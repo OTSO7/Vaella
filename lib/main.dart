@@ -1,9 +1,16 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart'; // <--- TARKISTA TÄMÄ IMPORT
 import 'package:provider/provider.dart';
-import 'providers/auth_provider.dart'; // Varmista, että tämä polku on oikein
-import 'app_router.dart';
+import 'providers/auth_provider.dart'; // Varmista polku
+import 'app_router.dart'; // Varmista polku
 
-void main() {
+void main() async {
+  // <--- ONKO TÄMÄ VARMASTI 'async'?
+  WidgetsFlutterBinding.ensureInitialized(); // <--- ONKO TÄMÄ RIVI OLEMASSA?
+  await initializeDateFormatting(
+      'fi_FI', null); // <--- ONKO TÄMÄ RIVI JA 'await' OLEMASSA?
+
   runApp(
     ChangeNotifierProvider(
       create: (_) => AuthProvider(),
@@ -17,7 +24,6 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // AppRouter hoitaa MaterialApp.router-määrityksen ja teeman
-    return const AppRouter();
+    return AppRouter();
   }
 }

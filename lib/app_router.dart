@@ -2,65 +2,50 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_localizations/flutter_localizations.dart'; // <--- TÄRKEÄ IMPORT
 
 import 'providers/auth_provider.dart';
 import 'pages/login_page.dart';
 import 'pages/home_page.dart';
-import 'pages/notes_page.dart'; // UUSI IMPORT
-import 'pages/profile_page.dart'; // UUSI IMPORT
-import 'widgets/main_scaffold.dart'; // UUSI IMPORT
+import 'pages/notes_page.dart';
+import 'pages/profile_page.dart';
+import 'widgets/main_scaffold.dart';
 
-// Globaalit NavigatorKeyt
 final _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
-// Shell-reitille ei välttämättä tarvita omaa avainta, jos käytetään StatefulShellRoute.indexedStackin oletuksia
-// final _shellNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shell');
 
 class AppRouter extends StatelessWidget {
   const AppRouter({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Kuunnellaan AuthProvideria, jotta GoRouter reagoi sen muutoksiin (refreshListenable)
     final authProvider = Provider.of<AuthProvider>(context, listen: true);
 
     final router = GoRouter(
       navigatorKey: _rootNavigatorKey,
-      initialLocation:
-          '/home', // Yritetään ensin kotisivulle, redirect hoitaa jos ei kirjautunut
-      debugLogDiagnostics: true, // Hyödyllinen debuggauksessa
-      refreshListenable:
-          authProvider, // Tärkeä autentikoinnin tilan muutoksille
+      initialLocation: '/home',
+      debugLogDiagnostics: true,
+      refreshListenable: authProvider,
       routes: [
-        // Kirjautumissivu (ei osa ShellRoutea)
         GoRoute(
           path: '/login',
-          parentNavigatorKey:
-              _rootNavigatorKey, // Varmistaa, että tämä on päällimmäisenä
+          parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) => const LoginPage(),
         ),
-
-        // ShellRoute pääsovelluksen sivuille, joissa on BottomNavigationBar
         StatefulShellRoute.indexedStack(
           builder: (BuildContext context, GoRouterState state,
               StatefulNavigationShell navigationShell) {
-            // Tämä on widget, joka sisältää Scaffolding ja BottomNavigationBarin
             return MainScaffoldWithBottomNav(navigationShell: navigationShell);
           },
           branches: <StatefulShellBranch>[
-            // Haara 1: Koti (Home)
             StatefulShellBranch(
-              // Ei tarvita omaa navigatorKeytä tässä, jos ei ole sisäkkäistä navigointia haarassa
               routes: <RouteBase>[
                 GoRoute(
                   path: '/home',
                   builder: (BuildContext context, GoRouterState state) =>
                       const HomePage(),
-                  // Tänne voisi lisätä alireittejä, esim. /home/post/:id
                 ),
               ],
             ),
-
-            // Haara 2: Muistilista (Notes)
             StatefulShellBranch(
               routes: <RouteBase>[
                 GoRoute(
@@ -70,8 +55,6 @@ class AppRouter extends StatelessWidget {
                 ),
               ],
             ),
-
-            // Haara 3: Profiili (Profile)
             StatefulShellBranch(
               routes: <RouteBase>[
                 GoRoute(
@@ -88,32 +71,18 @@ class AppRouter extends StatelessWidget {
         final isLoggedIn = authProvider.isLoggedIn;
         final currentPath = state.uri.toString();
 
-        // Jos käyttäjä ei ole kirjautunut sisään EIKÄ ole menossa kirjautumissivulle, ohjaa kirjautumissivulle.
-        if (!isLoggedIn && currentPath != '/login') {
-          return '/login';
-        }
-
-        // Jos käyttäjä ON kirjautunut sisään JA on kirjautumissivulla, ohjaa kotisivulle.
-        if (isLoggedIn && currentPath == '/login') {
-          return '/home';
-        }
-
-        // Jos käyttäjä on kirjautunut ja sovellus avataan juureen ("/"), ohjaa kotisivulle.
-        // Tämä on tärkeää, koska ShellRoute itsessään ei ole "sivu".
-        if (isLoggedIn && currentPath == '/') {
-          return '/home';
-        }
-
-        // Muissa tapauksissa ei uudelleenohjausta.
+        if (!isLoggedIn && currentPath != '/login') return '/login';
+        if (isLoggedIn && currentPath == '/login') return '/home';
+        if (isLoggedIn && currentPath == '/') return '/home';
         return null;
       },
     );
 
-    // Haetaan teema samalla tavalla kuin aiemmin
     final themeData = ThemeData(
         brightness: Brightness.dark,
         primaryColor: Colors.teal,
         scaffoldBackgroundColor: Colors.grey[900],
+        cardColor: Colors.grey[850],
         colorScheme: ColorScheme.dark(
           primary: Colors.teal,
           secondary: Colors.orangeAccent,
@@ -125,6 +94,7 @@ class AppRouter extends StatelessWidget {
           onSurface: Colors.white,
           onBackground: Colors.white,
           onError: Colors.black,
+          outline: Colors.grey[600],
         ),
         textTheme: TextTheme(
           headlineSmall: TextStyle(
@@ -133,31 +103,32 @@ class AppRouter extends StatelessWidget {
           titleLarge: TextStyle(
               fontWeight: FontWeight.bold,
               color: Colors.white.withOpacity(0.9)),
-          titleMedium:
-              TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 16),
+          titleMedium: // Käytetään AddHikePlanFormin inputTextStyle-pohjana
+              TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 16),
           bodyMedium: TextStyle(color: Colors.white.withOpacity(0.7)),
           labelLarge: const TextStyle(
             color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
+            // fontWeight: FontWeight.bold, // Otettu pois boldaus tästä, jotta kenttien otsikot ovat normaalit
+            fontSize: 14,
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: Colors.black.withOpacity(0.25),
-          hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
-          prefixIconColor: Colors.white.withOpacity(0.7),
+          fillColor: Colors.black.withOpacity(0.3), // Hieman läpinäkyvämpi
+          hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+          prefixIconColor: Colors.teal[200],
+          contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16, vertical: 14), // Yhtenäinen padding
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12.0),
-            borderSide: BorderSide.none,
+            borderRadius: BorderRadius.circular(8.0),
+            borderSide: BorderSide(color: Colors.grey[700]!),
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12.0),
-            borderSide:
-                BorderSide(color: Colors.white.withOpacity(0.3), width: 1),
+            borderRadius: BorderRadius.circular(8.0),
+            borderSide: BorderSide(color: Colors.grey[600]!, width: 1),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12.0),
+            borderRadius: BorderRadius.circular(8.0),
             borderSide: const BorderSide(color: Colors.tealAccent, width: 2),
           ),
           errorStyle: TextStyle(color: Colors.redAccent[100]),
@@ -167,9 +138,9 @@ class AppRouter extends StatelessWidget {
               backgroundColor: Colors.teal,
               foregroundColor: Colors.white,
               padding:
-                  const EdgeInsets.symmetric(vertical: 16.0, horizontal: 24.0),
+                  const EdgeInsets.symmetric(vertical: 12.0, horizontal: 20.0),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12.0),
+                borderRadius: BorderRadius.circular(8.0),
               ),
               textStyle: const TextStyle(
                 fontSize: 16,
@@ -179,24 +150,49 @@ class AppRouter extends StatelessWidget {
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(
             foregroundColor: Colors.orangeAccent,
-            textStyle: const TextStyle(fontWeight: FontWeight.w600),
+            textStyle:
+                const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
           ),
         ),
-        // BottomNavigationBarin teema voidaan myös määritellä tässä
+        outlinedButtonTheme: OutlinedButtonThemeData(
+            style: OutlinedButton.styleFrom(
+          foregroundColor: Colors.white.withOpacity(0.9),
+          side: BorderSide(color: Colors.grey[600]!),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8.0),
+          ),
+          padding: const EdgeInsets.symmetric(
+              vertical: 14.0, horizontal: 12.0), // Hieman säädetty
+        )),
         bottomNavigationBarTheme: BottomNavigationBarThemeData(
-          backgroundColor:
-              Colors.grey[850], // Esimerkki, vastaa colorScheme.surface
-          selectedItemColor:
-              Colors.orangeAccent, // Esimerkki, vastaa colorScheme.secondary
-          unselectedItemColor: Colors.white.withOpacity(0.6),
+          backgroundColor: Colors.grey[870],
+          selectedItemColor: Colors.orangeAccent,
+          unselectedItemColor: Colors.white.withOpacity(0.7),
           type: BottomNavigationBarType.fixed,
-          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold),
+          selectedLabelStyle:
+              const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+          unselectedLabelStyle: const TextStyle(fontSize: 12),
         ));
 
     return MaterialApp.router(
       title: 'TrekNote VaellusApp',
       debugShowCheckedModeBanner: false,
-      theme: themeData, // Käytetään määriteltyä teemaa
+      theme: themeData,
+
+      // --- NÄMÄ OVAT KRIITTISET LOKALISAATIOLLE JA MERKKIEN SYÖTÖLLE ---
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('fi', 'FI'), // Suomi ensisijaisena
+        Locale('en', ''), // Englanti varalle
+      ],
+      // Voit myös asettaa oletuskielen, jos haluat sen eroavan laitteen kielestä:
+      // locale: const Locale('fi', 'FI'),
+      // --------------------------------------------------------------------
+
       routerConfig: router,
     );
   }
