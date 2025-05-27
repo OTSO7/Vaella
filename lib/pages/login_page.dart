@@ -1,7 +1,7 @@
 // lib/pages/login_page.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart'; // Huomaa polun muutos
+import '../providers/auth_provider.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -59,10 +59,9 @@ class _LoginPageState extends State<LoginPage> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
-                      Icon(
-                        Icons.terrain_rounded,
-                        size: screenHeight * 0.12,
-                        color: theme.colorScheme.secondary,
+                      Image.asset(
+                        'assets/images/white1.png',
+                        height: screenHeight * 0.12,
                       ),
                       SizedBox(height: screenHeight * 0.015),
                       Text(
@@ -76,7 +75,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       SizedBox(height: screenHeight * 0.01),
                       Text(
-                        'Kirjaudu sisään ja tallenna seikkailusi',
+                        'Kirjaudu sisään ja aloita seikkailusi',
                         textAlign: TextAlign.center,
                         style: theme.textTheme.titleMedium
                             ?.copyWith(color: Colors.white70),
@@ -105,7 +104,7 @@ class _LoginPageState extends State<LoginPage> {
                         controller: _passwordController,
                         style: const TextStyle(color: Colors.white),
                         decoration: const InputDecoration(
-                          hintText: 'Salasana (esim. password)',
+                          hintText: 'Salasana',
                           prefixIcon: Icon(Icons.lock_outline),
                         ),
                         obscureText: true,

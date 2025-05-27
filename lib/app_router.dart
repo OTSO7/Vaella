@@ -4,52 +4,113 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import 'providers/auth_provider.dart';
-import 'pages/login_page.dart'; // <-- UUSI IMPORT
-import 'pages/home_page.dart'; // <-- UUSI IMPORT
+import 'pages/login_page.dart';
+import 'pages/home_page.dart';
+import 'pages/notes_page.dart'; // UUSI IMPORT
+import 'pages/profile_page.dart'; // UUSI IMPORT
+import 'widgets/main_scaffold.dart'; // UUSI IMPORT
+
+// Globaalit NavigatorKeyt
+final _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
+// Shell-reitille ei välttämättä tarvita omaa avainta, jos käytetään StatefulShellRoute.indexedStackin oletuksia
+// final _shellNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shell');
 
 class AppRouter extends StatelessWidget {
   const AppRouter({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context);
+    // Kuunnellaan AuthProvideria, jotta GoRouter reagoi sen muutoksiin (refreshListenable)
+    final authProvider = Provider.of<AuthProvider>(context, listen: true);
 
     final router = GoRouter(
-      initialLocation: '/',
+      navigatorKey: _rootNavigatorKey,
+      initialLocation:
+          '/home', // Yritetään ensin kotisivulle, redirect hoitaa jos ei kirjautunut
+      debugLogDiagnostics: true, // Hyödyllinen debuggauksessa
+      refreshListenable:
+          authProvider, // Tärkeä autentikoinnin tilan muutoksille
       routes: [
-        GoRoute(
-          path: '/',
-          builder: (context, state) =>
-              authProvider.isLoggedIn ? const HomePage() : const LoginPage(),
-        ),
+        // Kirjautumissivu (ei osa ShellRoutea)
         GoRoute(
           path: '/login',
+          parentNavigatorKey:
+              _rootNavigatorKey, // Varmistaa, että tämä on päällimmäisenä
           builder: (context, state) => const LoginPage(),
         ),
-        GoRoute(
-          path: '/home',
-          builder: (context, state) => const HomePage(),
+
+        // ShellRoute pääsovelluksen sivuille, joissa on BottomNavigationBar
+        StatefulShellRoute.indexedStack(
+          builder: (BuildContext context, GoRouterState state,
+              StatefulNavigationShell navigationShell) {
+            // Tämä on widget, joka sisältää Scaffolding ja BottomNavigationBarin
+            return MainScaffoldWithBottomNav(navigationShell: navigationShell);
+          },
+          branches: <StatefulShellBranch>[
+            // Haara 1: Koti (Home)
+            StatefulShellBranch(
+              // Ei tarvita omaa navigatorKeytä tässä, jos ei ole sisäkkäistä navigointia haarassa
+              routes: <RouteBase>[
+                GoRoute(
+                  path: '/home',
+                  builder: (BuildContext context, GoRouterState state) =>
+                      const HomePage(),
+                  // Tänne voisi lisätä alireittejä, esim. /home/post/:id
+                ),
+              ],
+            ),
+
+            // Haara 2: Muistilista (Notes)
+            StatefulShellBranch(
+              routes: <RouteBase>[
+                GoRoute(
+                  path: '/notes',
+                  builder: (BuildContext context, GoRouterState state) =>
+                      const NotesPage(),
+                ),
+              ],
+            ),
+
+            // Haara 3: Profiili (Profile)
+            StatefulShellBranch(
+              routes: <RouteBase>[
+                GoRoute(
+                  path: '/profile',
+                  builder: (BuildContext context, GoRouterState state) =>
+                      const ProfilePage(),
+                ),
+              ],
+            ),
+          ],
         ),
       ],
       redirect: (BuildContext context, GoRouterState state) {
         final isLoggedIn = authProvider.isLoggedIn;
-        final loggingIn = state.matchedLocation == '/login';
+        final currentPath = state.uri.toString();
 
-        if (!isLoggedIn && !loggingIn) {
+        // Jos käyttäjä ei ole kirjautunut sisään EIKÄ ole menossa kirjautumissivulle, ohjaa kirjautumissivulle.
+        if (!isLoggedIn && currentPath != '/login') {
           return '/login';
         }
-        if (isLoggedIn && loggingIn) {
-          return '/';
+
+        // Jos käyttäjä ON kirjautunut sisään JA on kirjautumissivulla, ohjaa kotisivulle.
+        if (isLoggedIn && currentPath == '/login') {
+          return '/home';
         }
+
+        // Jos käyttäjä on kirjautunut ja sovellus avataan juureen ("/"), ohjaa kotisivulle.
+        // Tämä on tärkeää, koska ShellRoute itsessään ei ole "sivu".
+        if (isLoggedIn && currentPath == '/') {
+          return '/home';
+        }
+
+        // Muissa tapauksissa ei uudelleenohjausta.
         return null;
       },
     );
 
-    return MaterialApp.router(
-      title: 'TrekNote VaellusApp',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        // Teema pysyy samana kuin aiemmin
+    // Haetaan teema samalla tavalla kuin aiemmin
+    final themeData = ThemeData(
         brightness: Brightness.dark,
         primaryColor: Colors.teal,
         scaffoldBackgroundColor: Colors.grey[900],
@@ -121,7 +182,21 @@ class AppRouter extends StatelessWidget {
             textStyle: const TextStyle(fontWeight: FontWeight.w600),
           ),
         ),
-      ),
+        // BottomNavigationBarin teema voidaan myös määritellä tässä
+        bottomNavigationBarTheme: BottomNavigationBarThemeData(
+          backgroundColor:
+              Colors.grey[850], // Esimerkki, vastaa colorScheme.surface
+          selectedItemColor:
+              Colors.orangeAccent, // Esimerkki, vastaa colorScheme.secondary
+          unselectedItemColor: Colors.white.withOpacity(0.6),
+          type: BottomNavigationBarType.fixed,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold),
+        ));
+
+    return MaterialApp.router(
+      title: 'TrekNote VaellusApp',
+      debugShowCheckedModeBanner: false,
+      theme: themeData, // Käytetään määriteltyä teemaa
       routerConfig: router,
     );
   }

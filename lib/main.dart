@@ -7,7 +7,7 @@ void main() {
   runApp(
     ChangeNotifierProvider(
       create: (_) => AuthProvider(),
-      child: MyApp(),
+      child: const MyApp(),
     ),
   );
 }
@@ -18,6 +18,6 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // AppRouter hoitaa MaterialApp.router-määrityksen ja teeman
-    return AppRouter();
+    return const AppRouter();
   }
 }
