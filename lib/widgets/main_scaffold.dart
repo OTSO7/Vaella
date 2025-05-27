@@ -34,7 +34,7 @@ class MainScaffoldWithBottomNav extends StatelessWidget {
           BottomNavigationBarItem(
             icon: Icon(Icons.list_alt_outlined),
             activeIcon: Icon(Icons.list_alt),
-            label: 'Muistilista',
+            label: 'Omat vaellukset',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),

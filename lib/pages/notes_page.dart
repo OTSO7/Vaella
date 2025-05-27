@@ -10,7 +10,7 @@ class NotesPage extends StatelessWidget {
       // HomePage, NotesPage ja ProfilePage voivat kukin hallita omaa AppBariaan
       // tai AppBar voidaan siirtää osaksi MainScaffoldWithBottomNav-widgetiä myöhemmin.
       appBar: AppBar(
-        title: const Text('Muistilistani'),
+        title: const Text('Suunnittelija'),
         backgroundColor: Theme.of(context).colorScheme.surface.withOpacity(0.8),
         elevation: 1,
       ),
@@ -22,7 +22,7 @@ class NotesPage extends StatelessWidget {
                 size: 80, color: Theme.of(context).primaryColor),
             const SizedBox(height: 20),
             Text(
-              'Tänne tulevat muistiinpanosi',
+              'Tänne tulevat vaellussunnitelmasi',
               style: Theme.of(context).textTheme.titleLarge,
             ),
           ],
