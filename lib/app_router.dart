@@ -9,9 +9,10 @@ import 'pages/login_page.dart';
 import 'pages/home_page.dart';
 import 'pages/notes_page.dart';
 import 'pages/profile_page.dart';
-import 'pages/edit_profile_page.dart'; // Varmista, että tämä import on olemassa, jos käytät sivua
+import 'pages/edit_profile_page.dart';
+import 'pages/register_page.dart'; // <--- LISÄTTY IMPORT REKISTERÖITYMISSIVULLE
 import 'widgets/main_scaffold.dart';
-import 'models/user_profile_model.dart'; // Varmista, että tämä import on olemassa
+import 'models/user_profile_model.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 
@@ -32,6 +33,13 @@ class AppRouter extends StatelessWidget {
           path: '/login',
           parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) => const LoginPage(),
+        ),
+        // LISÄTTY UUSI REITTI REKISTERÖITYMISSIVULLE
+        GoRoute(
+          path: '/register',
+          parentNavigatorKey:
+              _rootNavigatorKey, // Näytetään koko näytöllä ilman alapalkkia
+          builder: (context, state) => const RegisterPage(),
         ),
         StatefulShellRoute.indexedStack(
           builder: (BuildContext context, GoRouterState state,
@@ -66,13 +74,10 @@ class AppRouter extends StatelessWidget {
                     routes: [
                       GoRoute(
                         path: 'edit',
-                        // parentNavigatorKey: _rootNavigatorKey, // Voit poistaa kommentin, jos haluat tämän koko näytölle
                         builder: (BuildContext context, GoRouterState state) {
                           final userProfile = state.extra as UserProfile?;
                           if (userProfile == null) {
                             print("EditProfilePage: UserProfile data puuttuu!");
-                            // Palauta placeholder tai ohjaa takaisin, jos profiilidataa ei ole.
-                            // Tässä esimerkissä palautetaan yksinkertainen virhesivu.
                             return const Scaffold(
                                 body: Center(
                                     child: Text(
@@ -90,33 +95,47 @@ class AppRouter extends StatelessWidget {
       redirect: (BuildContext context, GoRouterState state) {
         final isLoggedIn = authProvider.isLoggedIn;
         final currentPath = state.uri.toString();
-        if (!isLoggedIn && currentPath != '/login') return '/login';
-        if (isLoggedIn && currentPath == '/login') return '/home';
-        if (isLoggedIn && currentPath == '/') return '/home';
+        final isPublicPage = currentPath == '/login' ||
+            currentPath == '/register'; // Tarkistetaan, onko sivu julkinen
+
+        // Jos käyttäjä EI OLE kirjautunut sisään EIKÄ ole julkisella sivulla (login/register), ohjaa kirjautumissivulle.
+        if (!isLoggedIn && !isPublicPage) {
+          return '/login';
+        }
+
+        // Jos käyttäjä ON kirjautunut sisään JA on julkisella sivulla (login/register), ohjaa kotisivulle.
+        if (isLoggedIn && isPublicPage) {
+          return '/home';
+        }
+
+        // Jos käyttäjä on kirjautunut ja sovellus avataan juureen ("/"), ohjaa kotisivulle.
+        if (isLoggedIn && currentPath == '/') {
+          return '/home';
+        }
+
+        // Muissa tapauksissa ei uudelleenohjausta.
         return null;
       },
     );
 
-    // --- TÄMÄ ON TÄRKEÄ TEEMA-ASETUS ---
+    // Teeman määrittely (pidetään aiemmin toimiva tumma teema)
     final themeData = ThemeData(
-        brightness: Brightness.dark, // <--- TÄMÄ ASETTAA TUMMAN TEEMAN
+        brightness: Brightness.dark,
         primaryColor: Colors.teal,
         scaffoldBackgroundColor: Colors.grey[900],
-        cardColor:
-            Colors.grey[850], // Käytetään korteille ja modaalin taustalle
+        cardColor: Colors.grey[850],
         colorScheme: ColorScheme.dark(
-          // Varmistetaan, että ColorScheme on myös tumma
           primary: Colors.teal,
           secondary: Colors.orangeAccent,
-          surface: Colors.grey[850]!, // Pintojen väri (esim. AppBar, Card)
-          background: Colors.grey[900]!, // Yleinen taustaväri
+          surface: Colors.grey[850]!,
+          background: Colors.grey[900]!,
           error: Colors.redAccent,
-          onPrimary: Colors.white, // Teksti/ikonit päävärin päällä
-          onSecondary: Colors.black, // Teksti/ikonit toissijaisen värin päällä
-          onSurface: Colors.white, // Teksti/ikonit pintojen päällä
-          onBackground: Colors.white, // Teksti/ikonit taustan päällä
-          onError: Colors.black, // Teksti/ikonit virhevärin päällä
-          outline: Colors.grey[600], // Reunaviivojen väri
+          onPrimary: Colors.white,
+          onSecondary: Colors.black,
+          onSurface: Colors.white,
+          onBackground: Colors.white,
+          onError: Colors.black,
+          outline: Colors.grey[600],
         ),
         textTheme: TextTheme(
           headlineSmall: TextStyle(
@@ -193,13 +212,11 @@ class AppRouter extends StatelessWidget {
               const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
           unselectedLabelStyle: const TextStyle(fontSize: 12),
         ));
-    // --- TEEMA-ASETUS PÄÄTTYY ---
 
     return MaterialApp.router(
       title: 'TrekNote VaellusApp',
       debugShowCheckedModeBanner: false,
-      theme: themeData, // <--- TÄMÄ KÄYTTÄÄ YLLÄ MÄÄRITELTYÄ TUMMAA TEEMAA
-
+      theme: themeData,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,

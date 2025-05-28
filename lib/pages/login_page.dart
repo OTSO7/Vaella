@@ -1,5 +1,6 @@
 // lib/pages/login_page.dart
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart'; // <--- LISÄÄ TÄMÄ IMPORT
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 
@@ -23,7 +24,17 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _login() {
-    Provider.of<AuthProvider>(context, listen: false).login();
+    // Varmistetaan, että lomake on validi ennen "kirjautumista"
+    if (_formKey.currentState!.validate()) {
+      Provider.of<AuthProvider>(context, listen: false).login();
+      // GoRouter hoitaa uudelleenohjauksen, jos se on määritelty AppRouterissa
+      // tai voit eksplisiittisesti navigoida: context.go('/');
+    } else {
+      // Voit näyttää virheilmoituksen, jos lomake ei ole validi
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tarkista syöttämäsi tiedot.')),
+      );
+    }
   }
 
   @override
@@ -54,7 +65,7 @@ class _LoginPageState extends State<LoginPage> {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 400),
                 child: Form(
-                  key: _formKey,
+                  key: _formKey, // Muista lisätä tämä Form-widgetille
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -135,21 +146,21 @@ class _LoginPageState extends State<LoginPage> {
                       SizedBox(height: screenHeight * 0.03),
                       ElevatedButton(
                         onPressed: _login,
-                        child: const Text('Kirjaudu sisään (Dummy)'),
+                        // Dummy-teksti voi olla hämäävä, jos validointi on käytössä
+                        child: const Text('Kirjaudu sisään'),
                       ),
                       SizedBox(height: screenHeight * 0.04),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text("Eikö sinulla ole tiliä? ",
-                              style: theme.textTheme.bodyMedium),
+                              style: theme.textTheme
+                                  .bodyMedium), // Varmista, että tämä tyyli on ok teemassasi
                           TextButton(
                             onPressed: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text(
-                                        'Rekisteröitymissivua ei ole vielä toteutettu.')),
-                              );
+                              // Navigoidaan rekisteröitymissivulle
+                              context.push(
+                                  '/register'); // TAI context.go('/register');
                             },
                             child: const Text('Luo tili'),
                           ),
