@@ -1,13 +1,14 @@
-// lib/pages/profile_page.dart
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart'; // Päivämäärien muotoiluun
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/auth_provider.dart';
-import '../models/user_profile_model.dart';
-import '../widgets/profile_header.dart';
-import '../widgets/stat_item.dart';
-import '../widgets/achievement_badge.dart';
+import '../models/user_profile_model.dart' as user_model;
+import '../widgets/profile_header.dart'; // Profiilin yläosan widget
+import '../widgets/profile_stats_grid.dart'; // Tilastojen esitykseen
+import '../widgets/achievement_grid.dart'
+    as achievement_widget; // Alias lisätty
+import 'package:cloud_firestore/cloud_firestore.dart'; // Firestore-tietokannan käyttö
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -17,18 +18,21 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  late UserProfile _userProfile;
+  // Ei enää _userProfile-statea täällä, haetaan se AuthProviderista
 
-  @override
-  void initState() {
-    super.initState();
-    // final auth = Provider.of<AuthProvider>(context, listen: false); // Poistettu, koska ei käytetty alla olevassa dummy-datassa
-    _userProfile = UserProfile(
-      uid: 'dummy_uid_123',
-      displayName: 'Otto Saarimaa',
-      email: 'valtteri@example.com',
-      photoURL: 'assets/images/header2.jpg',
-      bio: 'Innokas luonnossa liikkuja ja valokuvauksen harrastaja.',
+  // Simuloitu data (poistetaan myöhemmin, kun data tulee Firestoresta)
+  user_model.UserProfile _createDummyProfile(
+      String uid, String username, String email) {
+    return user_model.UserProfile(
+      uid: uid,
+      username: username,
+      displayName: 'Otto Seikkailija',
+      email: email,
+      photoURL: 'https://i.pravatar.cc/300?img=68', // Esimerkkiprofiilikuva
+      bio:
+          'Innokas luonnossa liikkuja ja valokuvauksen harrastaja. Aina valmis uusiin seikkailuihin!',
+      bannerImageUrl:
+          'https://picsum.photos/seed/profilebanner1/1200/400', // Esimerkkibannerikuva
       stats: {
         'Vaelluksia': 27,
         'Kilometrejä': 345.8,
@@ -36,268 +40,190 @@ class _ProfilePageState extends State<ProfilePage> {
         'Kuvia jaettu': 88,
       },
       achievements: [
-        Achievement(
+        user_model.Achievement(
             id: 'ach1',
             title: 'Ensimmäinen 10km',
             description: 'Kävelit ensimmäisen 10km vaelluksesi!',
-            icon: Icons.directions_walk,
+            icon: Icons.directions_walk_outlined,
             dateAchieved: DateTime(2023, 5, 10),
-            iconColor: Colors.green),
-        Achievement(
+            iconColor: Colors.lightGreen),
+        user_model.Achievement(
             id: 'ach2',
             title: 'Yö ulkona',
             description: 'Vietit ensimmäisen yösi teltassa.',
             icon: Icons.nights_stay_outlined,
             dateAchieved: DateTime(2023, 7, 22),
-            iconColor: Colors.blue),
-        Achievement(
+            iconColor: Colors.blueAccent),
+        user_model.Achievement(
             id: 'ach3',
             title: 'Huippujen valloittaja',
             description: 'Valloitit 5 eri huippua.',
             icon: Icons.landscape_outlined,
             dateAchieved: DateTime(2024, 1, 15),
             iconColor: Colors.purpleAccent),
-        Achievement(
+        user_model.Achievement(
             id: 'ach4',
             title: 'Valokuvaajamestari',
             description: 'Jaoit yli 50 kuvaa.',
             icon: Icons.camera_alt_outlined,
             dateAchieved: DateTime(2024, 3, 5),
-            iconColor: Colors.orange),
+            iconColor: Colors.orangeAccent),
+        user_model.Achievement(
+            id: 'ach5',
+            title: 'Talvivaeltaja',
+            description: 'Teit vaelluksen lumisessa maastossa.',
+            icon: Icons.ac_unit_outlined,
+            dateAchieved: DateTime(2024, 2, 1),
+            iconColor: Colors.lightBlue),
       ],
       stickers: [
-        Sticker(
+        user_model.Sticker(
             id: 'st1',
-            name: 'Nuuksio',
-            imageUrl:
-                'https://via.placeholder.com/100/8BC34A/FFFFFF?Text=Nuuksio'),
-        Sticker(
+            name: 'Nuuksio NP',
+            imageUrl: 'https://picsum.photos/seed/nuuksiobadge/100/100'),
+        user_model.Sticker(
             id: 'st2',
-            name: 'Koli',
-            imageUrl:
-                'https://via.placeholder.com/100/2196F3/FFFFFF?Text=Koli'),
+            name: 'Koli NP',
+            imageUrl: 'https://picsum.photos/seed/kolibadge/100/100'),
+        user_model.Sticker(
+            id: 'st3',
+            name: 'Oulanka NP',
+            imageUrl: 'https://picsum.photos/seed/oulankabadge/100/100'),
+        user_model.Sticker(
+            id: 'st4',
+            name: 'Repovesi NP',
+            imageUrl: 'https://picsum.photos/seed/repovesibadge/100/100'),
       ],
     );
-  }
-
-  void _navigateToEditProfile() async {
-    // Varmista, että widget on yhä puussa ennen navigointia
-    if (!mounted) return;
-    final updatedProfile = await context.push<UserProfile>(
-      '/profile/edit',
-      extra: _userProfile,
-    );
-
-    if (updatedProfile != null && mounted) {
-      setState(() {
-        _userProfile = updatedProfile;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Profiili päivitetty!'),
-            backgroundColor: Colors.green),
-      );
-    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context);
     final theme = Theme.of(context);
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+
+    if (!authProvider.isLoggedIn || authProvider.userProfile == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Profiili')),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              authProvider.isLoading
+                  ? const CircularProgressIndicator()
+                  : const Text('Ladataan profiilia...'),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () => authProvider.logout(),
+                child: const Text('Kirjaudu ulos'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final user_model.UserProfile userProfile = authProvider.userProfile!;
+
+    // Funktio profiilin muokkaukseen navigointiin
+    void navigateToEditProfile() async {
+      final updatedProfile = await context.push<user_model.UserProfile>(
+        '/profile/edit',
+        extra: userProfile,
+      );
+
+      if (updatedProfile != null && mounted) {
+        await authProvider.updateLocalUserProfile(updatedProfile);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Profiili päivitetty onnistuneesti!'),
+              backgroundColor: Colors.green),
+        );
+      }
+    }
 
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: CustomScrollView(
         slivers: <Widget>[
           SliverAppBar(
-            expandedHeight: 380.0,
+            expandedHeight: 320.0,
             floating: false,
-            pinned: true, // AppBar pysyy näkyvissä skrollatessa
-            elevation: 1,
-            backgroundColor: theme.colorScheme.surface,
+            pinned: true,
+            elevation: 0,
+            backgroundColor: theme.scaffoldBackgroundColor,
+            leading: IconButton(
+              icon: Icon(Icons.logout, color: theme.colorScheme.onBackground),
+              tooltip: 'Kirjaudu ulos',
+              onPressed: () {
+                authProvider.logout();
+              },
+            ),
             flexibleSpace: FlexibleSpaceBar(
+              collapseMode: CollapseMode.pin,
               background: ProfileHeader(
-                photoURL: _userProfile.photoURL,
-                displayName: _userProfile.displayName,
-                bio: _userProfile.bio,
-                onEditProfile: _navigateToEditProfile,
-                level: (_userProfile.stats['Vaelluksia'] ?? 0) ~/ 5 + 1,
+                username: userProfile.username,
+                displayName: userProfile.displayName,
+                photoURL: userProfile.photoURL,
+                bio: userProfile.bio,
+                bannerImageUrl: userProfile.bannerImageUrl,
+                onEditProfile: navigateToEditProfile,
+                level: (userProfile.stats['Vaelluksia'] ?? 0) ~/ 5 + 1,
                 experienceProgress:
-                    ((_userProfile.stats['Vaelluksia'] ?? 0) % 5) / 5.0,
+                    ((userProfile.stats['Vaelluksia'] ?? 0) % 5) / 5.0,
               ),
             ),
+            // Poistettu actions-lista, logout on nyt leadingissä
           ),
-
           _buildSectionHeader(context, 'Tilastot', Icons.bar_chart_outlined),
           SliverToBoxAdapter(
-            child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-              child: Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8.0, vertical: 16.0),
-                  child: Wrap(
-                    spacing: 8.0,
-                    runSpacing: 16.0,
-                    alignment: WrapAlignment.spaceAround,
-                    children: _userProfile.stats.entries.map((entry) {
-                      IconData iconData = Icons.star_border_outlined;
-                      if (entry.key.toLowerCase().contains('vaelluksia'))
-                        iconData = Icons.hiking;
-                      if (entry.key.toLowerCase().contains('kilometr'))
-                        iconData = Icons.timeline;
-                      if (entry.key.toLowerCase().contains('huippu'))
-                        iconData = Icons.flag_outlined;
-                      if (entry.key.toLowerCase().contains('kuvia'))
-                        iconData = Icons.photo_library_outlined;
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8.0), // Pieni lisäys Wrapin sisällä
-                        child: StatItem(
-                            icon: iconData,
-                            label: entry.key,
-                            value: entry.value.toString()),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ),
-            ),
+            child: ProfileStatsGrid(stats: userProfile.stats),
           ),
-
           _buildSectionHeader(
               context, 'Saavutukset', Icons.emoji_events_outlined),
-          _userProfile.achievements.isEmpty
+          userProfile.achievements.isEmpty
               ? SliverToBoxAdapter(
                   child: _buildEmptySectionPlaceholder(
-                      context, 'Ei vielä saavutuksia.'))
-              : SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(
-                      16.0, 8.0, 16.0, 12.0), // Pienennetty bottom
-                  sliver: SliverGrid(
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
-                      crossAxisSpacing: 12.0,
-                      mainAxisSpacing: 12.0,
-                      childAspectRatio: 1.0,
-                    ),
-                    delegate: SliverChildBuilderDelegate(
-                      (BuildContext context, int index) {
-                        final achievement = _userProfile.achievements[index];
-                        return AchievementBadge(
-                          title: achievement.title,
-                          icon: achievement.icon,
-                          iconColor: achievement.iconColor,
-                          type: BadgeType.achievement,
-                          onTap: () {
-                            showDialog(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                      title: Row(children: [
-                                        Icon(achievement.icon,
-                                            color: achievement.iconColor),
-                                        const SizedBox(width: 8),
-                                        Text(achievement.title)
-                                      ]),
-                                      content: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(achievement.description),
-                                          const SizedBox(height: 8),
-                                          Text(
-                                              'Ansaittu: ${DateFormat('d.M.yyyy', 'fi_FI').format(achievement.dateAchieved)}',
-                                              style: theme.textTheme.bodySmall),
-                                        ],
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                            onPressed: () =>
-                                                Navigator.of(context).pop(),
-                                            child: const Text('Sulje'))
-                                      ],
-                                    ));
-                          },
-                        );
-                      },
-                      childCount: _userProfile.achievements.length,
-                    ),
+                      context, 'Ei vielä saavutuksia. Lähde seikkailemaan!'))
+              : SliverToBoxAdapter(
+                  child: achievement_widget.AchievementGrid(
+                    achievements: userProfile.achievements
+                        .map((a) => achievement_widget.Achievement(
+                              title: a.title,
+                              description: a.description,
+                              icon: a.icon,
+                              dateAchieved: a.dateAchieved,
+                              iconColor: a.iconColor,
+                              imageUrl: a is achievement_widget.Achievement
+                                  ? a.imageUrl
+                                  : null,
+                            ))
+                        .toList(),
+                    isStickerGrid: false,
                   ),
                 ),
-
-          _buildSectionHeader(
-              context, 'Kerätyt Tarrat', Icons.collections_bookmark_outlined),
-          _userProfile.stickers.isEmpty
+          _buildSectionHeader(context, 'Kansallispuistomerkit',
+              Icons.collections_bookmark_outlined),
+          userProfile.stickers.isEmpty
               ? SliverToBoxAdapter(
                   child: _buildEmptySectionPlaceholder(
-                      context, 'Ei vielä kerättyjä tarroja.'))
-              : SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(
-                      16.0, 8.0, 16.0, 12.0), // Pienennetty bottom
-                  sliver: SliverGrid(
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 4,
-                      crossAxisSpacing: 10.0,
-                      mainAxisSpacing: 10.0,
-                      childAspectRatio: 1.0,
-                    ),
-                    delegate: SliverChildBuilderDelegate(
-                      (BuildContext context, int index) {
-                        final sticker = _userProfile.stickers[index];
-                        return AchievementBadge(
-                          title: sticker.name,
-                          imageUrl: sticker.imageUrl,
-                          type: BadgeType.sticker,
-                          onTap: () {
-                            showDialog(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                      title: Text(sticker.name),
-                                      content: Image.network(sticker.imageUrl,
-                                          fit: BoxFit.contain, height: 100),
-                                      actions: [
-                                        TextButton(
-                                            onPressed: () =>
-                                                Navigator.of(context).pop(),
-                                            child: const Text('Sulje'))
-                                      ],
-                                    ));
-                          },
-                        );
-                      },
-                      childCount: _userProfile.stickers.length,
-                    ),
+                      context, 'Ei vielä kerättyjä kansallispuistomerkkejä.'))
+              : SliverToBoxAdapter(
+                  child: achievement_widget.AchievementGrid(
+                    achievements: userProfile.stickers
+                        .map((s) => achievement_widget.Achievement(
+                              title: s.name,
+                              description: s.name,
+                              imageUrl: s.imageUrl,
+                              dateAchieved: DateTime.now(),
+                              icon: Icons.park_outlined,
+                            ))
+                        .toList(),
+                    isStickerGrid: true,
                   ),
                 ),
-
           SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                  24.0, 20.0, 24.0, 16.0), // Pienennetty ylätäytettä
-              child: ElevatedButton.icon(
-                icon: const Icon(Icons.logout),
-                label: const Text('Kirjaudu ulos'),
-                onPressed: () {
-                  authProvider.logout();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: theme.colorScheme.errorContainer,
-                  foregroundColor: theme.colorScheme.onErrorContainer,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(
-              child: SizedBox(
-                  height: kBottomNavigationBarHeight +
-                      8.0)), // Pieni vähennys täälläkin
+              child: SizedBox(height: kBottomNavigationBarHeight + 16.0)),
         ],
       ),
     );
@@ -308,19 +234,15 @@ class _ProfilePageState extends State<ProfilePage> {
     final theme = Theme.of(context);
     return SliverToBoxAdapter(
       child: Padding(
-        padding: const EdgeInsets.only(
-            left: 20.0,
-            right: 16.0,
-            top: 24.0, // <<<--- MUUTETTU (oli aiemmin 22.0 tai 28.0)
-            bottom: 10.0), // <<<--- MUUTETTU (oli aiemmin 10.0 tai 8.0)
+        padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
         child: Row(
           children: [
-            Icon(icon, color: theme.colorScheme.primary, size: 22),
-            const SizedBox(width: 10),
+            Icon(icon, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
             Text(
               title,
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600, letterSpacing: 0.5),
+              style: theme.textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -329,25 +251,14 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildEmptySectionPlaceholder(BuildContext context, String message) {
+    final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 16.0),
+      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
       child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.explore_off_outlined,
-                size: 48,
-                color:
-                    Theme.of(context).colorScheme.onSurface.withOpacity(0.4)),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color:
-                      Theme.of(context).colorScheme.onSurface.withOpacity(0.6)),
-            ),
-          ],
+        child: Text(
+          message,
+          style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
+          textAlign: TextAlign.center,
         ),
       ),
     );

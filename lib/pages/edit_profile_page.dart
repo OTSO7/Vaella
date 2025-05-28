@@ -1,7 +1,15 @@
 // lib/pages/edit_profile_page.dart
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart'; // Kuvan valintaan
+import 'dart:io'; // Tiedostokäsittelyyn
+import 'package:firebase_storage/firebase_storage.dart'; // Tallentaa kuvat Firebase Storageen
+import 'package:firebase_auth/firebase_auth.dart'; // Päivittää Auth-profiilia
+import 'package:cloud_firestore/cloud_firestore.dart'; // Firestore-tietokanta
+
 import '../models/user_profile_model.dart';
-// import 'package:image_picker/image_picker.dart'; // Myöhempää kuvavalintaa varten
+import '../providers/auth_provider.dart' as local_auth;
 
 class EditProfilePage extends StatefulWidget {
   final UserProfile initialProfile;
@@ -13,191 +21,371 @@ class EditProfilePage extends StatefulWidget {
 }
 
 class _EditProfilePageState extends State<EditProfilePage> {
-  late TextEditingController _nameController;
+  final _formKey = GlobalKey<FormState>();
+  late TextEditingController _usernameController;
+  late TextEditingController _displayNameController;
   late TextEditingController _bioController;
-  late String? _currentPhotoUrl; // Säilyttää nykyisen tai valitun kuvan URL:n
+  late TextEditingController _bannerImageUrlController;
 
-  // Esimerkki placeholder-avatar-URL:ista, joita voi selata
-  final List<String> _dummyAvatarUrls = [
-    'https://i.pravatar.cc/300?u=avatar1',
-    'https://i.pravatar.cc/300?u=avatar2',
-    'https://i.pravatar.cc/300?u=avatar3',
-    'https://i.pravatar.cc/300?u=avatar4',
-    'https://i.pravatar.cc/300?u=avatar5',
-    'https://i.pravatar.cc/300?u=newuser', // Lisää tämä, jos haluat testata uutta
-  ];
-  int _currentAvatarIndex = 0;
+  String? _profileImageUrl; // Paikallinen URL tai tiedostopolku
+  File? _pickedProfileImage; // Valittu kuva tiedostona
+
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _nameController =
+    _usernameController =
+        TextEditingController(text: widget.initialProfile.username);
+    _displayNameController =
         TextEditingController(text: widget.initialProfile.displayName);
-    _bioController =
-        TextEditingController(text: widget.initialProfile.bio ?? '');
-    _currentPhotoUrl = widget.initialProfile.photoURL;
-
-    // Etsi nykyisen avatarin indeksi dummy-listasta (jos löytyy)
-    if (_currentPhotoUrl != null) {
-      final index = _dummyAvatarUrls.indexOf(_currentPhotoUrl!);
-      if (index != -1) {
-        _currentAvatarIndex = index;
-      } else {
-        // Jos nykyistä URL:ää ei löydy, lisätään se listan alkuun ja valitaan se
-        // (tämä on vain dummy-datan käsittelyä varten)
-        // _dummyAvatarUrls.insert(0, _currentPhotoUrl!);
-        // _currentAvatarIndex = 0;
-        // Tai käytä oletusindeksiä 0, jolloin ensimmäinen dummy-kuva tulee valituksi
-      }
-    }
-  }
-
-  // Simuloi kuvan vaihtoa selaamalla dummy-URL:eja
-  void _changeProfilePicture() {
-    setState(() {
-      _currentAvatarIndex = (_currentAvatarIndex + 1) % _dummyAvatarUrls.length;
-      _currentPhotoUrl = _dummyAvatarUrls[_currentAvatarIndex];
-    });
-  }
-
-  // TODO: Myöhemmin toteuta oikea kuvanvalinta ImagePickerillä
-  // Future<void> _pickImage() async {
-  //   final ImagePicker picker = ImagePicker();
-  //   final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-  //   if (image != null && mounted) {
-  //     // Tässä vaiheessa kuva pitäisi ladata palvelimelle ja saada URL
-  //     // Nyt simuloidaan vain asettamalla paikallinen polku (ei toimi NetworkImagella)
-  //     // tai päivittämällä _currentPhotoUrl uudella dummy-URL:lla
-  //     setState(() {
-  //       _currentPhotoUrl = image.path; // TÄMÄ EI TOIMI SUORAAN NetworkImagella
-  //       // Korvaa tämä oikealla URL:lla, kun kuvanlataus on toteutettu
-  //     });
-  //   }
-  // }
-
-  void _saveProfile() {
-    if (!mounted) return;
-
-    // Luo päivitetty UserProfile-objekti
-    final updatedProfile = UserProfile(
-      uid: widget.initialProfile.uid,
-      displayName: _nameController.text.trim(),
-      email: widget
-          .initialProfile.email, // Sähköpostia ei yleensä anneta muokata tässä
-      photoURL: _currentPhotoUrl,
-      bio: _bioController.text.trim(),
-      stats: widget.initialProfile.stats, // Tilastoja ei muokata tässä
-      achievements:
-          widget.initialProfile.achievements, // Saavutuksia ei muokata tässä
-      stickers: widget.initialProfile.stickers,
-    );
-
-    // Palauta päivitetty profiili edelliselle sivulle
-    Navigator.of(context).pop(updatedProfile);
+    _bioController = TextEditingController(text: widget.initialProfile.bio);
+    _bannerImageUrlController =
+        TextEditingController(text: widget.initialProfile.bannerImageUrl);
+    _profileImageUrl =
+        widget.initialProfile.photoURL; // Aseta oletusarvo profiilikuvalle
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _usernameController.dispose();
+    _displayNameController.dispose();
     _bioController.dispose();
+    _bannerImageUrlController.dispose();
     super.dispose();
+  }
+
+  // Kuvan valinta galleriasta tai kamerasta
+  Future<void> _pickImage(ImageSource source, bool isProfileImage) async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(
+        source: source, imageQuality: 70); // Vähennä laatua
+    if (pickedFile != null) {
+      setState(() {
+        if (isProfileImage) {
+          _pickedProfileImage = File(pickedFile.path);
+          _profileImageUrl =
+              null; // Nollaa vanha URL, jos uusi tiedosto on valittu
+        } else {
+          _bannerImageUrlController.text =
+              pickedFile.path; // Tilapäisesti paikallinen polku
+        }
+      });
+    }
+  }
+
+  // Kuvan lataus Firebase Storageen
+  Future<String?> _uploadImage(File imageFile, String path) async {
+    try {
+      final ref = FirebaseStorage.instance.ref().child(path).child(
+          '${FirebaseAuth.instance.currentUser!.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      await ref.putFile(imageFile);
+      return await ref.getDownloadURL();
+    } catch (e) {
+      print('Kuvan lataus epäonnistui: $e');
+      _showSnackBar('Kuvan lataus epäonnistui.', Colors.redAccent);
+      return null;
+    }
+  }
+
+  Future<void> _updateProfile() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    final auth = Provider.of<local_auth.AuthProvider>(context, listen: false);
+    final currentUser = auth.user;
+    if (currentUser == null) {
+      _showSnackBar(
+          'Kirjautuminen vaaditaan profiilin muokkaukseen.', Colors.redAccent);
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
+    String? newProfilePhotoUrl =
+        _profileImageUrl; // Säilytä vanha URL, jos ei uutta kuvaa valittu
+    String? newBannerImageUrl = _bannerImageUrlController
+        .text; // Säilytä vanha URL, jos ei uutta kuvaa valittu
+
+    try {
+      // Tarkista käyttäjätunnuksen uniikkius, jos sitä muutetaan
+      if (_usernameController.text.trim().toLowerCase() !=
+          widget.initialProfile.username.toLowerCase()) {
+        final existingUsernameDocs = await FirebaseFirestore.instance
+            .collection('users')
+            .where('username',
+                isEqualTo: _usernameController.text.trim().toLowerCase())
+            .limit(1)
+            .get();
+
+        if (existingUsernameDocs.docs.isNotEmpty) {
+          _showSnackBar('Käyttäjätunnus on jo varattu.', Colors.redAccent);
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
+      }
+
+      // Lataa uusi profiilikuva Firebase Storageen, jos valittu
+      if (_pickedProfileImage != null) {
+        newProfilePhotoUrl =
+            await _uploadImage(_pickedProfileImage!, 'profile_photos');
+        if (newProfilePhotoUrl == null) {
+          setState(() {
+            _isLoading = false;
+          });
+          return; // Kuvan lataus epäonnistui
+        }
+      }
+
+      // Lataa uusi bannerikuva Firebase Storageen, jos valittu paikallisesta tiedostosta
+      if (_bannerImageUrlController.text.startsWith('file://') ||
+          _bannerImageUrlController.text.startsWith('/data/')) {
+        final bannerFile = File(_bannerImageUrlController.text);
+        newBannerImageUrl = await _uploadImage(bannerFile, 'banner_images');
+        if (newBannerImageUrl == null) {
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
+      }
+
+      // Luo päivitetty UserProfile-objekti
+      final updatedProfile = widget.initialProfile.copyWith(
+        username: _usernameController.text.trim().toLowerCase(),
+        displayName: _displayNameController.text.trim(),
+        bio: _bioController.text.trim(),
+        photoURL: newProfilePhotoUrl,
+        bannerImageUrl: newBannerImageUrl,
+      );
+
+      // Päivitä Firestore-dokumentti
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .update(updatedProfile.toFirestore());
+
+      // Päivitä AuthProviderin tila
+      await auth.updateLocalUserProfile(updatedProfile);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Profiili päivitetty!'),
+            backgroundColor: Colors.green),
+      );
+      context.pop(updatedProfile); // Palaa takaisin profiilisivulle
+    } catch (e) {
+      if (!mounted) return;
+      _showSnackBar(
+          'Profiilin päivitys epäonnistui: ${e.toString().replaceFirst('Exception: ', '')}',
+          Colors.redAccent);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  void _showSnackBar(String message, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color,
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Muokkaa profiilia'),
-        elevation: 1,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.save_outlined),
-            tooltip: 'Tallenna muutokset',
-            onPressed: _saveProfile,
-          )
-        ],
+        backgroundColor: theme.scaffoldBackgroundColor,
+        elevation: 0,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            Center(
-              child: Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 70,
-                    backgroundColor: theme.colorScheme.surfaceVariant,
-                    backgroundImage: _currentPhotoUrl != null &&
-                            _currentPhotoUrl!.isNotEmpty
-                        ? NetworkImage(_currentPhotoUrl!)
-                        : const AssetImage('assets/images/default_avatar.png')
-                            as ImageProvider,
-                    onBackgroundImageError: (_, __) {}, // Käsittele virhe
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: Material(
-                      // Lisätään Material, jotta InkWellin ripple näkyy
-                      color: theme.colorScheme.secondary,
-                      shape: const CircleBorder(),
-                      clipBehavior: Clip.antiAlias,
-                      child: InkWell(
-                        onTap:
-                            _changeProfilePicture, // Vaihdettu _pickImage -> _changeProfilePicture
-                        child: Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: Icon(
-                            Icons.camera_alt_outlined,
-                            color: theme.colorScheme.onSecondary,
-                            size: 20,
-                          ),
+        padding: const EdgeInsets.all(24.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Profiilikuvan valitsin
+              Center(
+                child: Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 80,
+                      backgroundColor: theme.colorScheme.surface,
+                      backgroundImage: _pickedProfileImage != null
+                          ? FileImage(_pickedProfileImage!)
+                          : (_profileImageUrl != null &&
+                                  _profileImageUrl!.isNotEmpty
+                              ? NetworkImage(_profileImageUrl!)
+                              : const AssetImage(
+                                      'assets/images/default_avatar.png')
+                                  as ImageProvider),
+                      onBackgroundImageError: (_, __) {
+                        setState(() {
+                          _profileImageUrl = null; // Virhekuva, käytä oletusta
+                        });
+                      },
+                      child: (_pickedProfileImage == null &&
+                              (_profileImageUrl == null ||
+                                  _profileImageUrl!.isEmpty))
+                          ? Icon(Icons.person,
+                              size: 90, color: Colors.grey[500])
+                          : null,
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: IconButton(
+                        icon: Icon(Icons.camera_alt,
+                            color: theme.colorScheme.onSecondary),
+                        style: IconButton.styleFrom(
+                          backgroundColor: theme.colorScheme.secondary,
+                          shape: const CircleBorder(),
+                          padding: const EdgeInsets.all(10),
                         ),
+                        onPressed: () => _pickImage(ImageSource.gallery,
+                            true), // Kutsutaan kuvavalitsinta
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Center(
-              child: TextButton(
-                onPressed:
-                    _changeProfilePicture, // Vaihdettu _pickImage -> _changeProfilePicture
-                child: const Text('Vaihda profiilikuva'),
+              const SizedBox(height: 32),
+
+              // Käyttäjätunnus
+              TextFormField(
+                controller: _usernameController,
+                style: textTheme.bodyLarge
+                    ?.copyWith(color: theme.colorScheme.onSurface),
+                decoration: InputDecoration(
+                  labelText: 'Käyttäjätunnus',
+                  prefixIcon: const Icon(Icons.alternate_email),
+                  enabled: !_isLoading, // Ei muokattavissa latauksen aikana
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Syötä käyttäjätunnus';
+                  }
+                  if (value.trim().length < 3) {
+                    return 'Käyttäjätunnuksen tulee olla vähintään 3 merkkiä';
+                  }
+                  return null;
+                },
               ),
-            ),
-            const SizedBox(height: 24),
-            TextFormField(
-              controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: 'Nimi',
-                prefixIcon: Icon(Icons.person_outline),
+              const SizedBox(height: 20),
+
+              // Näyttönimi
+              TextFormField(
+                controller: _displayNameController,
+                style: textTheme.bodyLarge
+                    ?.copyWith(color: theme.colorScheme.onSurface),
+                decoration: InputDecoration(
+                  labelText: 'Näyttönimi',
+                  prefixIcon: const Icon(Icons.person_outline),
+                  enabled: !_isLoading,
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Syötä näyttönimi';
+                  }
+                  return null;
+                },
               ),
-              style: theme.textTheme.bodyLarge,
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _bioController,
-              decoration: const InputDecoration(
-                labelText: 'Kuvaus (bio)',
-                hintText: 'Kerro jotain itsestäsi...',
-                prefixIcon: Icon(Icons.info_outline),
+              const SizedBox(height: 20),
+
+              // Bio
+              TextFormField(
+                controller: _bioController,
+                style: textTheme.bodyLarge
+                    ?.copyWith(color: theme.colorScheme.onSurface),
+                decoration: InputDecoration(
+                  labelText: 'Bio',
+                  hintText: 'Kerro itsestäsi lyhyesti...',
+                  prefixIcon: const Icon(Icons.info_outline),
+                  alignLabelWithHint: true,
+                  enabled: !_isLoading,
+                ),
+                maxLines: 3,
+                keyboardType: TextInputType.multiline,
               ),
-              maxLines: 3,
-              style: theme.textTheme.bodyLarge,
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.save_alt_outlined),
-              label: const Text('Tallenna muutokset'),
-              onPressed: _saveProfile,
-              style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12)),
-            ),
-          ],
+              const SizedBox(height: 20),
+
+              // Bannerikuvan URL (valinnainen)
+              TextFormField(
+                controller: _bannerImageUrlController,
+                style: textTheme.bodyLarge
+                    ?.copyWith(color: theme.colorScheme.onSurface),
+                decoration: InputDecoration(
+                  labelText: 'Bannerikuvan URL (valinnainen)',
+                  hintText: 'Käytä URL:ia tai valitse galleriasta',
+                  prefixIcon: const Icon(Icons.image_outlined),
+                  enabled: !_isLoading,
+                  suffixIcon: _isLoading
+                      ? null
+                      : IconButton(
+                          // Valintanappi
+                          icon: Icon(Icons.photo_library_outlined,
+                              color: theme.colorScheme.secondary),
+                          onPressed: () => _pickImage(
+                              ImageSource.gallery, false), // Bannerikuva
+                        ),
+                ),
+                keyboardType: TextInputType.url,
+                validator: (value) {
+                  if (value != null && value.isNotEmpty) {
+                    final uri = Uri.tryParse(value);
+                    if (uri == null ||
+                        (!uri.hasAbsolutePath &&
+                            !uri.isScheme('http') &&
+                            !uri.isScheme('https') &&
+                            !value.startsWith('file://') &&
+                            !value.startsWith('/data/'))) {
+                      return 'Syötä validi URL tai valitse kuva';
+                    }
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 40),
+
+              ElevatedButton.icon(
+                onPressed: _isLoading ? null : _updateProfile,
+                icon: _isLoading
+                    ? const SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Icon(Icons.save_alt_outlined),
+                label:
+                    Text(_isLoading ? 'Tallennetaan...' : 'Tallenna muutokset'),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
         ),
       ),
     );
