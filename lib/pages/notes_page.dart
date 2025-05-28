@@ -1,8 +1,9 @@
 // lib/pages/notes_page.dart
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import '../models/hike_plan_model.dart';
 import '../widgets/hike_plan_card.dart';
-import '../widgets/add_hike_plan_form.dart'; // Tuo lomake
+import '../widgets/add_hike_plan_form.dart';
 
 class NotesPage extends StatefulWidget {
   const NotesPage({super.key});
@@ -34,57 +35,6 @@ class _NotesPageState extends State<NotesPage>
       ),
     );
     _animationController.forward();
-
-    _loadDummyHikePlans();
-  }
-
-  void _loadDummyHikePlans() {
-    setState(() {
-      _hikePlans.addAll([
-        HikePlan(
-          id: '1',
-          hikeName: 'Päiväretki Nuuksioon',
-          location: 'Nuuksion kansallispuisto, Espoo',
-          startDate: DateTime.now().add(const Duration(days: 7)),
-          endDate: DateTime.now().add(const Duration(days: 7, hours: 4)),
-          lengthKm: 8.5,
-          notes: 'Mukavat eväät mukaan ja kamera käden ulottuville!',
-          status: HikeStatus.planned,
-        ),
-        HikePlan(
-          id: '2',
-          hikeName: 'Kolin kansallismaisemat',
-          location: 'Kolin kansallispuisto, Lieksa',
-          startDate: DateTime.now().add(const Duration(days: 30)),
-          endDate: DateTime.now().add(const Duration(days: 32)),
-          lengthKm: 25.0,
-          notes: 'Varaa majoitus etukäteen. Tarkista sääennusteet!',
-          status: HikeStatus.planned,
-        ),
-        HikePlan(
-          id: '3',
-          hikeName: 'Pallas-Yllästunturi, Hetta-Pallas',
-          location: 'Pallas-Yllästunturin kansallispuisto, Lappi',
-          startDate: DateTime.now().add(const Duration(days: 90)),
-          endDate: DateTime.now().add(const Duration(days: 97)),
-          lengthKm: 55.0,
-          notes:
-              'Kevyt rinkka, hyvät kengät. Varaudu sääolosuhteiden muutoksiin.',
-          status: HikeStatus.planned,
-        ),
-        HikePlan(
-          id: '4',
-          hikeName: 'Lokale Waldrunde',
-          location: 'Kaupin urheilupuisto, Tampere',
-          startDate: DateTime.now().subtract(const Duration(days: 10)),
-          endDate: DateTime.now().subtract(const Duration(days: 10, hours: 2)),
-          lengthKm: 5.0,
-          notes: 'Rentouttava iltakävely. Muista ottaa juomapullo mukaan.',
-          status: HikeStatus.completed,
-        ),
-      ]);
-      _sortPlans();
-    });
   }
 
   void _sortPlans() {
@@ -94,37 +44,27 @@ class _NotesPageState extends State<NotesPage>
   Future<void> _openAddHikePlanModal() async {
     final newPlan = await showModalBottomSheet<HikePlan>(
       context: context,
-      isScrollControlled: true, // Tämä mahdollistaa täyskorkean modaalin
-      backgroundColor: Colors.transparent, // Pohjan väri
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (BuildContext modalContext) {
-        // Otetaan turvallinen alue yläreunasta ja näppäimistön tila huomioon
-        final mediaQuery = MediaQuery.of(modalContext);
-        final topPadding = mediaQuery.padding.top; // Safe area yläreunassa
-        final keyboardHeight =
-            mediaQuery.viewInsets.bottom; // Näppäimistön korkeus
-
-        // Lomakkeen maksimikorkeus, jätetään tilaa yläreunaan ja näppäimistölle
-        final formMaxHeight = mediaQuery.size.height -
-            topPadding -
-            keyboardHeight -
-            20; // 20px lisämarginaali
-
-        return Padding(
-          padding: EdgeInsets.only(
-              top: topPadding + 20), // Yläpadding safearean ja lisätilan verran
-          child: Container(
-            constraints: BoxConstraints(
-              maxHeight: formMaxHeight, // Asetetaan maksimikorkeus
-              minHeight:
-                  mediaQuery.size.height * 0.5, // Minikorkeus varmuuden vuoksi
-            ),
-            decoration: BoxDecoration(
-              color: Theme.of(modalContext).scaffoldBackgroundColor,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(24.0)),
-            ),
-            child: const AddHikePlanForm(),
-          ),
+        return DraggableScrollableSheet(
+          initialChildSize: 0.85,
+          minChildSize: 0.5,
+          maxChildSize: 0.9,
+          expand: false,
+          builder: (BuildContext context, ScrollController scrollController) {
+            return Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(24.0)),
+              ),
+              child: PrimaryScrollController(
+                controller: scrollController,
+                child: const AddHikePlanForm(),
+              ),
+            );
+          },
         );
       },
     );
@@ -134,6 +74,7 @@ class _NotesPageState extends State<NotesPage>
         _hikePlans.add(newPlan);
         _sortPlans();
       });
+      // Varmista, että FloatingActionButton päivittyy, kun tila muuttuu
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content:
@@ -170,13 +111,15 @@ class _NotesPageState extends State<NotesPage>
             ? _buildEmptyState(context, theme)
             : _buildHikeList(),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openAddHikePlanModal,
-        tooltip: 'Luo uusi vaellussuunnitelma',
-        icon: const Icon(Icons.add_road),
-        label: const Text('Uusi Suunnitelma'),
-        heroTag: 'addHikePlanFab',
-      ),
+      floatingActionButton: _hikePlans.isNotEmpty
+          ? FloatingActionButton.extended(
+              onPressed: _openAddHikePlanModal,
+              tooltip: 'Luo uusi vaellussuunnitelma',
+              icon: const Icon(Icons.add_road),
+              label: const Text('Uusi Suunnitelma'),
+              heroTag: 'addHikePlanFab',
+            )
+          : null, // Jos lista on tyhjä, FAB on null ja piilossa
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
@@ -189,20 +132,26 @@ class _NotesPageState extends State<NotesPage>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.map_outlined,
-                size: 96, color: theme.colorScheme.primary.withOpacity(0.6)),
+            Lottie.asset(
+              'assets/lottie/mountain.json',
+              width: 250,
+              height: 250,
+              fit: BoxFit.contain,
+              repeat: true,
+            ),
             const SizedBox(height: 24),
             Text(
-              'Ei vaellussuunnitelmia vielä',
+              'Seikkailusi odottaa!',
               style: textTheme.headlineMedium?.copyWith(
                 color: theme.colorScheme.onBackground.withOpacity(0.9),
                 fontWeight: FontWeight.w700,
+                fontSize: 28,
               ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),
             Text(
-              'Aloita seikkailusi luomalla ensimmäinen vaellussuunnitelmasi alta!',
+              'Täällä on vielä tyhjää! Kun luot ensimmäisen vaellussuunnitelmasi, se ilmestyy tänne.',
               textAlign: TextAlign.center,
               style: textTheme.bodyLarge?.copyWith(
                 color: theme.colorScheme.onBackground.withOpacity(0.7),

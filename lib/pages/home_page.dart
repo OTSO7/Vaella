@@ -53,7 +53,6 @@ class _HomePageState extends State<HomePage> {
         id: '3',
         username: 'Laura Luontokuvaaja',
         userAvatarUrl: 'https://i.pravatar.cc/150?img=3',
-        // Ei kuvaa tässä postauksessa
         caption:
             'Lyhyt iltakävely paikallisessa metsässä. Hiljaisuus ja raikas ilma tekevät niin hyvää. Pieniä iloja arjessa. 😌 #metsä #luontoterapia #iltakävely',
         timestamp: DateTime.now().subtract(const Duration(days: 2, hours: 12)),
@@ -73,7 +72,6 @@ class _HomePageState extends State<HomePage> {
         comments: 45,
         location: 'Inari, Lappi',
       ),
-      // Lisää muutama uusi postaus, jotta virta näyttää täydemmältä
       Post(
         id: '5',
         username: 'Sini Sääksjärvi',
@@ -109,16 +107,14 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       appBar: AppBar(
         title: Hero(
-          // Lisätään Hero-animaatio login-sivun kanssa
           tag: 'appLogo',
           child: Image.asset(
-            'assets/images/white1.png', // Käytä samaa logoa kuin login-sivulla
-            height: 32, // Pienempi logo App Barissa
+            'assets/images/white1.png',
+            height: 32,
             fit: BoxFit.contain,
           ),
         ),
-        centerTitle: true, // Keskitä logo
-        // actions-painikkeet ovat jo hyvät, mutta voidaan hienosäätää tyyliä
+        centerTitle: true,
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
@@ -143,10 +139,9 @@ class _HomePageState extends State<HomePage> {
         onRefresh: () async {
           await Future.delayed(const Duration(seconds: 1));
           setState(() {
-            _dummyPosts = _getDummyPosts()
-              ..shuffle(); // Sekoitetaan, jotta näyttää päivittyneeltä
+            _dummyPosts = _getDummyPosts()..shuffle();
           });
-          if (!mounted) return; // Turvatarkistus
+          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
                 content:
@@ -155,14 +150,15 @@ class _HomePageState extends State<HomePage> {
         },
         color: theme.colorScheme.secondary,
         backgroundColor: theme.primaryColor,
-        child: ListView.builder(
-          padding: const EdgeInsets.only(
-              top: 8.0,
-              bottom: 80.0), // Padding, jotta FAB ei peitä alinta korttia
+        child: ListView.separated(
+          // MUUTETTU: Käytetään ListView.separated
+          padding: const EdgeInsets.only(top: 8.0, bottom: 80.0),
           itemCount: _dummyPosts.length,
           itemBuilder: (context, index) {
             return PostCard(post: _dummyPosts[index]);
           },
+          separatorBuilder: (context, index) =>
+              const SizedBox(height: 16.0), // LISÄTTY: Väliä korttien väliin
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -174,12 +170,9 @@ class _HomePageState extends State<HomePage> {
           );
         },
         tooltip: 'Lisää postaus tai muistiinpano',
-        // Tässä käytetään teeman värejä. FAB on jo teeman mukainen.
-        icon: const Icon(
-            Icons.add_a_photo_outlined), // Sopivampi ikoni some-postaukseen
+        icon: const Icon(Icons.add_a_photo_outlined),
         label: const Text("Lisää postaus"),
       ),
-      // FAB sijainti: keskellä alhaalla
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }

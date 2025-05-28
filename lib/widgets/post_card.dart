@@ -20,15 +20,23 @@ class PostCard extends StatelessWidget {
         color: theme.cardColor, // Käytetään teeman cardColoria
         borderRadius: BorderRadius.circular(16.0), // Pyöreämmät kulmat
         boxShadow: [
+          // UUDET, HIENOSTUNEEMMAT VARJOT
           BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color:
+                Colors.black.withOpacity(0.15), // Hienovaraisempi läpinäkyvyys
+            blurRadius: 10, // Pienempi sumeus
+            offset: const Offset(0, 5), // Lyhyempi varjo pystysuunnassa
+            spreadRadius: 0, // Ei levitä varjoa ulospäin
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1), // Vielä läpinäkyvämpi
+            blurRadius: 4, // Vähemmän sumeutta
+            offset: const Offset(0, 2), // Lyhyempi
+            spreadRadius: 0,
           ),
         ],
       ),
       child: ClipRRect(
-        // Leikkaa sisältö pyöreiden kulmien sisään
         borderRadius: BorderRadius.circular(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -85,11 +93,7 @@ class PostCard extends StatelessWidget {
                         Icons.more_horiz, // Vaihdettu more_horiz, modernimpi
                         color: theme.colorScheme.onSurface.withOpacity(0.8)),
                     onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text(
-                                'Postausasetuksia ei ole vielä toteutettu.')),
-                      );
+                      _showFeatureComingSoon(context, "Postausasetukset");
                     },
                   ),
                 ],
@@ -166,19 +170,16 @@ class PostCard extends StatelessWidget {
                       _buildActionButton(
                           context, Icons.favorite_border, post.likes.toString(),
                           () {
-                        // TODO: Tykkäystoiminto
                         _showFeatureComingSoon(context, "Tykkäystoiminto");
                       }),
                       const SizedBox(width: 16.0),
                       _buildActionButton(context, Icons.chat_bubble_outline,
                           post.comments.toString(), () {
-                        // TODO: Kommenttitoiminto
                         _showFeatureComingSoon(context, "Kommenttitoiminto");
                       }),
                       const SizedBox(width: 16.0),
                       _buildActionButton(context, Icons.share_outlined, "Jaa",
                           () {
-                        // TODO: Jakotoiminto
                         _showFeatureComingSoon(context, "Jakotoiminto");
                       }),
                     ],
@@ -203,31 +204,26 @@ class PostCard extends StatelessWidget {
       VoidCallback onPressed) {
     final theme = Theme.of(context);
     return Material(
-      // Käytä Material-widgettiä InkWellin ympärillä, jotta saat paremman ripple-efektin
       color: Colors.transparent,
       child: InkWell(
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(20), // Pyöreämpi reunus
-        splashColor: theme.colorScheme.primary.withOpacity(0.2), // Splash-väri
-        highlightColor:
-            theme.colorScheme.primary.withOpacity(0.1), // Korostusväri
+        borderRadius: BorderRadius.circular(20),
+        splashColor: theme.colorScheme.primary.withOpacity(0.2),
+        highlightColor: theme.colorScheme.primary.withOpacity(0.1),
         child: Padding(
-          padding: const EdgeInsets.symmetric(
-              horizontal: 8.0, vertical: 6.0), // Isompi padding
+          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
           child: Row(
-            mainAxisSize: MainAxisSize.min, // Varmista, ettei vie liikaa tilaa
+            mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               Icon(icon,
-                  size: 22.0, // Isommat ikonit
+                  size: 22.0,
                   color: theme.colorScheme.onSurface.withOpacity(0.75)),
-              const SizedBox(
-                  width: 6.0), // Isompi väli ikonin ja tekstin välissä
-              // Näytä label aina, paitsi jos se on tyhjä ja tarkoitus on näyttää vain ikoni
+              const SizedBox(width: 6.0),
               Text(
                 label,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurface.withOpacity(0.75),
-                  fontWeight: FontWeight.w600, // Lihavampi fontti
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -241,12 +237,11 @@ class PostCard extends StatelessWidget {
   String _getTimeAgo(DateTime dateTime) {
     final Duration diff = DateTime.now().difference(dateTime);
     if (diff.inDays > 7) {
-      return DateFormat('d MMM', 'fi_FI')
-          .format(dateTime); // Esim. "23 touko", varmista lokaali
+      return DateFormat('d MMM', 'fi_FI').format(dateTime);
     } else if (diff.inDays >= 1) {
-      return '${diff.inDays} pv sitten'; // "pv" = päivää (lyhenne)
+      return '${diff.inDays} pv sitten';
     } else if (diff.inHours >= 1) {
-      return '${diff.inHours} t sitten'; // "t" = tuntia
+      return '${diff.inHours} t sitten';
     } else if (diff.inMinutes >= 1) {
       return '${diff.inMinutes} min sitten';
     } else {

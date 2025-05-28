@@ -6,15 +6,11 @@ import '../models/hike_plan_model.dart';
 class HikePlanCard extends StatelessWidget {
   final HikePlan plan;
   final VoidCallback? onTap;
-  // final VoidCallback? onEdit; // POISTETTU
-  // final VoidCallback? onDelete; // POISTETTU
 
   const HikePlanCard({
     super.key,
     required this.plan,
     this.onTap,
-    // this.onEdit, // POISTETTU
-    // this.onDelete, // POISTETTU
   });
 
   @override
@@ -59,10 +55,20 @@ class HikePlanCard extends StatelessWidget {
         color: theme.cardColor,
         borderRadius: BorderRadius.circular(18.0),
         boxShadow: [
+          // TÄSSÄ VARJOJEN HIENOSÄÄTÖ
           BoxShadow(
-            color: Colors.black.withOpacity(0.25),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
+            color:
+                Colors.black.withOpacity(0.15), // Hienovaraisempi läpinäkyvyys
+            blurRadius: 10, // Pienempi sumeus
+            offset: const Offset(0, 5), // Lyhyempi varjo pystysuunnassa
+            spreadRadius: 0, // Ei levitä varjoa ulospäin
+          ),
+          // Voit lisätä toisen, hienovaraisemman varjon syvyyden lisäämiseksi
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1), // Vielä läpinäkyvämpi
+            blurRadius: 4, // Vähemmän sumeutta
+            offset: const Offset(0, 2), // Lyhyempi
+            spreadRadius: 0,
           ),
         ],
       ),
@@ -74,8 +80,7 @@ class HikePlanCard extends StatelessWidget {
           splashColor: theme.colorScheme.primary.withOpacity(0.1),
           highlightColor: theme.colorScheme.primary.withOpacity(0.05),
           child: Padding(
-            // Lisää Padding koko sisältöön kuvan poistamisen jälkeen
-            padding: const EdgeInsets.all(18.0), // Aiemmin vain kuvan jälkeen
+            padding: const EdgeInsets.all(18.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -95,7 +100,6 @@ class HikePlanCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    // PopupMenuButton poistettu kokonaan täältä
                   ],
                 ),
                 const SizedBox(height: 12),
