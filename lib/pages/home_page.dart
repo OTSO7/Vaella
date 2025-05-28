@@ -2,11 +2,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
-import '../models/post_model.dart'; // <-- UUSI IMPORT
-import '../widgets/post_card.dart'; // <-- UUSI IMPORT
+import '../models/post_model.dart';
+import '../widgets/post_card.dart';
 
 class HomePage extends StatefulWidget {
-  // Muutettu StatefulWidgetiksi, jotta voidaan hallita dataa
   const HomePage({super.key});
 
   @override
@@ -14,7 +13,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  late List<Post> _dummyPosts; // Tehdään tästä late, alustetaan initState:ssa
+  late List<Post> _dummyPosts;
 
   @override
   void initState() {
@@ -22,14 +21,14 @@ class _HomePageState extends State<HomePage> {
     _dummyPosts = _getDummyPosts();
   }
 
+  // Nykyiset dummy-postaukset
   List<Post> _getDummyPosts() {
     return [
       Post(
         id: '1',
         username: 'Maija Retkeilijä',
-        userAvatarUrl: 'https://i.pravatar.cc/150?img=1', // Satunnainen avatar
-        postImageUrl:
-            'https://picsum.photos/seed/trail1/600/400', // Satunnainen kuva
+        userAvatarUrl: 'https://i.pravatar.cc/150?img=1',
+        postImageUrl: 'https://picsum.photos/seed/trail1/600/400',
         caption:
             'Upea päiväretki Teijon kansallispuistossa! Polut olivat hyvässä kunnossa ja maisemat henkeäsalpaavat. 🌲☀️ #vaellus #luonto #teijo',
         timestamp:
@@ -74,6 +73,31 @@ class _HomePageState extends State<HomePage> {
         comments: 45,
         location: 'Inari, Lappi',
       ),
+      // Lisää muutama uusi postaus, jotta virta näyttää täydemmältä
+      Post(
+        id: '5',
+        username: 'Sini Sääksjärvi',
+        userAvatarUrl: 'https://i.pravatar.cc/150?img=5',
+        postImageUrl: 'https://picsum.photos/seed/lake5/600/400',
+        caption:
+            'Upea aamu Sääksjärvellä! Kajakointi auringonnousun aikaan on parasta. 🌅🛶 #kajakointi #auringonnousu #järvimaisema',
+        timestamp: DateTime.now().subtract(const Duration(hours: 4)),
+        likes: 180,
+        comments: 20,
+        location: 'Sääksjärvi',
+      ),
+      Post(
+        id: '6',
+        username: 'Ville Vaeltaja',
+        userAvatarUrl: 'https://i.pravatar.cc/150?img=6',
+        postImageUrl: 'https://picsum.photos/seed/forest6/600/400',
+        caption:
+            'Pitkä vaellus Korouoman kanjonissa takana. Jäätiköt olivat huikeita! 💪❄️ #korouoma #jääputous #talvivaellus',
+        timestamp: DateTime.now().subtract(const Duration(days: 3)),
+        likes: 250,
+        comments: 38,
+        location: 'Korouoman kanjoni',
+      ),
     ];
   }
 
@@ -84,12 +108,20 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Seikkailut'), // Päivitetty otsikko
-        backgroundColor: theme.colorScheme.surface.withOpacity(0.8),
-        elevation: 1, // Pieni varjo AppBarille
+        title: Hero(
+          // Lisätään Hero-animaatio login-sivun kanssa
+          tag: 'appLogo',
+          child: Image.asset(
+            'assets/images/white1.png', // Käytä samaa logoa kuin login-sivulla
+            height: 32, // Pienempi logo App Barissa
+            fit: BoxFit.contain,
+          ),
+        ),
+        centerTitle: true, // Keskitä logo
+        // actions-painikkeet ovat jo hyvät, mutta voidaan hienosäätää tyyliä
         actions: [
           IconButton(
-            icon: const Icon(Icons.search), // Esim. hakutoiminto
+            icon: const Icon(Icons.search),
             tooltip: 'Hae postauksia',
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -108,14 +140,13 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
       body: RefreshIndicator(
-        // Lisätään RefreshIndicator postausten päivittämiseen (myöhemmin)
         onRefresh: () async {
-          // TODO: Toteuta oikea datan päivityslogiikka
-          await Future.delayed(const Duration(seconds: 1)); // Simuloitu viive
+          await Future.delayed(const Duration(seconds: 1));
           setState(() {
             _dummyPosts = _getDummyPosts()
-              ..shuffle(); // Esim. sekoitetaan järjestys "päivityksenä"
+              ..shuffle(); // Sekoitetaan, jotta näyttää päivittyneeltä
           });
+          if (!mounted) return; // Turvatarkistus
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
                 content:
@@ -135,7 +166,6 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        // Muutettu .extended:ksi
         onPressed: () {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -144,10 +174,13 @@ class _HomePageState extends State<HomePage> {
           );
         },
         tooltip: 'Lisää postaus tai muistiinpano',
-        backgroundColor: theme.colorScheme.secondary,
-        icon: const Icon(Icons.edit_note_outlined), // Sopivampi ikoni
-        label: const Text("Luo uusi"),
+        // Tässä käytetään teeman värejä. FAB on jo teeman mukainen.
+        icon: const Icon(
+            Icons.add_a_photo_outlined), // Sopivampi ikoni some-postaukseen
+        label: const Text("Lisää postaus"),
       ),
+      // FAB sijainti: keskellä alhaalla
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 }
