@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart'; // Oletetaan, että käytät tätä myöhemmin
+import '../providers/auth_provider.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -13,14 +13,25 @@ class RegisterPage extends StatefulWidget {
 
 class _RegisterPageState extends State<RegisterPage> {
   final _formKey = GlobalKey<FormState>();
+  final TextEditingController _usernameController =
+      TextEditingController(); // UUSI
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
       TextEditingController();
 
+  // Simuloidaan "tietokantaa" varatuista käyttäjätunnuksista
+  // Todellisessa sovelluksessa tämä tarkistettaisiin palvelimelta.
+  static final Set<String> _takenUsernames = {
+    'testikäyttäjä',
+    'admin',
+    'käyttäjä123'
+  };
+
   @override
   void dispose() {
+    _usernameController.dispose(); // UUSI
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
@@ -32,27 +43,45 @@ class _RegisterPageState extends State<RegisterPage> {
     if (_formKey.currentState!.validate()) {
       // Tässä vaiheessa ei tehdä oikeaa rekisteröintiä,
       // vaan simuloidaan onnistumista ja siirrytään eteenpäin.
-      // Voit myöhemmin lisätä tähän Firebase-kutsut tai muun backend-logiikan.
+      // Myöhemmin tähän lisätään backend-logiikka.
 
-      // Esimerkki: Tulostetaan tiedot konsoliin
+      // Otetaan talteen syötetty käyttäjätunnus
+      final newUsername = _usernameController.text.trim().toLowerCase();
+
+      // Tarkistetaan uudelleen uniikkius (vaikka validoija tekeekin sen jo)
+      // Tämä on lisävarmistus, jos haluat tehdä jotain ennen kuin lisäät sen _takenUsernames-listaan.
+      if (_takenUsernames.contains(newUsername)) {
+        // Tämä ei pitäisi tapahtua, jos validoija toimii, mutta varmuuden vuoksi.
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Käyttäjätunnus "$newUsername" on jo varattu. Valitse toinen.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        return;
+      }
+
       print('Rekisteröidytään käyttäjällä:');
+      print('Käyttäjätunnus: $newUsername');
       print('Nimi: ${_nameController.text}');
       print('Sähköposti: ${_emailController.text}');
 
-      // Näytetään onnistumisviesti
+      // Dummy-vaiheessa: Lisää uusi käyttäjätunnus "varattujen" listaan
+      // Todellisessa sovelluksessa tämä tapahtuisi palvelimella.
+      _takenUsernames.add(newUsername);
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Tili luotu onnistuneesti! Voit nyt kirjautua sisään.'),
+          content: Text(
+              'Tili käyttäjätunnuksella "$newUsername" luotu onnistuneesti! Voit nyt kirjautua sisään.'),
           backgroundColor: Colors.green[700],
         ),
       );
 
-      // Vaihtoehto 1: Palaa kirjautumissivulle
-      // context.pop(); // Jos tulit .push() metodilla
-
-      // Vaihtoehto 2: Kirjaa käyttäjä sisään ja ohjaa kotisivulle (dummy-toiminto)
+      // Vaihtoehto: Kirjaa käyttäjä sisään ja ohjaa kotisivulle
       Provider.of<AuthProvider>(context, listen: false).login();
-      context.go('/'); // Ohjaa juureen, josta AppRouter ohjaa HomePageen
+      context.go('/');
     }
   }
 
@@ -63,32 +92,19 @@ class _RegisterPageState extends State<RegisterPage> {
     final screenWidth = MediaQuery.of(context).size.width;
 
     return Scaffold(
-      // Lisätään AppBar, jotta käyttäjä voi palata helposti takaisin, jos saapui .push()-kutsulla
-      // Jos käytät .go() ja haluat "takaisin"-nuolen, GoRouterin pitää tietää, mistä tultiin.
-      // Yksinkertaisempi on antaa selkeä linkki takaisin LoginPageen.
-      // Tässä tapauksessa jätetään AppBar pois, jotta ulkoasu on identtinen LoginPagen kanssa.
-      // appBar: AppBar(
-      //   title: const Text('Luo uusi tili'),
-      //   elevation: 0,
-      //   backgroundColor: Colors.transparent, // Läpinäkyvä, jotta taustakuva näkyy
-      // ),
       body: Stack(
         children: [
-          // Taustakuva (sama kuin LoginPage)
           Container(
             decoration: const BoxDecoration(
               image: DecorationImage(
-                image: AssetImage(
-                    'assets/images/header2.jpg'), // Varmista, että tämä kuva on olemassa
+                image: AssetImage('assets/images/header2.jpg'),
                 fit: BoxFit.cover,
               ),
             ),
           ),
-          // Tummennuskerros (sama kuin LoginPage)
           Container(
             decoration: BoxDecoration(
-              color: Colors.black
-                  .withOpacity(0.65), // Hieman tummempi kuin login? Tai sama.
+              color: Colors.black.withOpacity(0.65),
             ),
           ),
           Center(
@@ -102,9 +118,8 @@ class _RegisterPageState extends State<RegisterPage> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
-                      // Logo (sama kuin LoginPage)
                       Image.asset(
-                        'assets/images/white1.png', // Varmista, että tämä kuva on olemassa
+                        'assets/images/white1.png',
                         height: screenHeight * 0.10,
                       ),
                       SizedBox(height: screenHeight * 0.015),
@@ -113,7 +128,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         textAlign: TextAlign.center,
                         style: theme.textTheme.headlineSmall?.copyWith(
                           color: Colors.white,
-                          fontSize: 28, // Hieman pienempi kuin login
+                          fontSize: 28,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -126,12 +141,42 @@ class _RegisterPageState extends State<RegisterPage> {
                       ),
                       SizedBox(height: screenHeight * 0.04),
 
+                      // Käyttäjätunnus-kenttä (UUSI)
+                      TextFormField(
+                        controller: _usernameController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(
+                          hintText: 'Käyttäjätunnus',
+                          prefixIcon: Icon(Icons.account_circle_outlined),
+                        ),
+                        keyboardType: TextInputType.text,
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Syötä käyttäjätunnus';
+                          }
+                          if (value.trim().length < 3) {
+                            return 'Käyttäjätunnuksen tulee olla vähintään 3 merkkiä';
+                          }
+                          if (value.contains(' ')) {
+                            return 'Käyttäjätunnus ei saa sisältää välilyöntejä';
+                          }
+                          // Tarkistetaan uniikkius simuloidusta listasta (case-insensitive)
+                          if (_takenUsernames
+                              .contains(value.trim().toLowerCase())) {
+                            return 'Käyttäjätunnus on jo varattu';
+                          }
+                          return null;
+                        },
+                      ),
+                      SizedBox(height: screenHeight * 0.02),
+
                       // Nimi-kenttä
                       TextFormField(
                         controller: _nameController,
                         style: const TextStyle(color: Colors.white),
                         decoration: const InputDecoration(
-                          hintText: 'Nimi (esim. Matti Meikäläinen)',
+                          hintText: 'Koko nimi (esim. Matti Meikäläinen)',
                           prefixIcon: Icon(Icons.person_outline),
                         ),
                         keyboardType: TextInputType.name,
@@ -156,13 +201,19 @@ class _RegisterPageState extends State<RegisterPage> {
                           prefixIcon: Icon(Icons.email_outlined),
                         ),
                         keyboardType: TextInputType.emailAddress,
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
                         validator: (value) {
                           if (value == null || value.isEmpty) {
                             return 'Syötä sähköpostiosoite';
                           }
-                          if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
+                          final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
+                          if (!emailRegex.hasMatch(value)) {
                             return 'Syötä validi sähköpostiosoite';
                           }
+                          // Tähän voisi lisätä myös sähköpostin uniikkiuden tarkistuksen
+                          // if (_takenEmails.contains(value.trim().toLowerCase())) {
+                          //   return 'Sähköposti on jo käytössä';
+                          // }
                           return null;
                         },
                       ),
@@ -198,6 +249,7 @@ class _RegisterPageState extends State<RegisterPage> {
                           prefixIcon: Icon(Icons.lock_outline),
                         ),
                         obscureText: true,
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
                         validator: (value) {
                           if (value == null || value.isEmpty) {
                             return 'Vahvista salasana';
@@ -210,14 +262,12 @@ class _RegisterPageState extends State<RegisterPage> {
                       ),
                       SizedBox(height: screenHeight * 0.04),
 
-                      // Luo tili -painike
                       ElevatedButton(
                         onPressed: _register,
                         child: const Text('Luo tili'),
                       ),
                       SizedBox(height: screenHeight * 0.03),
 
-                      // Linkki takaisin kirjautumissivulle
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -225,13 +275,10 @@ class _RegisterPageState extends State<RegisterPage> {
                               style: theme.textTheme.bodyMedium),
                           TextButton(
                             onPressed: () {
-                              // Ohjaa takaisin LoginPageen. Jos käytit .push() tullessa, .pop() toimii.
-                              // Jos haluat varmemmin, käytä GoRouteria:
                               if (context.canPop()) {
                                 context.pop();
                               } else {
-                                context.go(
-                                    '/login'); // Varmuuden vuoksi, jos ei voi popata
+                                context.go('/login');
                               }
                             },
                             child: const Text('Kirjaudu sisään'),
