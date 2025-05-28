@@ -8,7 +8,9 @@ class HikePlan {
   final DateTime startDate;
   final DateTime? endDate;
   final double? lengthKm;
-  final String? notes; // Lisätään muistiinpanokenttä
+  final String? notes;
+  // final String? imageUrl; // POISTETTU
+
   final HikeStatus status;
 
   HikePlan({
@@ -19,6 +21,7 @@ class HikePlan {
     this.endDate,
     this.lengthKm,
     this.notes,
+    // this.imageUrl, // POISTETTU konstruktorista
     this.status = HikeStatus.planned,
   });
 }
