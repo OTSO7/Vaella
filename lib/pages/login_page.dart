@@ -13,7 +13,8 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _emailController = TextEditingController();
+  // Muutetaan nimeksi "_identifierController" kuvaamaan, että se voi olla joko sähköposti tai käyttäjätunnus
+  final TextEditingController _identifierController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -24,18 +25,18 @@ class _LoginPageState extends State<LoginPage>
     super.initState();
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900), // Pidempi animaatio
+      duration: const Duration(milliseconds: 900),
     );
 
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _animationController,
-        curve: Curves.easeInCubic, // Sulavampi sisäänajo
+        curve: Curves.easeInCubic,
       ),
     );
 
     _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.1), // Hieman ylöspäin
+      begin: const Offset(0, 0.1),
       end: Offset.zero,
     ).animate(
       CurvedAnimation(
@@ -49,7 +50,7 @@ class _LoginPageState extends State<LoginPage>
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _identifierController.dispose(); // Päivitetty
     _passwordController.dispose();
     _animationController.dispose();
     super.dispose();
@@ -59,12 +60,17 @@ class _LoginPageState extends State<LoginPage>
     if (_formKey.currentState!.validate()) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       try {
-        await authProvider.login(
-          _emailController.text.trim(),
+        // Käytetään uutta kirjautumismetodia
+        await authProvider.loginWithUsernameOrEmail(
+          _identifierController.text.trim(),
           _passwordController.text,
         );
+        // Tarkista mounted-tila ennen kontekstin käyttöä
+        if (!mounted) return;
         // GoRouterin redirect-logiikka AuthProviderissa hoitaa navigoinnin
       } catch (e) {
+        // Tarkista mounted-tila ennen kontekstin käyttöä
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(e.toString().replaceFirst('Exception: ', '')),
@@ -79,9 +85,8 @@ class _LoginPageState extends State<LoginPage>
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
-    final authProvider =
-        Provider.of<AuthProvider>(context); // Kuuntele isLoading-tilaa
-    final textTheme = Theme.of(context).textTheme; // Hae TextTheme
+    final authProvider = Provider.of<AuthProvider>(context);
+    final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
       body: Stack(
@@ -103,7 +108,7 @@ class _LoginPageState extends State<LoginPage>
                   colors: [
                     Colors.black.withOpacity(0.6),
                     Colors.black.withOpacity(0.8),
-                    Colors.black.withOpacity(0.95), // Tiiviimpi alhaalta
+                    Colors.black.withOpacity(0.95),
                   ],
                 ),
               ),
@@ -126,7 +131,6 @@ class _LoginPageState extends State<LoginPage>
                         children: <Widget>[
                           // Sovelluksen logo tai kuvake
                           Hero(
-                            // Lisää Hero-animaatio login- ja register-sivujen välille
                             tag: 'appLogo',
                             child: Image.asset(
                               'assets/images/white1.png',
@@ -140,7 +144,7 @@ class _LoginPageState extends State<LoginPage>
                             textAlign: TextAlign.center,
                             style: textTheme.headlineLarge?.copyWith(
                               color: Colors.white,
-                              fontSize: 48, // Isompi fontti
+                              fontSize: 48,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 2.0,
                               shadows: [
@@ -165,22 +169,24 @@ class _LoginPageState extends State<LoginPage>
                           SizedBox(height: screenHeight * 0.06),
 
                           TextFormField(
-                            controller: _emailController,
+                            controller: _identifierController, // Päivitetty
                             style: const TextStyle(color: Colors.white),
                             decoration: const InputDecoration(
-                              hintText: 'Sähköposti',
-                              labelText: 'Sähköposti', // Lisää label
-                              prefixIcon: Icon(Icons.email_outlined),
+                              hintText:
+                                  'Käyttäjätunnus tai sähköposti', // Päivitetty
+                              labelText:
+                                  'Käyttäjätunnus tai sähköposti', // Päivitetty
+                              prefixIcon:
+                                  Icon(Icons.person_outline), // Yleisempi ikoni
                             ),
-                            keyboardType: TextInputType.emailAddress,
+                            keyboardType: TextInputType
+                                .emailAddress, // Voi auttaa mobiilissa
                             validator: (value) {
                               if (value == null || value.isEmpty) {
-                                return 'Syötä sähköpostiosoite';
+                                return 'Syötä käyttäjätunnus tai sähköpostiosoite';
                               }
-                              if (!RegExp(r'^[^@]+@[^@]+\.[^@]+')
-                                  .hasMatch(value)) {
-                                return 'Syötä validi sähköpostiosoite';
-                              }
+                              // Ei tehdä tiukkaa sähköpostivalidointia tässä, koska se voi olla myös käyttäjätunnus
+                              // Tarkistetaan vain, ettei ole tyhjä
                               return null;
                             },
                           ),
@@ -204,12 +210,12 @@ class _LoginPageState extends State<LoginPage>
                               return null;
                             },
                           ),
-                          SizedBox(
-                              height: screenHeight * 0.015), // Pienempi väli
+                          SizedBox(height: screenHeight * 0.015),
                           Align(
                             alignment: Alignment.centerRight,
                             child: TextButton(
                               onPressed: () {
+                                if (!mounted) return; // Tarkista mounted-tila
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                       content: Text(

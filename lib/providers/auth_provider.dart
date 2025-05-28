@@ -16,20 +16,17 @@ class AuthProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
 
   AuthProvider() {
-    // Kuuntele Firebase Auth -tilan muutoksia
     _auth.authStateChanges().listen((User? firebaseUser) async {
       _user = firebaseUser;
       if (_user != null) {
-        // Jos käyttäjä on kirjautunut sisään, hae käyttäjän tiedot Firestoresta
         await _fetchUserProfile();
       } else {
-        _username = null; // Nollaa käyttäjänimi, jos uloskirjautunut
+        _username = null;
       }
-      notifyListeners(); // Ilmoita GoRouterille ja muille kuulijoille
+      notifyListeners();
     });
   }
 
-  // Hakee käyttäjän profiilitiedot Firestoresta
   Future<void> _fetchUserProfile() async {
     if (_user != null) {
       try {
@@ -38,7 +35,6 @@ class AuthProvider with ChangeNotifier {
         if (userDoc.exists) {
           _username = userDoc.get('username');
         } else {
-          // Jos Firestore-dokumenttia ei löydy, nollaa käyttäjänimi
           _username = null;
           print("Warning: User Firestore document not found for ${_user!.uid}");
         }
@@ -49,26 +45,55 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  Future<void> login(String email, String password) async {
+  // Apufunktio tarkistamaan, onko syöte sähköpostimuodossa
+  bool _isEmail(String input) {
+    return RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(input);
+  }
+
+  // UUSI KIRJAUTUMISLOGIIKKA: hyväksyy käyttäjätunnuksen tai sähköpostin
+  Future<void> loginWithUsernameOrEmail(
+      String identifier, String password) async {
     _isLoading = true;
     notifyListeners();
+    String emailToLogin;
+
     try {
-      await _auth.signInWithEmailAndPassword(email: email, password: password);
-      // _user ja _username päivittyvät automaattisesti authStateChanges-kuuntelijan kautta
+      if (_isEmail(identifier)) {
+        // Jos tunnus on sähköposti, käytä sitä suoraan
+        emailToLogin = identifier.trim();
+      } else {
+        // Jos tunnus ei ole sähköposti, oletetaan sen olevan käyttäjätunnus
+        final QuerySnapshot userQuery = await _firestore
+            .collection('users')
+            .where('username', isEqualTo: identifier.trim().toLowerCase())
+            .limit(1)
+            .get();
+
+        if (userQuery.docs.isEmpty) {
+          throw Exception('Käyttäjätunnusta tai sähköpostia ei löytynyt.');
+        }
+
+        // Käyttäjätunnus löytyi, haetaan sähköposti
+        emailToLogin = userQuery.docs.first.get('email');
+      }
+
+      // Yritä kirjautua sisään löydetyllä sähköpostilla
+      await _auth.signInWithEmailAndPassword(
+          email: emailToLogin, password: password);
     } on FirebaseAuthException catch (e) {
       String message;
       if (e.code == 'user-not-found') {
-        message = 'Käyttäjää ei löydy tällä sähköpostilla.';
+        message = 'Käyttäjää ei löydy.'; // Yleistetty virhe
       } else if (e.code == 'wrong-password') {
         message = 'Väärä salasana.';
       } else if (e.code == 'invalid-email') {
-        message = 'Virheellinen sähköpostiosoite.';
+        message = 'Virheellinen sähköpostiosoite tai käyttäjätunnus.';
       } else if (e.code == 'network-request-failed') {
         message = 'Verkkovirhe. Tarkista internetyhteytesi.';
       } else {
         message = 'Kirjautuminen epäonnistui: ${e.message}';
       }
-      throw Exception(message); // Heitä poikkeus, jonka UI voi näyttää
+      throw Exception(message);
     } catch (e) {
       throw Exception('Kirjautuminen epäonnistui: $e');
     } finally {
@@ -77,39 +102,61 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  // Vanha login-metodi, jota ei enää käytetä, mutta jätän sen kommentoituna vertailua varten
+  // Future<void> login(String email, String password) async {
+  //   _isLoading = true;
+  //   notifyListeners();
+  //   try {
+  //     await _auth.signInWithEmailAndPassword(email: email, password: password);
+  //   } on FirebaseAuthException catch (e) {
+  //     String message;
+  //     if (e.code == 'user-not-found') {
+  //       message = 'Käyttäjää ei löydy tällä sähköpostilla.';
+  //     } else if (e.code == 'wrong-password') {
+  //       message = 'Väärä salasana.';
+  //     } else if (e.code == 'invalid-email') {
+  //       message = 'Virheellinen sähköpostiosoite.';
+  //     } else {
+  //       message = 'Kirjautuminen epäonnistui: ${e.message}';
+  //     }
+  //     throw Exception(message);
+  //   } catch (e) {
+  //     throw Exception('Kirjautuminen epäonnistui: $e');
+  //   } finally {
+  //     _isLoading = false;
+  //     notifyListeners();
+  //   }
+  // }
+
   Future<void> register(
       String email, String password, String username, String name) async {
     _isLoading = true;
     notifyListeners();
     try {
-      // Tarkista käyttäjätunnuksen uniikkius Firestoresta
       final usernameExists = await _firestore
           .collection('users')
           .where('username', isEqualTo: username.toLowerCase())
-          .limit(1) // Hae vain yksi, jos löytyy
+          .limit(1)
           .get();
 
       if (usernameExists.docs.isNotEmpty) {
         throw Exception('Käyttäjätunnus on jo varattu.');
       }
 
-      // Luo käyttäjä Firebase Authenticationsiin
       UserCredential userCredential =
           await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
 
-      // Tallenna käyttäjän tiedot Firestoreen
       if (userCredential.user != null) {
         await _firestore.collection('users').doc(userCredential.user!.uid).set({
           'email': email.toLowerCase(),
           'username': username.toLowerCase(),
           'name': name,
-          'createdAt': FieldValue.serverTimestamp(), // Tallentaa luomisajan
+          'createdAt': FieldValue.serverTimestamp(),
         });
       }
-      // _user ja _username päivittyvät automaattisesti authStateChanges-kuuntelijan kautta
     } on FirebaseAuthException catch (e) {
       String message;
       if (e.code == 'weak-password') {
@@ -137,8 +184,8 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
     try {
       await _auth.signOut();
-      _user = null; // Aseta käyttäjä nulliksi välittömästi
-      _username = null; // Nollaa käyttäjänimi
+      _user = null;
+      _username = null;
     } catch (e) {
       print('Error during logout: $e');
     } finally {
