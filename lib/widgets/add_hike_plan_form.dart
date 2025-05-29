@@ -178,17 +178,25 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
 
   // UUSI: Käsittelee valitun ehdotuksen Nominatimista
   void _selectLocationSuggestion(Map<String, dynamic> suggestion) {
+    // Haetaan lyhyempi versio sijainnista
+    final displayName = suggestion['display_name'] as String;
+    final parts = displayName.split(',').map((e) => e.trim()).toList();
+
+    // Oletetaan, että ensimmäiset 1-3 osaa riittävät lyhyeen nimeen
+    String shortLocation = parts.take(2).join(', '); // Esim. "Nuuksio, Espoo"
+
     setState(() {
-      _locationController.text = suggestion['display_name'];
+      _locationController.text = shortLocation;
       _latitude = double.tryParse(suggestion['lat'] ?? '');
       _longitude = double.tryParse(suggestion['lon'] ?? '');
-      _locationSuggestions = []; // Tyhjennä ehdotukset valinnan jälkeen
+      _locationSuggestions = []; // Tyhjennä ehdotukset
     });
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-              'Sijainti "${suggestion['display_name']}" valittu. Koordinaatit: ${_latitude?.toStringAsFixed(4)}, ${_longitude?.toStringAsFixed(4)}'),
+              'Sijainti "$shortLocation" valittu. Koordinaatit: ${_latitude?.toStringAsFixed(4)}, ${_longitude?.toStringAsFixed(4)}'),
           backgroundColor: Colors.green[700],
         ),
       );
@@ -383,16 +391,24 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
                         ],
                       ),
                       child: ListView.builder(
-                        shrinkWrap:
-                            true, // Varmista, ettei listview vie liikaa tilaa
-                        physics:
-                            const NeverScrollableScrollPhysics(), // Estä vieritys
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
                         itemCount: _locationSuggestions.length,
                         itemBuilder: (context, index) {
                           final suggestion = _locationSuggestions[index];
+                          final displayName =
+                              suggestion['display_name'] as String;
+                          final parts = displayName
+                              .split(',')
+                              .map((e) => e.trim())
+                              .toList();
+                          String shortDisplay = parts.take(2).join(', ');
+                          if (shortDisplay.length < 18 && parts.length > 2) {
+                            shortDisplay = parts.take(3).join(', ');
+                          }
                           return ListTile(
                             leading: const Icon(Icons.place),
-                            title: Text(suggestion['display_name']),
+                            title: Text(shortDisplay),
                             onTap: () => _selectLocationSuggestion(suggestion),
                           );
                         },
