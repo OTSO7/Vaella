@@ -129,7 +129,7 @@ class HikePlanCard extends StatelessWidget {
                                 children: [
                                   Icon(Icons.delete_outline,
                                       color: Colors.red.shade600),
-                                  SizedBox(width: 8),
+                                  const SizedBox(width: 8),
                                   Text('Poista',
                                       style: TextStyle(
                                           color: Colors.red.shade600)),

@@ -33,7 +33,7 @@ class AchievementBadge extends StatelessWidget {
           width: 80,
           height: 80,
           decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+              color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
               borderRadius: BorderRadius.circular(12),
               border:
                   Border.all(color: theme.colorScheme.outline.withOpacity(0.5)),

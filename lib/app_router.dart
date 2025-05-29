@@ -132,25 +132,23 @@ class AppRouter extends StatelessWidget {
         primary: Colors.teal.shade400, // Kirkkaampi turkoosi
         secondary: Colors.orange.shade300, // Pehmeämpi oranssi korostus
         surface: const Color(0xFF2C2C2C),
-        background: const Color(0xFF1A1A1A),
         error: Colors.redAccent,
         onPrimary: Colors.white,
         onSecondary: Colors.black,
         onSurface: Colors.white.withOpacity(0.9),
-        onBackground: Colors.white.withOpacity(0.9),
         onError: Colors.black,
         outline: Colors.grey.shade700, // Kenttien reunaviivat
       ),
       // Tekstiteemat
       textTheme: TextTheme(
-        headlineLarge: TextStyle(
+        headlineLarge: const TextStyle(
             fontWeight: FontWeight.w800,
             color: Colors.white,
             fontSize: 48,
             letterSpacing: -1.0),
-        headlineMedium: TextStyle(
+        headlineMedium: const TextStyle(
             fontWeight: FontWeight.w700, color: Colors.white, fontSize: 32),
-        headlineSmall: TextStyle(
+        headlineSmall: const TextStyle(
             fontWeight: FontWeight.w600, color: Colors.white, fontSize: 24),
         titleLarge: TextStyle(
             fontWeight: FontWeight.w700,
@@ -246,7 +244,7 @@ class AppRouter extends StatelessWidget {
         unselectedLabelStyle: const TextStyle(fontSize: 11),
         elevation: 8.0,
       ),
-      appBarTheme: AppBarTheme(
+      appBarTheme: const AppBarTheme(
         backgroundColor: Colors.transparent, // Läpinäkyvä app bar
         elevation: 0,
         foregroundColor: Colors.white,

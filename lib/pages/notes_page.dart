@@ -241,7 +241,7 @@ class _NotesPageState extends State<NotesPage>
             Text(
               'Seikkailusi odottaa!',
               style: textTheme.headlineMedium?.copyWith(
-                color: theme.colorScheme.onBackground.withOpacity(0.9),
+                color: theme.colorScheme.onSurface.withOpacity(0.9),
                 fontWeight: FontWeight.w700,
                 fontSize: 28,
               ),
@@ -252,7 +252,7 @@ class _NotesPageState extends State<NotesPage>
               'Täällä on vielä tyhjää! Kun luot ensimmäisen vaellussuunnitelmasi, se ilmestyy tänne.',
               textAlign: TextAlign.center,
               style: textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onBackground.withOpacity(0.7),
+                color: theme.colorScheme.onSurface.withOpacity(0.7),
                 height: 1.4,
               ),
             ),
@@ -292,7 +292,7 @@ class _NotesPageState extends State<NotesPage>
               'Kirjaudu sisään nähdäksesi vaelluksesi!',
               textAlign: TextAlign.center,
               style: textTheme.headlineMedium?.copyWith(
-                color: theme.colorScheme.onBackground.withOpacity(0.9),
+                color: theme.colorScheme.onSurface.withOpacity(0.9),
                 fontWeight: FontWeight.w700,
                 fontSize: 28,
               ),
@@ -302,7 +302,7 @@ class _NotesPageState extends State<NotesPage>
               'Sinun täytyy olla kirjautuneena sisään nähdäksesi ja hallitaksesi vaellussuunnitelmiasi. Kirjaudu sisään tai luo uusi tili.',
               textAlign: TextAlign.center,
               style: textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onBackground.withOpacity(0.7),
+                color: theme.colorScheme.onSurface.withOpacity(0.7),
                 height: 1.4,
               ),
             ),

@@ -107,12 +107,12 @@ class ProfileHeader extends StatelessWidget {
                 displayName,
                 style: textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.onBackground),
+                    color: theme.colorScheme.onSurface),
               ),
               Text(
                 '@$username', // Käyttäjätunnus
                 style: textTheme.titleMedium?.copyWith(
-                    color: theme.colorScheme.onBackground.withOpacity(0.6)),
+                    color: theme.colorScheme.onSurface.withOpacity(0.6)),
               ),
               if (bio != null && bio!.isNotEmpty) ...[
                 const SizedBox(height: 12),
@@ -121,7 +121,7 @@ class ProfileHeader extends StatelessWidget {
                   child: Text(
                     bio!,
                     style: textTheme.bodyLarge?.copyWith(
-                        color: theme.colorScheme.onBackground.withOpacity(0.8),
+                        color: theme.colorScheme.onSurface.withOpacity(0.8),
                         height: 1.4),
                     textAlign: TextAlign.center,
                     maxLines: 3,
@@ -145,14 +145,14 @@ class ProfileHeader extends StatelessWidget {
                         Text(
                             '${(experienceProgress * 100).toInt()}% seuraavaan tasoon',
                             style: textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.onBackground
+                                color: theme.colorScheme.onSurface
                                     .withOpacity(0.7))),
                       ],
                     ),
                     const SizedBox(height: 6),
                     LinearProgressIndicator(
                       value: experienceProgress,
-                      backgroundColor: theme.colorScheme.surfaceVariant
+                      backgroundColor: theme.colorScheme.surfaceContainerHighest
                           .withOpacity(0.3), // Vaaleampi tausta
                       valueColor: AlwaysStoppedAnimation<Color>(
                           theme.colorScheme.secondary),

@@ -1,8 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/hike_plan_model.dart';
-import 'package:provider/provider.dart'; // Lisää tämä
-import '../providers/auth_provider.dart'; // Lisää tämä
+// Lisää tämä
+// Lisää tämä
 
 class HikePlanService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;

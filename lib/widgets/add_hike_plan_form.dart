@@ -244,10 +244,12 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
                     validator: (value) {
                       if (value != null && value.trim().isNotEmpty) {
                         final val = value.trim().replaceAll(',', '.');
-                        if (double.tryParse(val) == null)
+                        if (double.tryParse(val) == null) {
                           return 'Syötä validi numero';
-                        if (double.parse(val) < 0)
+                        }
+                        if (double.parse(val) < 0) {
                           return 'Pituuden on oltava positiivinen';
+                        }
                       }
                       return null;
                     },
@@ -350,7 +352,7 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
       DateFormat dateFormat, bool isStartDate, String labelText) {
     BorderRadius fieldBorderRadius = BorderRadius.circular(12.0);
     BorderSide fieldBorderSide =
-        BorderSide(color: theme.colorScheme.outline!, width: 1.5);
+        BorderSide(color: theme.colorScheme.outline, width: 1.5);
 
     if (theme.inputDecorationTheme.enabledBorder is OutlineInputBorder) {
       final outlineEnabledBorder =
