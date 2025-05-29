@@ -12,6 +12,8 @@ class HikePlan {
   final double? lengthKm;
   final String? notes;
   final HikeStatus status;
+  final double? latitude;
+  final double? longitude;
 
   HikePlan({
     String? id,
@@ -22,6 +24,8 @@ class HikePlan {
     this.lengthKm,
     this.notes,
     HikeStatus? status,
+    this.latitude,
+    this.longitude,
   })  : id = id ?? const Uuid().v4(),
         status = status ??
             (startDate.isBefore(DateTime.now())
@@ -42,6 +46,8 @@ class HikePlan {
         (e) => e.toString() == 'HikeStatus.${data['status']}',
         orElse: () => HikeStatus.planned,
       ),
+      latitude: (data['latitude'] as num?)?.toDouble(),
+      longitude: (data['longitude'] as num?)?.toDouble(),
     );
   }
 
@@ -55,6 +61,8 @@ class HikePlan {
       'notes': notes,
       'status': status.toString().split('.').last,
       'createdAt': FieldValue.serverTimestamp(),
+      'latitude': latitude,
+      'longitude': longitude,
     };
   }
 
@@ -67,6 +75,8 @@ class HikePlan {
     double? lengthKm,
     String? notes,
     HikeStatus? status,
+    double? latitude,
+    double? longitude,
   }) {
     return HikePlan(
       id: id ?? this.id,
@@ -77,6 +87,8 @@ class HikePlan {
       lengthKm: lengthKm ?? this.lengthKm,
       notes: notes ?? this.notes,
       status: status ?? this.status,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
     );
   }
 }

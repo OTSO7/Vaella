@@ -186,40 +186,23 @@ class _NotesPageState extends State<NotesPage>
                         child: Text(
                             'Virhe ladattaessa vaelluksia: ${snapshot.error}'));
                   }
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return _buildEmptyState(context, theme);
+                  }
 
-                  final List<HikePlan> hikePlans =
-                      snapshot.data ?? []; // Varmista, ettei ole null
-
-                  return snapshot.data!.isEmpty
-                      ? _buildEmptyState(context, theme)
-                      : _buildHikeList(hikePlans);
+                  final List<HikePlan> hikePlans = snapshot.data!;
+                  return _buildHikeList(hikePlans);
                 },
               ),
       ),
-      floatingActionButton: userId == null // Jos ei kirjautunut, ei FAB:ia
+      floatingActionButton: userId == null
           ? null
-          : StreamBuilder<List<HikePlan>>(
-              stream: _hikePlanService
-                  .getHikePlans(), // Kuunnellaan FAB:n näkyvyyttä varten
-              builder: (context, snapshot) {
-                // Näytetään FAB vain, jos vaelluksia on, tai jos dataa ei ole vielä ladattu (eli tila on waiting)
-                // Mutta ei näytetä, jos on virhe tai data on tyhjä
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const SizedBox(); // Piilotetaan latauksen ajaksi
-                }
-                if (snapshot.hasError ||
-                    !snapshot.hasData ||
-                    snapshot.data!.isEmpty) {
-                  return const SizedBox(); // Piilotetaan, jos lista on tyhjä tai virhe
-                }
-                return FloatingActionButton.extended(
-                  onPressed: _openAddHikePlanModal,
-                  tooltip: 'Luo uusi vaellussuunnitelma',
-                  icon: const Icon(Icons.add_road),
-                  label: const Text('Uusi Suunnitelma'),
-                  heroTag: 'addHikePlanFab',
-                );
-              },
+          : FloatingActionButton.extended(
+              onPressed: _openAddHikePlanModal,
+              tooltip: 'Luo uusi vaellussuunnitelma',
+              icon: const Icon(Icons.add_road),
+              label: const Text('Uusi Suunnitelma'),
+              heroTag: 'addHikePlanFab',
             ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
@@ -349,9 +332,14 @@ class _NotesPageState extends State<NotesPage>
         return HikePlanCard(
           plan: plan,
           onTap: () {
+            String coords = '';
+            if (plan.latitude != null && plan.longitude != null) {
+              coords =
+                  ' (Koord: ${plan.latitude?.toStringAsFixed(4)}, ${plan.longitude?.toStringAsFixed(4)})';
+            }
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                 content: Text(
-                    'Tarkastellaan suunnitelmaa: ${plan.hikeName} (${plan.status == HikeStatus.completed ? 'suoritettu' : 'tulossa'})')));
+                    'Tarkastellaan suunnitelmaa: ${plan.hikeName} (${plan.status == HikeStatus.completed ? 'suoritettu' : 'tulossa'})$coords')));
           },
           onEdit: () => _openAddHikePlanModal(existingPlan: plan),
           onDelete: () => _deleteHikePlan(plan.id, plan.hikeName),

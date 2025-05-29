@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http; // UUSI: HTTP-pyyntöihin
+import 'dart:convert'; // UUSI: JSON-käsittelyyn
 import '../models/hike_plan_model.dart';
+
+// Ei tarvita Google Maps API-avainta Nominatimille!
+// const String kGoogleMapsApiKey = 'YOUR_Maps_API_KEY'; // POISTA TÄMÄ
 
 class AddHikePlanForm extends StatefulWidget {
   final HikePlan? existingPlan;
@@ -20,10 +25,21 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
 
   DateTime? _startDate;
   DateTime? _endDate;
+  double? _latitude;
+  double? _longitude;
+
+  // Lista ehdotuksille, näytetään käyttäjälle
+  List<Map<String, dynamic>> _locationSuggestions = [];
+  // Viive hakujen välillä, jotta APIa ei kuormiteta liikaa
+  // (Nominatimin käytännöt sallivat 1 pyynnön sekunnissa)
+  static const _searchDelay = Duration(milliseconds: 500);
+  // Timer viivästettyihin hakuihin
+  ValueNotifier<bool> _isSearchingLocation = ValueNotifier(false);
 
   @override
   void initState() {
     super.initState();
+
     if (widget.existingPlan != null) {
       _nameController.text = widget.existingPlan!.hikeName;
       _locationController.text = widget.existingPlan!.location;
@@ -34,6 +50,8 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
       _notesController.text = widget.existingPlan!.notes ?? '';
       _startDate = widget.existingPlan!.startDate;
       _endDate = widget.existingPlan!.endDate;
+      _latitude = widget.existingPlan!.latitude;
+      _longitude = widget.existingPlan!.longitude;
     }
   }
 
@@ -43,6 +61,7 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
     _locationController.dispose();
     _lengthController.dispose();
     _notesController.dispose();
+    _isSearchingLocation.dispose();
     super.dispose();
   }
 
@@ -97,6 +116,85 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
     }
   }
 
+  // UUSI: Hakee sijaintiehdotuksia Nominatim API:sta
+  Future<void> _searchLocationSuggestions(String query) async {
+    if (query.isEmpty) {
+      setState(() {
+        _locationSuggestions = [];
+      });
+      return;
+    }
+
+    _isSearchingLocation.value = true;
+    // Viivästetään hakua, jotta käyttäjällä on aikaa kirjoittaa
+    await Future.delayed(_searchDelay);
+
+    // Tarkista, onko haku ehtinyt muuttua odotuksen aikana
+    if (query != _locationController.text.trim()) {
+      _isSearchingLocation.value = false;
+      return;
+    }
+
+    final url = Uri.parse(
+        'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=json&limit=5&addressdetails=1&extratags=1');
+
+    try {
+      final response = await http.get(url, headers: {
+        'User-Agent': 'TrekNoteApp/1.0'
+      }); // Käyttäjätunnus on suositeltava Nominatimissa
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        setState(() {
+          _locationSuggestions =
+              data.map((item) => item as Map<String, dynamic>).toList();
+        });
+      } else {
+        print('Nominatim API error: ${response.statusCode}');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Sijainnin haku epäonnistui (virhekoodi: ${response.statusCode})'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('Sijainnin hakuvirhe: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Sijainnin haku epäonnistui: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      _isSearchingLocation.value = false;
+    }
+  }
+
+  // UUSI: Käsittelee valitun ehdotuksen Nominatimista
+  void _selectLocationSuggestion(Map<String, dynamic> suggestion) {
+    setState(() {
+      _locationController.text = suggestion['display_name'];
+      _latitude = double.tryParse(suggestion['lat'] ?? '');
+      _longitude = double.tryParse(suggestion['lon'] ?? '');
+      _locationSuggestions = []; // Tyhjennä ehdotukset valinnan jälkeen
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'Sijainti "${suggestion['display_name']}" valittu. Koordinaatit: ${_latitude?.toStringAsFixed(4)}, ${_longitude?.toStringAsFixed(4)}'),
+          backgroundColor: Colors.green[700],
+        ),
+      );
+    }
+  }
+
   void _submitForm() {
     if (!mounted) return;
 
@@ -104,6 +202,20 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Valitse vaelluksen aloituspäivämäärä.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    // Tarkista, että sijainti on valittu ja koordinaatit ovat olemassa
+    if (_latitude == null ||
+        _longitude == null ||
+        _locationController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Valitse kelvollinen sijainti automaattisen täydennyksen avulla.'),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -125,6 +237,8 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
           notes: _notesController.text.trim().isNotEmpty
               ? _notesController.text.trim()
               : null,
+          latitude: _latitude,
+          longitude: _longitude,
         );
       } else {
         resultPlan = HikePlan(
@@ -139,6 +253,8 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
           notes: _notesController.text.trim().isNotEmpty
               ? _notesController.text.trim()
               : null,
+          latitude: _latitude,
+          longitude: _longitude,
         );
       }
 
@@ -210,23 +326,78 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
                             : null,
                   ),
                   const SizedBox(height: 18),
+                  // UUSI: Sijaintikenttä automaattisella täydennyksellä Nominatimilla
                   TextFormField(
                     controller: _locationController,
                     style: inputTextStyle,
                     decoration: InputDecoration(
                       labelText: 'Sijainti*',
-                      hintText: 'Esim. Helvetinjärven kansallispuisto',
+                      hintText: 'Aloita kirjoittamaan sijaintia...',
                       prefixIcon: Icon(Icons.location_on_outlined,
                           color: theme.colorScheme.primary),
+                      suffixIcon: ValueListenableBuilder<bool>(
+                        // Näytä latausindikaattori
+                        valueListenable: _isSearchingLocation,
+                        builder: (context, isSearching, child) {
+                          return isSearching
+                              ? const Padding(
+                                  padding: EdgeInsets.all(8.0),
+                                  child: SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  ),
+                                )
+                              : const Icon(Icons.search);
+                        },
+                      ),
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 18, vertical: 14),
                     ),
-                    keyboardType: TextInputType.text,
-                    validator: (value) =>
-                        (value == null || value.trim().isEmpty)
-                            ? 'Syötä vaelluksen sijainti'
-                            : null,
+                    onChanged: (value) {
+                      _searchLocationSuggestions(
+                          value); // Käynnistä ehdotusten haku
+                    },
+                    validator: (value) => (value == null ||
+                            value.trim().isEmpty ||
+                            _latitude == null ||
+                            _longitude == null)
+                        ? 'Valitse kelvollinen sijainti ehdotuksista'
+                        : null,
                   ),
+                  // Näytä ehdotukset, jos niitä on
+                  if (_locationSuggestions.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      padding: const EdgeInsets.all(8.0),
+                      decoration: BoxDecoration(
+                        color: theme.cardColor,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 5,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: ListView.builder(
+                        shrinkWrap:
+                            true, // Varmista, ettei listview vie liikaa tilaa
+                        physics:
+                            const NeverScrollableScrollPhysics(), // Estä vieritys
+                        itemCount: _locationSuggestions.length,
+                        itemBuilder: (context, index) {
+                          final suggestion = _locationSuggestions[index];
+                          return ListTile(
+                            leading: const Icon(Icons.place),
+                            title: Text(suggestion['display_name']),
+                            onTap: () => _selectLocationSuggestion(suggestion),
+                          );
+                        },
+                      ),
+                    ),
                   const SizedBox(height: 18),
                   TextFormField(
                     controller: _lengthController,
@@ -244,12 +415,10 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
                     validator: (value) {
                       if (value != null && value.trim().isNotEmpty) {
                         final val = value.trim().replaceAll(',', '.');
-                        if (double.tryParse(val) == null) {
+                        if (double.tryParse(val) == null)
                           return 'Syötä validi numero';
-                        }
-                        if (double.parse(val) < 0) {
+                        if (double.parse(val) < 0)
                           return 'Pituuden on oltava positiivinen';
-                        }
                       }
                       return null;
                     },
@@ -352,7 +521,7 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
       DateFormat dateFormat, bool isStartDate, String labelText) {
     BorderRadius fieldBorderRadius = BorderRadius.circular(12.0);
     BorderSide fieldBorderSide =
-        BorderSide(color: theme.colorScheme.outline, width: 1.5);
+        BorderSide(color: theme.colorScheme.outline!, width: 1.5);
 
     if (theme.inputDecorationTheme.enabledBorder is OutlineInputBorder) {
       final outlineEnabledBorder =
