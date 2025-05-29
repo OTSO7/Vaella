@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
+import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../models/hike_plan_model.dart';
 import '../widgets/hike_plan_card.dart';
 import '../widgets/add_hike_plan_form.dart';
 import '../services/hike_plan_service.dart';
-import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
-import 'package:go_router/go_router.dart'; // Lisää GoRouter-importti
 
 class NotesPage extends StatefulWidget {
   const NotesPage({super.key});
@@ -92,12 +92,14 @@ class _NotesPageState extends State<NotesPage>
           );
         }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Virhe: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Virhe: $e'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
       }
     }
   }
@@ -157,6 +159,8 @@ class _NotesPageState extends State<NotesPage>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
+    final authProvider = Provider.of<AuthProvider>(context);
+    final userId = authProvider.user?.uid;
 
     return Scaffold(
       appBar: AppBar(
@@ -169,17 +173,9 @@ class _NotesPageState extends State<NotesPage>
       ),
       body: SlideTransition(
         position: _slideAnimation,
-        child: Consumer<AuthProvider>(
-          // Käytetään Consumeria kuuntelemaan AuthProviderin tilaa
-          builder: (context, authProvider, child) {
-            final userId =
-                authProvider.user?.uid; // Käytä AuthProviderin user ID:tä
-
-            if (userId == null) {
-              return _buildLoginPromptState(
-                  context, theme); // Näytä kehote, jos ei kirjautunut
-            } else {
-              return StreamBuilder<List<HikePlan>>(
+        child: userId == null
+            ? _buildLoginPromptState(context, theme)
+            : StreamBuilder<List<HikePlan>>(
                 stream: _hikePlanService.getHikePlans(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
@@ -190,85 +186,42 @@ class _NotesPageState extends State<NotesPage>
                         child: Text(
                             'Virhe ladattaessa vaelluksia: ${snapshot.error}'));
                   }
-                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                    return _buildEmptyState(context, theme);
-                  }
 
-                  final List<HikePlan> hikePlans = snapshot.data!;
-                  return _buildHikeList(hikePlans);
+                  final List<HikePlan> hikePlans =
+                      snapshot.data ?? []; // Varmista, ettei ole null
+
+                  return snapshot.data!.isEmpty
+                      ? _buildEmptyState(context, theme)
+                      : _buildHikeList(hikePlans);
                 },
-              );
-            }
-          },
-        ),
+              ),
       ),
-      floatingActionButton: Consumer<AuthProvider>(
-        // FAB myös riippuvainen kirjautumistilasta
-        builder: (context, authProvider, child) {
-          if (authProvider.user == null) {
-            return const SizedBox
-                .shrink(); // Piilota FAB, jos käyttäjä ei ole kirjautunut
-          }
-          return FloatingActionButton.extended(
-            onPressed: _openAddHikePlanModal,
-            tooltip: 'Luo uusi vaellussuunnitelma',
-            icon: const Icon(Icons.add_road),
-            label: const Text('Uusi Suunnitelma'),
-            heroTag: 'addHikePlanFab',
-          );
-        },
-      ),
+      floatingActionButton: userId == null // Jos ei kirjautunut, ei FAB:ia
+          ? null
+          : StreamBuilder<List<HikePlan>>(
+              stream: _hikePlanService
+                  .getHikePlans(), // Kuunnellaan FAB:n näkyvyyttä varten
+              builder: (context, snapshot) {
+                // Näytetään FAB vain, jos vaelluksia on, tai jos dataa ei ole vielä ladattu (eli tila on waiting)
+                // Mutta ei näytetä, jos on virhe tai data on tyhjä
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const SizedBox(); // Piilotetaan latauksen ajaksi
+                }
+                if (snapshot.hasError ||
+                    !snapshot.hasData ||
+                    snapshot.data!.isEmpty) {
+                  return const SizedBox(); // Piilotetaan, jos lista on tyhjä tai virhe
+                }
+                return FloatingActionButton.extended(
+                  onPressed: _openAddHikePlanModal,
+                  tooltip: 'Luo uusi vaellussuunnitelma',
+                  icon: const Icon(Icons.add_road),
+                  label: const Text('Uusi Suunnitelma'),
+                  heroTag: 'addHikePlanFab',
+                );
+              },
+            ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-    );
-  }
-
-  Widget _buildEmptyState(BuildContext context, ThemeData theme) {
-    final textTheme = theme.textTheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Lottie.asset(
-              'assets/lottie/mountain.json',
-              width: 250,
-              height: 250,
-              fit: BoxFit.contain,
-              repeat: true,
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Seikkailusi odottaa!',
-              style: textTheme.headlineMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.9),
-                fontWeight: FontWeight.w700,
-                fontSize: 28,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Täällä on vielä tyhjää! Kun luot ensimmäisen vaellussuunnitelmasi, se ilmestyy tänne.',
-              textAlign: TextAlign.center,
-              style: textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.7),
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton.icon(
-              onPressed: _openAddHikePlanModal,
-              icon: const Icon(Icons.add_circle_outline),
-              label: const Text('Luo Ensimmäinen'),
-              style: ElevatedButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -281,7 +234,7 @@ class _NotesPageState extends State<NotesPage>
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Lottie.asset(
-              'assets/lottie/login_required.json', // Käytä sopivaa Lottie-animaatiota tai lisää sellainen
+              'assets/lottie/login_required.json',
               width: 250,
               height: 250,
               fit: BoxFit.contain,
@@ -292,7 +245,7 @@ class _NotesPageState extends State<NotesPage>
               'Kirjaudu sisään nähdäksesi vaelluksesi!',
               textAlign: TextAlign.center,
               style: textTheme.headlineMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.9),
+                color: theme.colorScheme.onBackground.withOpacity(0.9),
                 fontWeight: FontWeight.w700,
                 fontSize: 28,
               ),
@@ -302,7 +255,7 @@ class _NotesPageState extends State<NotesPage>
               'Sinun täytyy olla kirjautuneena sisään nähdäksesi ja hallitaksesi vaellussuunnitelmiasi. Kirjaudu sisään tai luo uusi tili.',
               textAlign: TextAlign.center,
               style: textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.7),
+                color: theme.colorScheme.onBackground.withOpacity(0.7),
                 height: 1.4,
               ),
             ),
@@ -329,6 +282,56 @@ class _NotesPageState extends State<NotesPage>
                   color: theme.colorScheme.secondary,
                   fontWeight: FontWeight.bold,
                 ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context, ThemeData theme) {
+    final textTheme = theme.textTheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Lottie.asset(
+              'assets/lottie/mountain.json',
+              width: 250,
+              height: 250,
+              fit: BoxFit.contain,
+              repeat: true,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Seikkailusi odottaa!',
+              style: textTheme.headlineMedium?.copyWith(
+                color: theme.colorScheme.onBackground.withOpacity(0.9),
+                fontWeight: FontWeight.w700,
+                fontSize: 28,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Täällä on vielä tyhjää! Kun luot ensimmäisen vaellussuunnitelmasi, se ilmestyy tänne.',
+              textAlign: TextAlign.center,
+              style: textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.onBackground.withOpacity(0.7),
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton.icon(
+              onPressed: _openAddHikePlanModal,
+              icon: const Icon(Icons.add_circle_outline),
+              label: const Text('Luo Ensimmäinen'),
+              style: ElevatedButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               ),
             ),
           ],
