@@ -1,4 +1,3 @@
-// lib/widgets/hike_plan_card.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/hike_plan_model.dart';
@@ -6,11 +5,15 @@ import '../models/hike_plan_model.dart';
 class HikePlanCard extends StatelessWidget {
   final HikePlan plan;
   final VoidCallback? onTap;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   const HikePlanCard({
     super.key,
     required this.plan,
     this.onTap,
+    this.onEdit,
+    this.onDelete,
   });
 
   @override
@@ -40,7 +43,7 @@ class HikePlanCard extends StatelessWidget {
       case HikeStatus.completed:
         statusColor = Colors.green.shade600;
         statusIcon = Icons.check_circle_outline;
-        statusLabel = 'Suoritettu';
+        statusLabel = 'Suoritettu vaellus';
         break;
       case HikeStatus.cancelled:
         statusColor = Colors.red.shade400;
@@ -55,19 +58,16 @@ class HikePlanCard extends StatelessWidget {
         color: theme.cardColor,
         borderRadius: BorderRadius.circular(18.0),
         boxShadow: [
-          // TÄSSÄ VARJOJEN HIENOSÄÄTÖ
           BoxShadow(
-            color:
-                Colors.black.withOpacity(0.15), // Hienovaraisempi läpinäkyvyys
-            blurRadius: 10, // Pienempi sumeus
-            offset: const Offset(0, 5), // Lyhyempi varjo pystysuunnassa
-            spreadRadius: 0, // Ei levitä varjoa ulospäin
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+            spreadRadius: 0,
           ),
-          // Voit lisätä toisen, hienovaraisemman varjon syvyyden lisäämiseksi
           BoxShadow(
-            color: Colors.black.withOpacity(0.1), // Vielä läpinäkyvämpi
-            blurRadius: 4, // Vähemmän sumeutta
-            offset: const Offset(0, 2), // Lyhyempi
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
             spreadRadius: 0,
           ),
         ],
@@ -100,6 +100,48 @@ class HikePlanCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    if (onEdit != null || onDelete != null)
+                      PopupMenuButton<String>(
+                        onSelected: (value) {
+                          if (value == 'edit' && onEdit != null) {
+                            onEdit!();
+                          } else if (value == 'delete' && onDelete != null) {
+                            onDelete!();
+                          }
+                        },
+                        itemBuilder: (BuildContext context) =>
+                            <PopupMenuEntry<String>>[
+                          if (onEdit != null)
+                            const PopupMenuItem<String>(
+                              value: 'edit',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.edit_outlined),
+                                  SizedBox(width: 8),
+                                  Text('Muokkaa'),
+                                ],
+                              ),
+                            ),
+                          if (onDelete != null)
+                            PopupMenuItem<String>(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.delete_outline,
+                                      color: Colors.red.shade600),
+                                  SizedBox(width: 8),
+                                  Text('Poista',
+                                      style: TextStyle(
+                                          color: Colors.red.shade600)),
+                                ],
+                              ),
+                            ),
+                        ],
+                        icon: Icon(Icons.more_vert,
+                            color:
+                                theme.colorScheme.onSurface.withOpacity(0.7)),
+                        tooltip: 'Lisää vaihtoehtoja',
+                      ),
                   ],
                 ),
                 const SizedBox(height: 12),

@@ -1,10 +1,11 @@
-// lib/widgets/add_hike_plan_form.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/hike_plan_model.dart';
 
 class AddHikePlanForm extends StatefulWidget {
-  const AddHikePlanForm({super.key});
+  final HikePlan? existingPlan;
+
+  const AddHikePlanForm({super.key, this.existingPlan});
 
   @override
   State<AddHikePlanForm> createState() => _AddHikePlanFormState();
@@ -19,6 +20,22 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
 
   DateTime? _startDate;
   DateTime? _endDate;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.existingPlan != null) {
+      _nameController.text = widget.existingPlan!.hikeName;
+      _locationController.text = widget.existingPlan!.location;
+      if (widget.existingPlan!.lengthKm != null) {
+        _lengthController.text =
+            widget.existingPlan!.lengthKm!.toStringAsFixed(1);
+      }
+      _notesController.text = widget.existingPlan!.notes ?? '';
+      _startDate = widget.existingPlan!.startDate;
+      _endDate = widget.existingPlan!.endDate;
+    }
+  }
 
   @override
   void dispose() {
@@ -94,23 +111,39 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
     }
 
     if (_formKey.currentState!.validate()) {
-      final newPlan = HikePlan(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        hikeName: _nameController.text.trim(),
-        location: _locationController.text.trim(),
-        startDate: _startDate!,
-        endDate: _endDate,
-        lengthKm: _lengthController.text.trim().isNotEmpty
-            ? double.tryParse(
-                _lengthController.text.trim().replaceAll(',', '.'))
-            : null,
-        notes: _notesController.text.trim().isNotEmpty
-            ? _notesController.text.trim()
-            : null,
-        status: HikeStatus.planned,
-      );
+      HikePlan resultPlan;
+      if (widget.existingPlan != null) {
+        resultPlan = widget.existingPlan!.copyWith(
+          hikeName: _nameController.text.trim(),
+          location: _locationController.text.trim(),
+          startDate: _startDate!,
+          endDate: _endDate,
+          lengthKm: _lengthController.text.trim().isNotEmpty
+              ? double.tryParse(
+                  _lengthController.text.trim().replaceAll(',', '.'))
+              : null,
+          notes: _notesController.text.trim().isNotEmpty
+              ? _notesController.text.trim()
+              : null,
+        );
+      } else {
+        resultPlan = HikePlan(
+          hikeName: _nameController.text.trim(),
+          location: _locationController.text.trim(),
+          startDate: _startDate!,
+          endDate: _endDate,
+          lengthKm: _lengthController.text.trim().isNotEmpty
+              ? double.tryParse(
+                  _lengthController.text.trim().replaceAll(',', '.'))
+              : null,
+          notes: _notesController.text.trim().isNotEmpty
+              ? _notesController.text.trim()
+              : null,
+        );
+      }
+
       if (mounted) {
-        Navigator.of(context).pop(newPlan);
+        Navigator.of(context).pop(resultPlan);
       }
     }
   }
@@ -134,16 +167,14 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
     );
 
     return Column(
-      // Poistettu Padding ja SingleChildScrollView täältä
-      mainAxisSize:
-          MainAxisSize.min, // Jotta Column ei yritä venyä äärettömäksi
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        // Lisätään yläpadding suoraan otsikolle, tai jopa SizedBox
-        const SizedBox(height: 16), // Lisätään tilaa yläreunaan
-
+        const SizedBox(height: 16),
         Text(
-          'Luo uusi vaellussuunnitelma',
+          widget.existingPlan == null
+              ? 'Luo uusi vaellussuunnitelma'
+              : 'Muokkaa vaellussuunnitelmaa',
           style: textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.bold,
             color: theme.colorScheme.onSurface,
@@ -152,19 +183,13 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 28),
-
-        // Käytetään Paddingia kerran Form-widgetin ympärillä
         Flexible(
-          // <--- Kääritään Form Flexibleen
           child: SingleChildScrollView(
-            // <--- Siirretään SingleChildScrollView tänne
-            padding: const EdgeInsets.symmetric(
-                horizontal: 20), // Sisäinen horisontaalinen padding
+            padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Form(
               key: _formKey,
               child: Column(
-                mainAxisSize:
-                    MainAxisSize.min, // Tärkeää, että Column pakkautuu
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   TextFormField(
@@ -278,12 +303,10 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
             ),
           ),
         ),
-
-        // Painikerivi (tässäkin Flexible, jos tilaa on rajoitetusti)
         Padding(
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-            left: 20, // Sama sivu padding kuin yllä
+            left: 20,
             right: 20,
           ),
           child: Row(
@@ -305,7 +328,9 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
               Flexible(
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.save_alt_outlined, size: 20),
-                  label: const Text('Tallenna', style: TextStyle(fontSize: 16)),
+                  label: Text(
+                      widget.existingPlan == null ? 'Tallenna' : 'Päivitä',
+                      style: const TextStyle(fontSize: 16)),
                   onPressed: _submitForm,
                   style: ElevatedButton.styleFrom(
                     minimumSize: const Size(double.infinity, 48),

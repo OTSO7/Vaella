@@ -7,25 +7,31 @@ class AuthProvider with ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  User? _user;
-  UserProfile? _userProfile; // Tänne tallennetaan koko profiili
+  User? _user; // Firebase Auth User
+  UserProfile? _userProfile; // Firestoresta haettu käyttäjäprofiili
   bool _isLoading = false;
 
   User? get user => _user;
-  UserProfile? get userProfile => _userProfile; // UUSI GETTERI
+  UserProfile? get userProfile => _userProfile;
   bool get isLoggedIn => _user != null;
   bool get isLoading => _isLoading;
 
   AuthProvider() {
+    // Kuuntele Firebase Auth -tilan muutoksia
     _auth.authStateChanges().listen((User? firebaseUser) async {
       _user = firebaseUser;
       if (_user != null) {
-        await _fetchUserProfile(); // Hae koko profiili
+        await _fetchUserProfile(); // Hae Firestore-profiili, jos käyttäjä on kirjautunut
       } else {
         _userProfile = null; // Nollaa profiili uloskirjautuessa
       }
       notifyListeners();
     });
+  }
+
+  void _setLoading(bool value) {
+    _isLoading = value;
+    notifyListeners();
   }
 
   Future<void> _fetchUserProfile() async {
@@ -37,8 +43,8 @@ class AuthProvider with ChangeNotifier {
           _userProfile = UserProfile.fromFirestore(
               userDoc.data() as Map<String, dynamic>, _user!.uid);
         } else {
-          // Jos Firestore-dokumenttia ei löydy, luo oletusprofiili
-          // TÄMÄ ON KRITIIKKINEN, KOSKA KÄYTTÄJÄ ON REKISTERÖITYNYT AUTHIN KAUTTA, MUTTA EI FIRESTOREEN
+          // Tämä tilanne ei pitäisi tapahtua, jos rekisteröinti tallentaa aina profiilin.
+          // Mutta jos tapahtuu, luodaan perusprofiili.
           print(
               "Warning: User Firestore document not found for ${_user!.uid}. Creating default profile.");
           _userProfile = UserProfile(
@@ -49,6 +55,15 @@ class AuthProvider with ChangeNotifier {
             email: _user!.email ?? '',
             photoURL: _user!.photoURL,
             bio: 'Tämä on uusi profiili! Aloita seikkailu.',
+            bannerImageUrl: null,
+            stats: {
+              'Vaelluksia': 0,
+              'Kilometrejä': 0.0,
+              'Huippuja': 0,
+              'Kuvia jaettu': 0
+            },
+            achievements: [],
+            stickers: [],
           );
           await _firestore
               .collection('users')
@@ -58,15 +73,18 @@ class AuthProvider with ChangeNotifier {
       } catch (e) {
         print('Error fetching or creating user profile: $e');
         _userProfile = null;
+        // Tässä voit näyttää virheilmoituksen käyttäjälle, jos profiilin lataaminen epäonnistuu
       }
     }
   }
 
-  // Päivitä käyttäjäprofiilia Firestoreen (kutsutaan edit_profile_page.dartista)
+  // Päivitä käyttäjäprofiilia paikallisesti (kutsutaan edit_profile_page.dartista)
+  // Huom: Firestore-päivitys tapahtuu yleensä EditProfilePage:ssa itsessään
+  // tai sen omassa palvelussa. Tässä vain päivitetään paikallinen tila.
   Future<void> updateLocalUserProfile(UserProfile updatedProfile) async {
     _userProfile = updatedProfile;
     notifyListeners();
-    // Tässä vaiheessa voit myös päivittää Firebase Auth Display Name ja PhotoURL
+    // Päivitä Firebase Auth -käyttäjän display name ja photoURL, jos ne ovat muuttuneet
     if (_user != null) {
       if (_user!.displayName != updatedProfile.displayName) {
         await _user!.updateDisplayName(updatedProfile.displayName);
@@ -75,7 +93,6 @@ class AuthProvider with ChangeNotifier {
         await _user!.updatePhotoURL(updatedProfile.photoURL);
       }
     }
-    // Firestore-päivitys hoidetaan edit_profile_page.dartissa
   }
 
   bool _isEmail(String input) {
@@ -84,14 +101,14 @@ class AuthProvider with ChangeNotifier {
 
   Future<void> loginWithUsernameOrEmail(
       String identifier, String password) async {
-    _isLoading = true;
-    notifyListeners();
+    _setLoading(true);
     String emailToLogin;
 
     try {
       if (_isEmail(identifier)) {
         emailToLogin = identifier.trim();
       } else {
+        // Etsi käyttäjän sähköpostia käyttäjätunnuksen perusteella
         final QuerySnapshot userQuery = await _firestore
             .collection('users')
             .where('username', isEqualTo: identifier.trim().toLowerCase())
@@ -104,14 +121,16 @@ class AuthProvider with ChangeNotifier {
         emailToLogin = userQuery.docs.first.get('email');
       }
 
-      await _auth.signInWithEmailAndPassword(
+      // Kirjaudu sisään Firebase Authenticationilla
+      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
           email: emailToLogin, password: password);
+
+      _user = userCredential.user; // Päivitä _user tässä
+      await _fetchUserProfile(); // Hae käyttäjäprofiili sisäänkirjautumisen jälkeen
     } on FirebaseAuthException catch (e) {
       String message;
-      if (e.code == 'user-not-found') {
-        message = 'Käyttäjää ei löydy.';
-      } else if (e.code == 'wrong-password') {
-        message = 'Väärä salasana.';
+      if (e.code == 'user-not-found' || e.code == 'wrong-password') {
+        message = 'Virheellinen käyttäjätunnus/sähköposti tai salasana.';
       } else if (e.code == 'invalid-email') {
         message = 'Virheellinen sähköpostiosoite tai käyttäjätunnus.';
       } else if (e.code == 'network-request-failed') {
@@ -123,16 +142,15 @@ class AuthProvider with ChangeNotifier {
     } catch (e) {
       throw Exception('Kirjautuminen epäonnistui: $e');
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      _setLoading(false);
     }
   }
 
   Future<void> register(
       String email, String password, String username, String name) async {
-    _isLoading = true;
-    notifyListeners();
+    _setLoading(true);
     try {
+      // Tarkista, onko käyttäjätunnus jo käytössä (case-insensitive)
       final usernameExists = await _firestore
           .collection('users')
           .where('username', isEqualTo: username.toLowerCase())
@@ -143,6 +161,7 @@ class AuthProvider with ChangeNotifier {
         throw Exception('Käyttäjätunnus on jo varattu.');
       }
 
+      // Luo Firebase-käyttäjä sähköpostilla ja salasanalla
       UserCredential userCredential =
           await _auth.createUserWithEmailAndPassword(
         email: email,
@@ -150,13 +169,14 @@ class AuthProvider with ChangeNotifier {
       );
 
       if (userCredential.user != null) {
+        _user = userCredential.user; // Päivitä _user tässä
         // Tallenna kaikki profiilitiedot Firestoreen rekisteröitymisen yhteydessä
         _userProfile = UserProfile(
-          uid: userCredential.user!.uid,
+          uid: _user!.uid,
           username: username.toLowerCase(),
           displayName: name,
           email: email.toLowerCase(),
-          photoURL: null, // Ei aluksi profiilikuvaa
+          photoURL: null,
           bio: '',
           bannerImageUrl: null,
           stats: {
@@ -170,7 +190,7 @@ class AuthProvider with ChangeNotifier {
         );
         await _firestore
             .collection('users')
-            .doc(userCredential.user!.uid)
+            .doc(_user!.uid)
             .set(_userProfile!.toFirestore());
       }
     } on FirebaseAuthException catch (e) {
@@ -190,23 +210,21 @@ class AuthProvider with ChangeNotifier {
     } catch (e) {
       throw Exception('Rekisteröinti epäonnistui: $e');
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      _setLoading(false);
     }
   }
 
   Future<void> logout() async {
-    _isLoading = true;
-    notifyListeners();
+    _setLoading(true);
     try {
       await _auth.signOut();
-      _user = null;
+      _user = null; // Nollaa Firebase-käyttäjä
       _userProfile = null; // Nollaa profiili uloskirjautuessa
     } catch (e) {
       print('Error during logout: $e');
+      throw Exception('Uloskirjautuminen epäonnistui: $e');
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      _setLoading(false);
     }
   }
 }

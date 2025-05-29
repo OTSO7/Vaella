@@ -1,9 +1,12 @@
-// lib/pages/notes_page.dart
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import '../models/hike_plan_model.dart';
 import '../widgets/hike_plan_card.dart';
 import '../widgets/add_hike_plan_form.dart';
+import '../services/hike_plan_service.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
+import 'package:go_router/go_router.dart'; // Lisää GoRouter-importti
 
 class NotesPage extends StatefulWidget {
   const NotesPage({super.key});
@@ -14,7 +17,7 @@ class NotesPage extends StatefulWidget {
 
 class _NotesPageState extends State<NotesPage>
     with SingleTickerProviderStateMixin {
-  final List<HikePlan> _hikePlans = [];
+  final HikePlanService _hikePlanService = HikePlanService();
   late AnimationController _animationController;
   late Animation<Offset> _slideAnimation;
 
@@ -37,12 +40,8 @@ class _NotesPageState extends State<NotesPage>
     _animationController.forward();
   }
 
-  void _sortPlans() {
-    _hikePlans.sort((a, b) => a.startDate.compareTo(b.startDate));
-  }
-
-  Future<void> _openAddHikePlanModal() async {
-    final newPlan = await showModalBottomSheet<HikePlan>(
+  Future<void> _openAddHikePlanModal({HikePlan? existingPlan}) async {
+    final newOrUpdatedPlan = await showModalBottomSheet<HikePlan>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -61,7 +60,9 @@ class _NotesPageState extends State<NotesPage>
               ),
               child: PrimaryScrollController(
                 controller: scrollController,
-                child: const AddHikePlanForm(),
+                child: AddHikePlanForm(
+                  existingPlan: existingPlan,
+                ),
               ),
             );
           },
@@ -69,19 +70,80 @@ class _NotesPageState extends State<NotesPage>
       },
     );
 
-    if (newPlan != null && mounted) {
-      setState(() {
-        _hikePlans.add(newPlan);
-        _sortPlans();
-      });
-      // Varmista, että FloatingActionButton päivittyy, kun tila muuttuu
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content:
-              Text('Uusi vaellussuunnitelma "${newPlan.hikeName}" lisätty!'),
-          backgroundColor: Colors.green[700],
-        ),
-      );
+    if (newOrUpdatedPlan != null && mounted) {
+      try {
+        if (existingPlan == null) {
+          await _hikePlanService.addHikePlan(newOrUpdatedPlan);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Uusi vaellussuunnitelma "${newOrUpdatedPlan.hikeName}" lisätty!'),
+              backgroundColor: Colors.green[700],
+            ),
+          );
+        } else {
+          await _hikePlanService.updateHikePlan(newOrUpdatedPlan);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Vaellussuunnitelma "${newOrUpdatedPlan.hikeName}" päivitetty!'),
+              backgroundColor: Colors.blue[700],
+            ),
+          );
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Virhe: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
+  }
+
+  void _deleteHikePlan(String planId, String hikeName) async {
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Poista vaellus?'),
+          content: Text('Haluatko varmasti poistaa vaelluksen "$hikeName"?'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Peruuta'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Poista', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm == true) {
+      try {
+        await _hikePlanService.deleteHikePlan(planId);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Vaellus "$hikeName" poistettu!'),
+              backgroundColor: Colors.red[700],
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Virhe poistettaessa vaellusta: $e'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      }
     }
   }
 
@@ -107,19 +169,55 @@ class _NotesPageState extends State<NotesPage>
       ),
       body: SlideTransition(
         position: _slideAnimation,
-        child: _hikePlans.isEmpty
-            ? _buildEmptyState(context, theme)
-            : _buildHikeList(),
+        child: Consumer<AuthProvider>(
+          // Käytetään Consumeria kuuntelemaan AuthProviderin tilaa
+          builder: (context, authProvider, child) {
+            final userId =
+                authProvider.user?.uid; // Käytä AuthProviderin user ID:tä
+
+            if (userId == null) {
+              return _buildLoginPromptState(
+                  context, theme); // Näytä kehote, jos ei kirjautunut
+            } else {
+              return StreamBuilder<List<HikePlan>>(
+                stream: _hikePlanService.getHikePlans(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.hasError) {
+                    return Center(
+                        child: Text(
+                            'Virhe ladattaessa vaelluksia: ${snapshot.error}'));
+                  }
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return _buildEmptyState(context, theme);
+                  }
+
+                  final List<HikePlan> hikePlans = snapshot.data!;
+                  return _buildHikeList(hikePlans);
+                },
+              );
+            }
+          },
+        ),
       ),
-      floatingActionButton: _hikePlans.isNotEmpty
-          ? FloatingActionButton.extended(
-              onPressed: _openAddHikePlanModal,
-              tooltip: 'Luo uusi vaellussuunnitelma',
-              icon: const Icon(Icons.add_road),
-              label: const Text('Uusi Suunnitelma'),
-              heroTag: 'addHikePlanFab',
-            )
-          : null, // Jos lista on tyhjä, FAB on null ja piilossa
+      floatingActionButton: Consumer<AuthProvider>(
+        // FAB myös riippuvainen kirjautumistilasta
+        builder: (context, authProvider, child) {
+          if (authProvider.user == null) {
+            return const SizedBox
+                .shrink(); // Piilota FAB, jos käyttäjä ei ole kirjautunut
+          }
+          return FloatingActionButton.extended(
+            onPressed: _openAddHikePlanModal,
+            tooltip: 'Luo uusi vaellussuunnitelma',
+            icon: const Icon(Icons.add_road),
+            label: const Text('Uusi Suunnitelma'),
+            heroTag: 'addHikePlanFab',
+          );
+        },
+      ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
@@ -174,19 +272,86 @@ class _NotesPageState extends State<NotesPage>
     );
   }
 
-  Widget _buildHikeList() {
+  Widget _buildLoginPromptState(BuildContext context, ThemeData theme) {
+    final textTheme = theme.textTheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Lottie.asset(
+              'assets/lottie/login_required.json', // Käytä sopivaa Lottie-animaatiota tai lisää sellainen
+              width: 250,
+              height: 250,
+              fit: BoxFit.contain,
+              repeat: true,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Kirjaudu sisään nähdäksesi vaelluksesi!',
+              textAlign: TextAlign.center,
+              style: textTheme.headlineMedium?.copyWith(
+                color: theme.colorScheme.onBackground.withOpacity(0.9),
+                fontWeight: FontWeight.w700,
+                fontSize: 28,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Sinun täytyy olla kirjautuneena sisään nähdäksesi ja hallitaksesi vaellussuunnitelmiasi. Kirjaudu sisään tai luo uusi tili.',
+              textAlign: TextAlign.center,
+              style: textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.onBackground.withOpacity(0.7),
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton.icon(
+              onPressed: () {
+                GoRouter.of(context).go('/login');
+              },
+              icon: const Icon(Icons.login),
+              label: const Text('Kirjaudu sisään'),
+              style: ElevatedButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: () {
+                GoRouter.of(context).go('/register');
+              },
+              child: Text(
+                'Luo uusi tili',
+                style: textTheme.bodyLarge?.copyWith(
+                  color: theme.colorScheme.secondary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHikeList(List<HikePlan> hikePlans) {
     return ListView.builder(
       padding: const EdgeInsets.only(top: 12.0, bottom: 96.0),
-      itemCount: _hikePlans.length,
+      itemCount: hikePlans.length,
       itemBuilder: (context, index) {
-        final plan = _hikePlans[index];
+        final plan = hikePlans[index];
         return HikePlanCard(
           plan: plan,
           onTap: () {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                 content: Text(
-                    'Tarkastellaan suunnitelmaa: ${plan.hikeName} (tulossa)')));
+                    'Tarkastellaan suunnitelmaa: ${plan.hikeName} (${plan.status == HikeStatus.completed ? 'suoritettu' : 'tulossa'})')));
           },
+          onEdit: () => _openAddHikePlanModal(existingPlan: plan),
+          onDelete: () => _deleteHikePlan(plan.id, plan.hikeName),
         );
       },
     );
