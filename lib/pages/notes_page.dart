@@ -291,12 +291,12 @@ class _NotesPageState extends State<NotesPage>
             const SizedBox(height: 24),
             Text(
               'Seikkailusi odottaa!',
+              textAlign: TextAlign.center,
               style: textTheme.headlineMedium?.copyWith(
                 color: theme.colorScheme.onBackground.withOpacity(0.9),
                 fontWeight: FontWeight.w700,
                 fontSize: 28,
               ),
-              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),
             Text(
@@ -323,8 +323,10 @@ class _NotesPageState extends State<NotesPage>
     );
   }
 
+  // --- MUUTOS TÄSSÄ ALKAA ---
   Widget _buildHikeList(List<HikePlan> hikePlans) {
-    return ListView.builder(
+    return ListView.separated(
+      // MUUTETTU ListView.builder -> ListView.separated
       padding: const EdgeInsets.only(top: 12.0, bottom: 96.0),
       itemCount: hikePlans.length,
       itemBuilder: (context, index) {
@@ -345,6 +347,9 @@ class _NotesPageState extends State<NotesPage>
           onDelete: () => _deleteHikePlan(plan.id, plan.hikeName),
         );
       },
+      separatorBuilder: (context, index) =>
+          const SizedBox(height: 16.0), // LISÄTTY VÄLI
     );
   }
+  // --- MUUTOS TÄSSÄ LOPPUU ---
 }

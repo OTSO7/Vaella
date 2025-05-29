@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:http/http.dart' as http; // UUSI: HTTP-pyyntöihin
-import 'dart:convert'; // UUSI: JSON-käsittelyyn
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:async';
+import 'package:geocoding/geocoding.dart';
+import 'package:latlong2/latlong.dart'; // Varmista, että tämä on tuotu
 import '../models/hike_plan_model.dart';
-
-// Ei tarvita Google Maps API-avainta Nominatimille!
-// const String kGoogleMapsApiKey = 'YOUR_Maps_API_KEY'; // POISTA TÄMÄ
+import '../widgets/map_picker_page.dart';
 
 class AddHikePlanForm extends StatefulWidget {
   final HikePlan? existingPlan;
@@ -28,12 +29,8 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
   double? _latitude;
   double? _longitude;
 
-  // Lista ehdotuksille, näytetään käyttäjälle
   List<Map<String, dynamic>> _locationSuggestions = [];
-  // Viive hakujen välillä, jotta APIa ei kuormiteta liikaa
-  // (Nominatimin käytännöt sallivat 1 pyynnön sekunnissa)
-  static const _searchDelay = Duration(milliseconds: 500);
-  // Timer viivästettyihin hakuihin
+  Timer? _debounce;
   ValueNotifier<bool> _isSearchingLocation = ValueNotifier(false);
 
   @override
@@ -53,16 +50,27 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
       _latitude = widget.existingPlan!.latitude;
       _longitude = widget.existingPlan!.longitude;
     }
+
+    _locationController.addListener(_onLocationChanged);
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _locationController.removeListener(_onLocationChanged);
     _locationController.dispose();
     _lengthController.dispose();
     _notesController.dispose();
     _isSearchingLocation.dispose();
+    _debounce?.cancel();
     super.dispose();
+  }
+
+  void _onLocationChanged() {
+    if (_debounce?.isActive ?? false) _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 700), () {
+      _searchLocationSuggestions(_locationController.text.trim());
+    });
   }
 
   Future<void> _pickDate(BuildContext context, bool isStartDate) async {
@@ -116,41 +124,36 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
     }
   }
 
-  // UUSI: Hakee sijaintiehdotuksia Nominatim API:sta
   Future<void> _searchLocationSuggestions(String query) async {
     if (query.isEmpty) {
       setState(() {
         _locationSuggestions = [];
+        _isSearchingLocation.value = false;
       });
       return;
     }
 
     _isSearchingLocation.value = true;
-    // Viivästetään hakua, jotta käyttäjällä on aikaa kirjoittaa
-    await Future.delayed(_searchDelay);
-
-    // Tarkista, onko haku ehtinyt muuttua odotuksen aikana
-    if (query != _locationController.text.trim()) {
-      _isSearchingLocation.value = false;
-      return;
-    }
 
     final url = Uri.parse(
-        'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=json&limit=5&addressdetails=1&extratags=1');
+        'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=json&limit=7&addressdetails=1&extratags=1');
 
     try {
       final response = await http.get(url, headers: {
-        'User-Agent': 'TrekNoteApp/1.0'
-      }); // Käyttäjätunnus on suositeltava Nominatimissa
+        'User-Agent':
+            'TrekNoteApp/1.0 (contact@treknote.com)' // **VAIHDA TÄMÄ OMAAN SÄHKÖPOSTIIN/NIMEEN!**
+      });
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
-        setState(() {
-          _locationSuggestions =
-              data.map((item) => item as Map<String, dynamic>).toList();
-        });
+        if (mounted) {
+          setState(() {
+            _locationSuggestions =
+                data.map((item) => item as Map<String, dynamic>).toList();
+          });
+        }
       } else {
-        print('Nominatim API error: ${response.statusCode}');
+        print('Nominatim API error: ${response.statusCode} - ${response.body}');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -176,35 +179,136 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
     }
   }
 
-  // UUSI: Käsittelee valitun ehdotuksen Nominatimista
   void _selectLocationSuggestion(Map<String, dynamic> suggestion) {
-    // Haetaan lyhyempi versio sijainnista
-    final displayName = suggestion['display_name'] as String;
-    final parts = displayName.split(',').map((e) => e.trim()).toList();
+    String shortLocationName = suggestion['display_name'] as String;
+    if (suggestion.containsKey('address')) {
+      final address = suggestion['address'];
+      List<String> parts = [];
+      if (address.containsKey('name'))
+        parts.add(address['name']);
+      else if (address.containsKey('road')) parts.add(address['road']);
 
-    // Oletetaan, että ensimmäiset 1-3 osaa riittävät lyhyeen nimeen
-    String shortLocation = parts.take(2).join(', '); // Esim. "Nuuksio, Espoo"
+      if (address.containsKey('city'))
+        parts.add(address['city']);
+      else if (address.containsKey('town'))
+        parts.add(address['town']);
+      else if (address.containsKey('village')) parts.add(address['village']);
+
+      if (address.containsKey('county')) parts.add(address['county']);
+      if (address.containsKey('state')) parts.add(address['state']);
+      if (address.containsKey('country')) parts.add(address['country']);
+
+      if (parts.isNotEmpty) {
+        shortLocationName = parts.take(3).join(', ');
+        if (shortLocationName.length > 50 && parts.length > 2) {
+          shortLocationName = parts.take(2).join(', ');
+        }
+      }
+    }
+    if (shortLocationName.length > 50 &&
+        suggestion['display_name'].length > 50) {
+      final rawParts =
+          suggestion['display_name'].split(',').map((e) => e.trim()).toList();
+      shortLocationName = rawParts.take(3).join(', ');
+      if (shortLocationName.length > 50 && rawParts.length > 2) {
+        shortLocationName = rawParts.take(2).join(', ');
+      }
+    }
 
     setState(() {
-      _locationController.text = shortLocation;
+      _locationController.text = shortLocationName;
       _latitude = double.tryParse(suggestion['lat'] ?? '');
       _longitude = double.tryParse(suggestion['lon'] ?? '');
-      _locationSuggestions = []; // Tyhjennä ehdotukset
+      _locationSuggestions = [];
     });
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-              'Sijainti "$shortLocation" valittu. Koordinaatit: ${_latitude?.toStringAsFixed(4)}, ${_longitude?.toStringAsFixed(4)}'),
+              'Sijainti "$shortLocationName" valittu. Koordinaatit: ${_latitude?.toStringAsFixed(4)}, ${_longitude?.toStringAsFixed(4)}'),
           backgroundColor: Colors.green[700],
         ),
       );
     }
   }
 
+  Future<void> _pickLocationFromMap() async {
+    final LatLng? pickedLocation = await Navigator.push<LatLng>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MapPickerPage(
+          initialLocation: LatLng(_latitude ?? 60.4518, _longitude ?? 22.2666),
+        ),
+      ),
+    );
+
+    if (pickedLocation != null && mounted) {
+      try {
+        List<Placemark> placemarks = await placemarkFromCoordinates(
+          pickedLocation.latitude,
+          pickedLocation.longitude,
+          localeIdentifier: 'fi_FI', // Tämä on oikein
+        );
+
+        String displayAddress = 'Tuntematon sijainti';
+        if (placemarks.isNotEmpty) {
+          final placemark = placemarks.first;
+          List<String?> addressParts = [
+            placemark.name,
+            placemark.thoroughfare,
+            placemark.locality,
+            placemark.administrativeArea,
+            placemark.country,
+          ];
+          displayAddress = addressParts
+              .where((element) => element != null && element.isNotEmpty)
+              .join(', ');
+
+          if (placemark.locality != null && placemark.country != null) {
+            displayAddress = '${placemark.locality}, ${placemark.country}';
+          } else if (placemark.name != null && placemark.locality != null) {
+            displayAddress = '${placemark.name}, ${placemark.locality}';
+          } else if (placemark.thoroughfare != null &&
+              placemark.locality != null) {
+            displayAddress = '${placemark.thoroughfare}, ${placemark.locality}';
+          }
+        }
+
+        setState(() {
+          _locationController.text = displayAddress;
+          _latitude = pickedLocation.latitude;
+          _longitude = pickedLocation.longitude;
+          _locationSuggestions = [];
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Sijainti "${displayAddress}" valittu kartalta. Koordinaatit: ${_latitude?.toStringAsFixed(4)}, ${_longitude?.toStringAsFixed(4)}'),
+            backgroundColor: Colors.green[700],
+          ),
+        );
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Sijainnin geokoodaus epäonnistui: $e'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      }
+    }
+  }
+
   void _submitForm() {
     if (!mounted) return;
+
+    // Kutsutaan ensin formin validatoria tarkistamaan pakolliset kentät
+    if (!_formKey.currentState!.validate()) {
+      return; // Jos validoinnissa virheitä, älä jatka
+    }
 
     if (_startDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -216,59 +320,72 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
       return;
     }
 
-    // Tarkista, että sijainti on valittu ja koordinaatit ovat olemassa
-    if (_latitude == null ||
-        _longitude == null ||
-        _locationController.text.trim().isEmpty) {
+    // Erillinen tarkistus sijaintikentän tekstille, jos se ei ole tyhjä
+    // ja koordinaatit puuttuvat, vaikka validator onkin yllä
+    if (_locationController.text.trim().isNotEmpty &&
+        (_latitude == null || _longitude == null)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-              'Valitse kelvollinen sijainti automaattisen täydennyksen avulla.'),
+              'Valitse kelvollinen sijainti automaattisen täydennyksen tai kartan avulla.'),
           backgroundColor: Colors.redAccent,
         ),
       );
       return;
     }
 
-    if (_formKey.currentState!.validate()) {
-      HikePlan resultPlan;
-      if (widget.existingPlan != null) {
-        resultPlan = widget.existingPlan!.copyWith(
-          hikeName: _nameController.text.trim(),
-          location: _locationController.text.trim(),
-          startDate: _startDate!,
-          endDate: _endDate,
-          lengthKm: _lengthController.text.trim().isNotEmpty
-              ? double.tryParse(
-                  _lengthController.text.trim().replaceAll(',', '.'))
-              : null,
-          notes: _notesController.text.trim().isNotEmpty
-              ? _notesController.text.trim()
-              : null,
-          latitude: _latitude,
-          longitude: _longitude,
-        );
-      } else {
-        resultPlan = HikePlan(
-          hikeName: _nameController.text.trim(),
-          location: _locationController.text.trim(),
-          startDate: _startDate!,
-          endDate: _endDate,
-          lengthKm: _lengthController.text.trim().isNotEmpty
-              ? double.tryParse(
-                  _lengthController.text.trim().replaceAll(',', '.'))
-              : null,
-          notes: _notesController.text.trim().isNotEmpty
-              ? _notesController.text.trim()
-              : null,
-          latitude: _latitude,
-          longitude: _longitude,
-        );
-      }
+    // Jos _locationController on tyhjä, silloin koordinaattejakaan ei pitäisi olla
+    // ja validointi yllä hoitaa tämän.
+    // TÄMÄ TARKISTUS ON TÄRKEÄ VIELÄ TÄSSÄ KOHTAA varmistaakseen, että koordinaatit ovat asetettu.
+    if (_latitude == null || _longitude == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Vaelluksen sijainti on pakollinen ja se on valittava kartalta tai ehdotuksista.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
 
-      if (mounted) {
-        Navigator.of(context).pop(resultPlan);
-      }
+    // Jos kaikki on kunnossa, luo tai päivitä HikePlan
+    HikePlan resultPlan;
+    if (widget.existingPlan != null) {
+      resultPlan = widget.existingPlan!.copyWith(
+        hikeName: _nameController.text.trim(),
+        location: _locationController.text.trim(),
+        startDate: _startDate!,
+        endDate: _endDate,
+        lengthKm: _lengthController.text.trim().isNotEmpty
+            ? double.tryParse(
+                _lengthController.text.trim().replaceAll(',', '.'))
+            : null,
+        notes: _notesController.text.trim().isNotEmpty
+            ? _notesController.text.trim()
+            : null,
+        latitude: _latitude,
+        longitude: _longitude,
+      );
+    } else {
+      resultPlan = HikePlan(
+        hikeName: _nameController.text.trim(),
+        location: _locationController.text.trim(),
+        startDate: _startDate!,
+        endDate: _endDate,
+        lengthKm: _lengthController.text.trim().isNotEmpty
+            ? double.tryParse(
+                _lengthController.text.trim().replaceAll(',', '.'))
+            : null,
+        notes: _notesController.text.trim().isNotEmpty
+            ? _notesController.text.trim()
+            : null,
+        latitude: _latitude,
+        longitude: _longitude,
+      );
+    }
+
+    if (mounted) {
+      Navigator.of(context).pop(resultPlan);
     }
   }
 
@@ -334,47 +451,48 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
                             : null,
                   ),
                   const SizedBox(height: 18),
-                  // UUSI: Sijaintikenttä automaattisella täydennyksellä Nominatimilla
                   TextFormField(
                     controller: _locationController,
                     style: inputTextStyle,
                     decoration: InputDecoration(
                       labelText: 'Sijainti*',
-                      hintText: 'Aloita kirjoittamaan sijaintia...',
+                      hintText:
+                          'Aloita kirjoittamaan sijaintia tai valitse kartalta...',
                       prefixIcon: Icon(Icons.location_on_outlined,
                           color: theme.colorScheme.primary),
                       suffixIcon: ValueListenableBuilder<bool>(
-                        // Näytä latausindikaattori
                         valueListenable: _isSearchingLocation,
                         builder: (context, isSearching, child) {
-                          return isSearching
-                              ? const Padding(
-                                  padding: EdgeInsets.all(8.0),
-                                  child: SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2),
-                                  ),
-                                )
-                              : const Icon(Icons.search);
+                          if (isSearching) {
+                            return const Padding(
+                              padding: EdgeInsets.all(8.0),
+                              child: SizedBox(
+                                height: 20,
+                                width: 20,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            );
+                          } else {
+                            return IconButton(
+                              icon: const Icon(Icons.map_outlined),
+                              tooltip: 'Valitse sijainti kartalta',
+                              onPressed: _pickLocationFromMap,
+                            );
+                          }
                         },
                       ),
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 18, vertical: 14),
                     ),
-                    onChanged: (value) {
-                      _searchLocationSuggestions(
-                          value); // Käynnistä ehdotusten haku
+                    // Päivitetty validator: tarkistaa vain kentän tyhjyyden
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Vaelluksen sijainti on pakollinen';
+                      }
+                      return null; // Koordinaattien tarkistus tapahtuu _submitFormissa
                     },
-                    validator: (value) => (value == null ||
-                            value.trim().isEmpty ||
-                            _latitude == null ||
-                            _longitude == null)
-                        ? 'Valitse kelvollinen sijainti ehdotuksista'
-                        : null,
                   ),
-                  // Näytä ehdotukset, jos niitä on
                   if (_locationSuggestions.isNotEmpty)
                     Container(
                       margin: const EdgeInsets.only(top: 8),
@@ -396,19 +514,63 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
                         itemCount: _locationSuggestions.length,
                         itemBuilder: (context, index) {
                           final suggestion = _locationSuggestions[index];
-                          final displayName =
+                          String displayCandidate =
                               suggestion['display_name'] as String;
-                          final parts = displayName
-                              .split(',')
-                              .map((e) => e.trim())
-                              .toList();
-                          String shortDisplay = parts.take(2).join(', ');
-                          if (shortDisplay.length < 18 && parts.length > 2) {
-                            shortDisplay = parts.take(3).join(', ');
+
+                          if (suggestion.containsKey('address')) {
+                            final address = suggestion['address'];
+                            List<String> parts = [];
+                            if (address.containsKey('name')) {
+                              parts.add(address['name']);
+                            } else if (address.containsKey('road')) {
+                              parts.add(address['road']);
+                            }
+
+                            if (address.containsKey('city')) {
+                              parts.add(address['city']);
+                            } else if (address.containsKey('town')) {
+                              parts.add(address['town']);
+                            } else if (address.containsKey('village')) {
+                              parts.add(address['village']);
+                            }
+
+                            if (address.containsKey('county') &&
+                                !parts.contains(address['county'])) {
+                              parts.add(address['county']);
+                            }
+                            if (address.containsKey('state') &&
+                                !parts.contains(address['state'])) {
+                              parts.add(address['state']);
+                            }
+                            if (address.containsKey('country') &&
+                                !parts.contains(address['country'])) {
+                              parts.add(address['country']);
+                            }
+
+                            if (parts.isNotEmpty) {
+                              displayCandidate = parts.take(3).join(', ');
+                              if (displayCandidate.length > 50 &&
+                                  parts.length > 2) {
+                                displayCandidate = parts.take(2).join(', ');
+                              }
+                            }
                           }
+                          if (displayCandidate.length > 50 &&
+                              suggestion['display_name'].length > 50) {
+                            final rawParts = suggestion['display_name']
+                                .split(',')
+                                .map((e) => e.trim())
+                                .toList();
+                            displayCandidate = rawParts.take(3).join(', ');
+                            if (displayCandidate.length > 50 &&
+                                rawParts.length > 2) {
+                              displayCandidate = rawParts.take(2).join(', ');
+                            }
+                          }
+
                           return ListTile(
                             leading: const Icon(Icons.place),
-                            title: Text(shortDisplay),
+                            title: Text(displayCandidate),
                             onTap: () => _selectLocationSuggestion(suggestion),
                           );
                         },
@@ -563,7 +725,7 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
         Text(labelText,
             style: theme.textTheme.labelLarge?.copyWith(
               fontWeight: FontWeight.bold,
-              color: theme.colorScheme.onSurface.withOpacity(0.8),
+              color: theme.colorScheme.onBackground.withOpacity(0.8),
               fontSize: 14,
             )),
         const SizedBox(height: 8),
