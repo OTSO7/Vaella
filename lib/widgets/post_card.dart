@@ -17,21 +17,19 @@ class PostCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       decoration: BoxDecoration(
-        color: theme.cardColor, // Käytetään teeman cardColoria
-        borderRadius: BorderRadius.circular(16.0), // Pyöreämmät kulmat
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(16.0),
         boxShadow: [
-          // UUDET, HIENOSTUNEEMMAT VARJOT
           BoxShadow(
-            color:
-                Colors.black.withOpacity(0.15), // Hienovaraisempi läpinäkyvyys
-            blurRadius: 10, // Pienempi sumeus
-            offset: const Offset(0, 5), // Lyhyempi varjo pystysuunnassa
-            spreadRadius: 0, // Ei levitä varjoa ulospäin
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+            spreadRadius: 0,
           ),
           BoxShadow(
-            color: Colors.black.withOpacity(0.1), // Vielä läpinäkyvämpi
-            blurRadius: 4, // Vähemmän sumeutta
-            offset: const Offset(0, 2), // Lyhyempi
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
             spreadRadius: 0,
           ),
         ],
@@ -47,7 +45,7 @@ class PostCard extends StatelessWidget {
               child: Row(
                 children: <Widget>[
                   CircleAvatar(
-                    radius: 24, // Hieman isompi avatar
+                    radius: 24,
                     backgroundImage: NetworkImage(post.userAvatarUrl),
                     backgroundColor:
                         theme.colorScheme.secondary.withOpacity(0.5),
@@ -62,7 +60,7 @@ class PostCard extends StatelessWidget {
                           style: textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                             color: theme.colorScheme.onSurface,
-                            fontSize: 17, // Hieman isompi
+                            fontSize: 17,
                           ),
                         ),
                         if (post.location.isNotEmpty)
@@ -79,7 +77,7 @@ class PostCard extends StatelessWidget {
                                   style: textTheme.bodySmall?.copyWith(
                                     color: theme.colorScheme.onSurface
                                         .withOpacity(0.7),
-                                    fontSize: 12, // Hieman pienempi
+                                    fontSize: 12,
                                   ),
                                 ),
                               ],
@@ -89,11 +87,10 @@ class PostCard extends StatelessWidget {
                     ),
                   ),
                   IconButton(
-                    icon: Icon(
-                        Icons.more_horiz, // Vaihdettu more_horiz, modernimpi
+                    icon: Icon(Icons.more_horiz,
                         color: theme.colorScheme.onSurface.withOpacity(0.8)),
                     onPressed: () {
-                      _showFeatureComingSoon(context, "Postausasetukset");
+                      _showFeatureComingSoon(context, "Post settings");
                     },
                   ),
                 ],
@@ -103,7 +100,7 @@ class PostCard extends StatelessWidget {
             // Post Image (if available)
             if (post.postImageUrl != null && post.postImageUrl!.isNotEmpty)
               AspectRatio(
-                aspectRatio: 16 / 9, // Yleinen kuvasuhde
+                aspectRatio: 16 / 9,
                 child: Image.network(
                   post.postImageUrl!,
                   fit: BoxFit.cover,
@@ -143,14 +140,13 @@ class PostCard extends StatelessWidget {
               child: Text(
                 post.caption,
                 style: textTheme.bodyLarge?.copyWith(
-                  // Hieman isompi kuvateksti
                   color: theme.colorScheme.onSurface.withOpacity(0.95),
                   fontSize: 16,
-                  height: 1.4, // Parantaa luettavuutta
+                  height: 1.4,
                 ),
               ),
             ),
-            // Divider ennen toimintapainikkeita
+            // Divider before actions
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Divider(
@@ -170,17 +166,17 @@ class PostCard extends StatelessWidget {
                       _buildActionButton(
                           context, Icons.favorite_border, post.likes.toString(),
                           () {
-                        _showFeatureComingSoon(context, "Tykkäystoiminto");
+                        _showFeatureComingSoon(context, "Like feature");
                       }),
                       const SizedBox(width: 16.0),
                       _buildActionButton(context, Icons.chat_bubble_outline,
                           post.comments.toString(), () {
-                        _showFeatureComingSoon(context, "Kommenttitoiminto");
+                        _showFeatureComingSoon(context, "Comment feature");
                       }),
                       const SizedBox(width: 16.0),
-                      _buildActionButton(context, Icons.share_outlined, "Jaa",
+                      _buildActionButton(context, Icons.share_outlined, "Share",
                           () {
-                        _showFeatureComingSoon(context, "Jakotoiminto");
+                        _showFeatureComingSoon(context, "Share feature");
                       }),
                     ],
                   ),
@@ -199,7 +195,6 @@ class PostCard extends StatelessWidget {
     );
   }
 
-  // Apufunktio toimintapainikkeiden rakentamiseen
   Widget _buildActionButton(BuildContext context, IconData icon, String label,
       VoidCallback onPressed) {
     final theme = Theme.of(context);
@@ -233,27 +228,25 @@ class PostCard extends StatelessWidget {
     );
   }
 
-  // Apufunktio ajan muotoiluun (sama kuin ennen)
   String _getTimeAgo(DateTime dateTime) {
     final Duration diff = DateTime.now().difference(dateTime);
     if (diff.inDays > 7) {
-      return DateFormat('d MMM', 'fi_FI').format(dateTime);
+      return DateFormat('d MMM', 'en_US').format(dateTime);
     } else if (diff.inDays >= 1) {
-      return '${diff.inDays} pv sitten';
+      return '${diff.inDays}d ago';
     } else if (diff.inHours >= 1) {
-      return '${diff.inHours} t sitten';
+      return '${diff.inHours}h ago';
     } else if (diff.inMinutes >= 1) {
-      return '${diff.inMinutes} min sitten';
+      return '${diff.inMinutes} min ago';
     } else {
-      return 'Juuri nyt';
+      return 'Just now';
     }
   }
 
-  // Apufunktio "ominaisuus tulossa" -snackbariin
   void _showFeatureComingSoon(BuildContext context, String featureName) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('$featureName ei ole vielä toteutettu.'),
+        content: Text('$featureName is not implemented yet.'),
         backgroundColor: Theme.of(context).colorScheme.primary,
         duration: const Duration(seconds: 1),
       ),

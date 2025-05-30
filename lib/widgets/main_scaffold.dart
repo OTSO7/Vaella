@@ -29,17 +29,17 @@ class MainScaffoldWithBottomNav extends StatelessWidget {
           BottomNavigationBarItem(
             icon: Icon(Icons.home_outlined),
             activeIcon: Icon(Icons.home),
-            label: 'Koti',
+            label: 'Home',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.list_alt_outlined),
             activeIcon: Icon(Icons.list_alt),
-            label: 'Omat vaellukset',
+            label: 'Your plans',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
             activeIcon: Icon(Icons.person),
-            label: 'Profiili',
+            label: 'Profile',
           ),
         ],
         backgroundColor:

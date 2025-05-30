@@ -21,7 +21,6 @@ class _HomePageState extends State<HomePage> {
     _dummyPosts = _getDummyPosts();
   }
 
-  // Nykyiset dummy-postaukset
   List<Post> _getDummyPosts() {
     return [
       Post(
@@ -30,12 +29,12 @@ class _HomePageState extends State<HomePage> {
         userAvatarUrl: 'https://i.pravatar.cc/150?img=1',
         postImageUrl: 'https://picsum.photos/seed/trail1/600/400',
         caption:
-            'Upea päiväretki Teijon kansallispuistossa! Polut olivat hyvässä kunnossa ja maisemat henkeäsalpaavat. 🌲☀️ #vaellus #luonto #teijo',
+            'Amazing day hike at Teijo National Park! Trails were in great condition and the views were breathtaking. 🌲☀️ #hiking #nature #teijo',
         timestamp:
             DateTime.now().subtract(const Duration(hours: 2, minutes: 35)),
         likes: 125,
         comments: 18,
-        location: 'Teijon kansallispuisto',
+        location: 'Teijo National Park',
       ),
       Post(
         id: '2',
@@ -43,22 +42,22 @@ class _HomePageState extends State<HomePage> {
         userAvatarUrl: 'https://i.pravatar.cc/150?img=2',
         postImageUrl: 'https://picsum.photos/seed/mountain2/600/400',
         caption:
-            'Viikonlopun seikkailu Kolilla. Huipulla tuuli, mutta näkymät korvasivat kaiken! Suosittelen lämpimästi. #koli #kansallismaisema #retkeily #suomi',
+            'Weekend adventure at Koli. It was windy at the top, but the views made it all worth it! Highly recommended. #koli #nationalview #hiking #finland',
         timestamp: DateTime.now().subtract(const Duration(days: 1, hours: 5)),
         likes: 210,
         comments: 32,
-        location: 'Kolin kansallispuisto',
+        location: 'Koli National Park',
       ),
       Post(
         id: '3',
         username: 'Laura Luontokuvaaja',
         userAvatarUrl: 'https://i.pravatar.cc/150?img=3',
         caption:
-            'Lyhyt iltakävely paikallisessa metsässä. Hiljaisuus ja raikas ilma tekevät niin hyvää. Pieniä iloja arjessa. 😌 #metsä #luontoterapia #iltakävely',
+            'Short evening walk in the local forest. The silence and fresh air are so good for you. Small joys in everyday life. 😌 #forest #naturetherapy #eveningwalk',
         timestamp: DateTime.now().subtract(const Duration(days: 2, hours: 12)),
         likes: 95,
         comments: 12,
-        location: 'Kaupin urheilupuisto, Tampere',
+        location: 'Kauppi Sports Park, Tampere',
       ),
       Post(
         id: '4',
@@ -66,11 +65,11 @@ class _HomePageState extends State<HomePage> {
         userAvatarUrl: 'https://i.pravatar.cc/150?img=4',
         postImageUrl: 'https://picsum.photos/seed/aurora4/600/400',
         caption:
-            'Revontulibongaus Inarissa viime yönä oli maagista! Kylmä, mutta ehdottomasti sen arvoista. ✨🌌 #revontulet #lappi #inarjärvi #yötaivas',
+            'Northern lights hunting in Inari last night was magical! Cold, but definitely worth it. ✨🌌 #aurora #lapland #inarijarvi #nightSky',
         timestamp: DateTime.now().subtract(const Duration(hours: 10)),
         likes: 302,
         comments: 45,
-        location: 'Inari, Lappi',
+        location: 'Inari, Lapland',
       ),
       Post(
         id: '5',
@@ -78,7 +77,7 @@ class _HomePageState extends State<HomePage> {
         userAvatarUrl: 'https://i.pravatar.cc/150?img=5',
         postImageUrl: 'https://picsum.photos/seed/lake5/600/400',
         caption:
-            'Upea aamu Sääksjärvellä! Kajakointi auringonnousun aikaan on parasta. 🌅🛶 #kajakointi #auringonnousu #järvimaisema',
+            'Beautiful morning at Sääksjärvi! Kayaking at sunrise is the best. 🌅🛶 #kayaking #sunrise #lakelandscape',
         timestamp: DateTime.now().subtract(const Duration(hours: 4)),
         likes: 180,
         comments: 20,
@@ -90,11 +89,11 @@ class _HomePageState extends State<HomePage> {
         userAvatarUrl: 'https://i.pravatar.cc/150?img=6',
         postImageUrl: 'https://picsum.photos/seed/forest6/600/400',
         caption:
-            'Pitkä vaellus Korouoman kanjonissa takana. Jäätiköt olivat huikeita! 💪❄️ #korouoma #jääputous #talvivaellus',
+            'Long hike in the Korouoma canyon done. The ice falls were amazing! 💪❄️ #korouoma #icefall #winterhike',
         timestamp: DateTime.now().subtract(const Duration(days: 3)),
         likes: 250,
         comments: 38,
-        location: 'Korouoman kanjoni',
+        location: 'Korouoma Canyon',
       ),
     ];
   }
@@ -118,17 +117,18 @@ class _HomePageState extends State<HomePage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
-            tooltip: 'Hae postauksia',
+            tooltip: 'Search posts',
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                    content: Text('Hakutoimintoa ei ole vielä toteutettu.')),
+                    content:
+                        Text('Search functionality is not implemented yet.')),
               );
             },
           ),
           IconButton(
             icon: const Icon(Icons.logout),
-            tooltip: 'Kirjaudu ulos',
+            tooltip: 'Log out',
             onPressed: () {
               authProvider.logout();
             },
@@ -144,34 +144,31 @@ class _HomePageState extends State<HomePage> {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-                content:
-                    Text('Postaukset "päivitetty" (järjestys sekoitettu).')),
+                content: Text('Posts "refreshed" (order shuffled).')),
           );
         },
         color: theme.colorScheme.secondary,
         backgroundColor: theme.primaryColor,
         child: ListView.separated(
-          // MUUTETTU: Käytetään ListView.separated
           padding: const EdgeInsets.only(top: 8.0, bottom: 80.0),
           itemCount: _dummyPosts.length,
           itemBuilder: (context, index) {
             return PostCard(post: _dummyPosts[index]);
           },
-          separatorBuilder: (context, index) =>
-              const SizedBox(height: 16.0), // LISÄTTY: Väliä korttien väliin
+          separatorBuilder: (context, index) => const SizedBox(height: 16.0),
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-                content: Text(
-                    'Uuden postauksen/muistiinpanon lisäystä ei ole vielä toteutettu.')),
+                content:
+                    Text('Adding a new post/note is not implemented yet.')),
           );
         },
-        tooltip: 'Lisää postaus tai muistiinpano',
+        tooltip: 'Add post or note',
         icon: const Icon(Icons.add_a_photo_outlined),
-        label: const Text("Lisää postaus"),
+        label: const Text("Add post"),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
