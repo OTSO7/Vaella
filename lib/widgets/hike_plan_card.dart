@@ -20,7 +20,7 @@ class HikePlanCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
-    final dateFormat = DateFormat('d.M.yyyy', 'fi_FI');
+    final dateFormat = DateFormat('d.M.yyyy', 'en_US');
     String dateText = dateFormat.format(plan.startDate);
     if (plan.endDate != null && plan.endDate != plan.startDate) {
       dateText += ' - ${dateFormat.format(plan.endDate!)}';
@@ -33,22 +33,22 @@ class HikePlanCard extends StatelessWidget {
       case HikeStatus.planned:
         statusColor = Colors.blueGrey.shade400;
         statusIcon = Icons.pending_actions_outlined;
-        statusLabel = 'Suunnitteilla';
+        statusLabel = 'Planned';
         break;
       case HikeStatus.upcoming:
         statusColor = theme.colorScheme.secondary;
         statusIcon = Icons.access_time_outlined;
-        statusLabel = 'Tulossa';
+        statusLabel = 'Upcoming';
         break;
       case HikeStatus.completed:
         statusColor = Colors.green.shade600;
         statusIcon = Icons.check_circle_outline;
-        statusLabel = 'Suoritettu vaellus';
+        statusLabel = 'Completed hike';
         break;
       case HikeStatus.cancelled:
         statusColor = Colors.red.shade400;
         statusIcon = Icons.cancel_outlined;
-        statusLabel = 'Peruttu';
+        statusLabel = 'Cancelled';
         break;
     }
 
@@ -118,7 +118,7 @@ class HikePlanCard extends StatelessWidget {
                                 children: [
                                   Icon(Icons.edit_outlined),
                                   SizedBox(width: 8),
-                                  Text('Muokkaa'),
+                                  Text('Edit'),
                                 ],
                               ),
                             ),
@@ -127,12 +127,10 @@ class HikePlanCard extends StatelessWidget {
                               value: 'delete',
                               child: Row(
                                 children: [
-                                  Icon(Icons.delete_outline,
-                                      color: Colors.red.shade600),
-                                  const SizedBox(width: 8),
-                                  Text('Poista',
-                                      style: TextStyle(
-                                          color: Colors.red.shade600)),
+                                  Icon(Icons.delete_outline, color: Colors.red),
+                                  SizedBox(width: 8),
+                                  Text('Delete',
+                                      style: TextStyle(color: Colors.red)),
                                 ],
                               ),
                             ),
@@ -140,7 +138,7 @@ class HikePlanCard extends StatelessWidget {
                         icon: Icon(Icons.more_vert,
                             color:
                                 theme.colorScheme.onSurface.withOpacity(0.7)),
-                        tooltip: 'Lisää vaihtoehtoja',
+                        tooltip: 'More options',
                       ),
                   ],
                 ),
@@ -157,7 +155,7 @@ class HikePlanCard extends StatelessWidget {
                   const SizedBox(height: 12),
                   Divider(color: theme.colorScheme.onSurface.withOpacity(0.1)),
                   const SizedBox(height: 12),
-                  Text('Muistiinpanot:',
+                  Text('Notes:',
                       style: textTheme.labelLarge?.copyWith(
                           fontWeight: FontWeight.bold,
                           color: theme.colorScheme.onSurface.withOpacity(0.8))),
