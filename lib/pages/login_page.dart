@@ -140,7 +140,7 @@ class _LoginPageState extends State<LoginPage>
                           ),
                           SizedBox(height: screenHeight * 0.02),
                           Text(
-                            'TrekNote',
+                            'Vaella',
                             textAlign: TextAlign.center,
                             style: textTheme.headlineLarge?.copyWith(
                               color: Colors.white,
@@ -158,7 +158,7 @@ class _LoginPageState extends State<LoginPage>
                           ),
                           SizedBox(height: screenHeight * 0.01),
                           Text(
-                            'Seikkailut odottavat!',
+                            'Adventures await!',
                             textAlign: TextAlign.center,
                             style: textTheme.titleLarge?.copyWith(
                               color: Colors.white70,
@@ -172,10 +172,8 @@ class _LoginPageState extends State<LoginPage>
                             controller: _identifierController, // Päivitetty
                             style: const TextStyle(color: Colors.white),
                             decoration: const InputDecoration(
-                              hintText:
-                                  'Käyttäjätunnus tai sähköposti', // Päivitetty
-                              labelText:
-                                  'Käyttäjätunnus tai sähköposti', // Päivitetty
+                              hintText: 'Username or email address',
+                              labelText: 'Username or email address',
                               prefixIcon:
                                   Icon(Icons.person_outline), // Yleisempi ikoni
                             ),
@@ -183,7 +181,7 @@ class _LoginPageState extends State<LoginPage>
                                 .emailAddress, // Voi auttaa mobiilissa
                             validator: (value) {
                               if (value == null || value.isEmpty) {
-                                return 'Syötä käyttäjätunnus tai sähköpostiosoite';
+                                return 'Please enter your username or email address.';
                               }
                               // Ei tehdä tiukkaa sähköpostivalidointia tässä, koska se voi olla myös käyttäjätunnus
                               // Tarkistetaan vain, ettei ole tyhjä
@@ -195,17 +193,17 @@ class _LoginPageState extends State<LoginPage>
                             controller: _passwordController,
                             style: const TextStyle(color: Colors.white),
                             decoration: const InputDecoration(
-                              hintText: 'Salasana',
-                              labelText: 'Salasana',
+                              hintText: 'Password',
+                              labelText: 'Password',
                               prefixIcon: Icon(Icons.lock_outline),
                             ),
                             obscureText: true,
                             validator: (value) {
                               if (value == null || value.isEmpty) {
-                                return 'Syötä salasana';
+                                return 'Please enter your password.';
                               }
                               if (value.length < 6) {
-                                return 'Salasanan tulee olla vähintään 6 merkkiä pitkä';
+                                return 'The password must be at least 6 characters long.';
                               }
                               return null;
                             },
@@ -223,7 +221,7 @@ class _LoginPageState extends State<LoginPage>
                                 );
                               },
                               child: Text(
-                                'Unohtuiko salasana?',
+                                'Forgot password?',
                                 style: textTheme.bodyMedium
                                     ?.copyWith(color: Colors.orange.shade300),
                               ),
@@ -242,14 +240,14 @@ class _LoginPageState extends State<LoginPage>
                                       strokeWidth: 2,
                                     ),
                                   )
-                                : const Text('Kirjaudu sisään'),
+                                : const Text('Log in'),
                           ),
                           SizedBox(height: screenHeight * 0.04),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
-                                "Eikö sinulla ole tiliä? ",
+                                "No account yet? ",
                                 style: textTheme.bodyMedium?.copyWith(
                                   color: Colors.white.withOpacity(0.7),
                                 ),
@@ -259,7 +257,7 @@ class _LoginPageState extends State<LoginPage>
                                   context.push('/register');
                                 },
                                 child: Text(
-                                  'Luo tili',
+                                  'create one here',
                                   style: textTheme.bodyMedium?.copyWith(
                                       color: Colors.tealAccent.shade200),
                                 ),

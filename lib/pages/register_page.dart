@@ -73,21 +73,17 @@ class _RegisterPageState extends State<RegisterPage>
           _usernameController.text.trim(),
           _nameController.text.trim(),
         );
-        // Tarkista mounted-tila ennen kontekstin käyttöä
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                'Tili käyttäjätunnuksella "${_usernameController.text.trim()}" luotu onnistuneesti!'),
+                'Account with username "${_usernameController.text.trim()}" created successfully!'),
             backgroundColor: Colors.green[700],
           ),
         );
-        // Tarkista mounted-tila ennen kontekstin käyttöä
         if (!mounted) return;
-        context.go(
-            '/home'); // Siirry kotisivulle onnistuneen rekisteröinnin jälkeen
+        context.go('/home');
       } catch (e) {
-        // Tarkista mounted-tila ennen kontekstin käyttöä
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -103,21 +99,18 @@ class _RegisterPageState extends State<RegisterPage>
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
-    final authProvider =
-        Provider.of<AuthProvider>(context); // Kuuntele isLoading-tilaa
-    final textTheme = Theme.of(context).textTheme; // Hae TextTheme
+    final authProvider = Provider.of<AuthProvider>(context);
+    final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
       body: Stack(
         children: [
-          // Taustakuva
           Positioned.fill(
             child: Image.asset(
               'assets/images/header2.jpg',
               fit: BoxFit.cover,
             ),
           ),
-          // Gradientti peitto
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
@@ -149,7 +142,6 @@ class _RegisterPageState extends State<RegisterPage>
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: <Widget>[
                           Hero(
-                            // Lisää Hero-animaatio
                             tag: 'appLogo',
                             child: Image.asset(
                               'assets/images/white1.png',
@@ -159,11 +151,11 @@ class _RegisterPageState extends State<RegisterPage>
                           ),
                           SizedBox(height: screenHeight * 0.015),
                           Text(
-                            'Liity TrekNoteen!',
+                            'Join Vaella!',
                             textAlign: TextAlign.center,
                             style: textTheme.headlineLarge?.copyWith(
                               color: Colors.white,
-                              fontSize: 38, // Isompi fontti
+                              fontSize: 38,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 1.5,
                               shadows: [
@@ -177,7 +169,7 @@ class _RegisterPageState extends State<RegisterPage>
                           ),
                           SizedBox(height: screenHeight * 0.01),
                           Text(
-                            'Luo uusi tili ja aloita matkasi!',
+                            'Start your journey with us',
                             textAlign: TextAlign.center,
                             style: textTheme.titleLarge?.copyWith(
                               color: Colors.white70,
@@ -190,8 +182,8 @@ class _RegisterPageState extends State<RegisterPage>
                             controller: _usernameController,
                             style: const TextStyle(color: Colors.white),
                             decoration: const InputDecoration(
-                              hintText: 'Käyttäjätunnus',
-                              labelText: 'Käyttäjätunnus (uniikki)',
+                              hintText: 'Username',
+                              labelText: 'Username',
                               prefixIcon: Icon(Icons.account_circle_outlined),
                             ),
                             keyboardType: TextInputType.text,
@@ -199,15 +191,14 @@ class _RegisterPageState extends State<RegisterPage>
                                 AutovalidateMode.onUserInteraction,
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
-                                return 'Syötä käyttäjätunnus';
+                                return 'Enter a username';
                               }
                               if (value.trim().length < 3) {
-                                return 'Käyttäjätunnuksen tulee olla vähintään 3 merkkiä';
+                                return 'Username must be at least 3 characters';
                               }
                               if (value.contains(' ')) {
-                                return 'Käyttäjätunnus ei saa sisältää välilyöntejä';
+                                return 'Username cannot contain spaces';
                               }
-                              // Uniikkiustarkistus tehdään palvelimella AuthProviderissa
                               return null;
                             },
                           ),
@@ -216,17 +207,17 @@ class _RegisterPageState extends State<RegisterPage>
                             controller: _nameController,
                             style: const TextStyle(color: Colors.white),
                             decoration: const InputDecoration(
-                              hintText: 'Koko nimi',
-                              labelText: 'Nimi',
+                              hintText: 'Full name',
+                              labelText: 'Name',
                               prefixIcon: Icon(Icons.person_outline),
                             ),
                             keyboardType: TextInputType.name,
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
-                                return 'Syötä nimesi';
+                                return 'Enter your name';
                               }
                               if (value.trim().length < 2) {
-                                return 'Nimen tulee olla vähintään 2 merkkiä';
+                                return 'Name must be at least 2 characters';
                               }
                               return null;
                             },
@@ -236,8 +227,8 @@ class _RegisterPageState extends State<RegisterPage>
                             controller: _emailController,
                             style: const TextStyle(color: Colors.white),
                             decoration: const InputDecoration(
-                              hintText: 'Sähköposti',
-                              labelText: 'Sähköposti',
+                              hintText: 'Email',
+                              labelText: 'Email',
                               prefixIcon: Icon(Icons.email_outlined),
                             ),
                             keyboardType: TextInputType.emailAddress,
@@ -245,11 +236,11 @@ class _RegisterPageState extends State<RegisterPage>
                                 AutovalidateMode.onUserInteraction,
                             validator: (value) {
                               if (value == null || value.isEmpty) {
-                                return 'Syötä sähköpostiosoite';
+                                return 'Enter your email address';
                               }
                               final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
                               if (!emailRegex.hasMatch(value)) {
-                                return 'Syötä validi sähköpostiosoite';
+                                return 'Enter a valid email address';
                               }
                               return null;
                             },
@@ -259,17 +250,17 @@ class _RegisterPageState extends State<RegisterPage>
                             controller: _passwordController,
                             style: const TextStyle(color: Colors.white),
                             decoration: const InputDecoration(
-                              hintText: 'Salasana',
-                              labelText: 'Salasana',
+                              hintText: 'Password',
+                              labelText: 'Password',
                               prefixIcon: Icon(Icons.lock_outline),
                             ),
                             obscureText: true,
                             validator: (value) {
                               if (value == null || value.isEmpty) {
-                                return 'Syötä salasana';
+                                return 'Enter a password';
                               }
                               if (value.length < 6) {
-                                return 'Salasanan tulee olla vähintään 6 merkkiä pitkä';
+                                return 'Password must be at least 6 characters';
                               }
                               return null;
                             },
@@ -279,8 +270,8 @@ class _RegisterPageState extends State<RegisterPage>
                             controller: _confirmPasswordController,
                             style: const TextStyle(color: Colors.white),
                             decoration: const InputDecoration(
-                              hintText: 'Vahvista salasana',
-                              labelText: 'Vahvista salasana',
+                              hintText: 'Confirm password',
+                              labelText: 'Confirm password',
                               prefixIcon: Icon(Icons.lock_outline),
                             ),
                             obscureText: true,
@@ -288,10 +279,10 @@ class _RegisterPageState extends State<RegisterPage>
                                 AutovalidateMode.onUserInteraction,
                             validator: (value) {
                               if (value == null || value.isEmpty) {
-                                return 'Vahvista salasana';
+                                return 'Confirm your password';
                               }
                               if (value != _passwordController.text) {
-                                return 'Salasanat eivät täsmää';
+                                return 'Passwords do not match';
                               }
                               return null;
                             },
@@ -310,14 +301,14 @@ class _RegisterPageState extends State<RegisterPage>
                                       strokeWidth: 2,
                                     ),
                                   )
-                                : const Text('Luo tili'),
+                                : const Text('Create account'),
                           ),
                           SizedBox(height: screenHeight * 0.03),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
-                                "Onko sinulla jo tili? ",
+                                "Already have an account? ",
                                 style: textTheme.bodyMedium?.copyWith(
                                   color: Colors.white.withOpacity(0.7),
                                 ),
@@ -331,7 +322,7 @@ class _RegisterPageState extends State<RegisterPage>
                                   }
                                 },
                                 child: Text(
-                                  'Kirjaudu sisään',
+                                  'Sign in',
                                   style: textTheme.bodyMedium?.copyWith(
                                       color: Colors.tealAccent.shade200),
                                 ),
