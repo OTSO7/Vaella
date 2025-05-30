@@ -32,6 +32,10 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
   List<Map<String, dynamic>> _locationSuggestions = [];
   Timer? _debounce;
   ValueNotifier<bool> _isSearchingLocation = ValueNotifier(false);
+  final FocusNode _locationFocusNode = FocusNode();
+
+  static const _searchDelay = Duration(milliseconds: 400);
+  String _currentSearchQuery = '';
 
   @override
   void initState() {
@@ -52,6 +56,7 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
     }
 
     _locationController.addListener(_onLocationChanged);
+    _locationFocusNode.addListener(_onFocusChanged);
   }
 
   @override
@@ -63,13 +68,32 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
     _notesController.dispose();
     _isSearchingLocation.dispose();
     _debounce?.cancel();
+    _locationFocusNode.removeListener(_onFocusChanged);
+    _locationFocusNode.dispose();
     super.dispose();
   }
 
+  void _onFocusChanged() {
+    if (!_locationFocusNode.hasFocus && _locationSuggestions.isNotEmpty) {
+      setState(() {
+        _locationSuggestions = [];
+      });
+    }
+  }
+
   void _onLocationChanged() {
+    final query = _locationController.text.trim();
+    if (query == _currentSearchQuery) {
+      return;
+    }
+
+    _currentSearchQuery = query;
+
     if (_debounce?.isActive ?? false) _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 700), () {
-      _searchLocationSuggestions(_locationController.text.trim());
+    _debounce = Timer(_searchDelay, () {
+      if (query == _locationController.text.trim()) {
+        _searchLocationSuggestions(query);
+      }
     });
   }
 
@@ -86,9 +110,9 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
       initialDate: initialDate,
       firstDate: firstDate,
       lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
-      helpText: isStartDate ? 'SELECT START DATE' : 'SELECT END DATE',
-      confirmText: 'SELECT',
-      cancelText: 'CANCEL',
+      helpText: isStartDate ? 'Select start date' : 'Select end date',
+      confirmText: 'Select',
+      cancelText: 'Cancel',
       locale: const Locale('en', 'US'),
       builder: (BuildContext context, Widget? child) {
         return Theme(
@@ -136,13 +160,11 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
     _isSearchingLocation.value = true;
 
     final url = Uri.parse(
-        'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=json&limit=7&addressdetails=1&extratags=1');
+        'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=json&limit=7&addressdetails=1&extratags=1&countrycodes=fi&viewbox=19.0,59.5,32.0,70.0&bounded=1');
 
     try {
-      final response = await http.get(url, headers: {
-        'User-Agent':
-            'TrekNoteApp/1.0 (contact@treknote.com)' // CHANGE THIS TO YOUR OWN EMAIL/NAME!
-      });
+      final response = await http.get(url,
+          headers: {'User-Agent': 'TrekNoteApp/1.0 (contact@treknote.com)'});
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
@@ -180,53 +202,25 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
   }
 
   void _selectLocationSuggestion(Map<String, dynamic> suggestion) {
-    String shortLocationName = suggestion['display_name'] as String;
-    if (suggestion.containsKey('address')) {
-      final address = suggestion['address'];
-      List<String> parts = [];
-      if (address.containsKey('name'))
-        parts.add(address['name']);
-      else if (address.containsKey('road')) parts.add(address['road']);
-
-      if (address.containsKey('city'))
-        parts.add(address['city']);
-      else if (address.containsKey('town'))
-        parts.add(address['town']);
-      else if (address.containsKey('village')) parts.add(address['village']);
-
-      if (address.containsKey('county')) parts.add(address['county']);
-      if (address.containsKey('state')) parts.add(address['state']);
-      if (address.containsKey('country')) parts.add(address['country']);
-
-      if (parts.isNotEmpty) {
-        shortLocationName = parts.take(3).join(', ');
-        if (shortLocationName.length > 50 && parts.length > 2) {
-          shortLocationName = parts.take(2).join(', ');
-        }
-      }
-    }
-    if (shortLocationName.length > 50 &&
-        suggestion['display_name'].length > 50) {
-      final rawParts =
-          suggestion['display_name'].split(',').map((e) => e.trim()).toList();
-      shortLocationName = rawParts.take(3).join(', ');
-      if (shortLocationName.length > 50 && rawParts.length > 2) {
-        shortLocationName = rawParts.take(2).join(', ');
-      }
-    }
-
     setState(() {
-      _locationController.text = shortLocationName;
-      _latitude = double.tryParse(suggestion['lat'] ?? '');
-      _longitude = double.tryParse(suggestion['lon'] ?? '');
       _locationSuggestions = [];
     });
+
+    String displayCandidate = _formatLocationSuggestionName(suggestion);
+
+    setState(() {
+      _locationController.text = displayCandidate;
+      _latitude = double.tryParse(suggestion['lat'].toString());
+      _longitude = double.tryParse(suggestion['lon'].toString());
+    });
+
+    _locationFocusNode.unfocus();
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-              'Location "$shortLocationName" selected. Coordinates: ${_latitude?.toStringAsFixed(4)}, ${_longitude?.toStringAsFixed(4)}'),
+              'Location "$displayCandidate" selected. Coordinates: ${_latitude?.toStringAsFixed(4)}, ${_longitude?.toStringAsFixed(4)}'),
           backgroundColor: Colors.green[700],
         ),
       );
@@ -234,11 +228,16 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
   }
 
   Future<void> _pickLocationFromMap() async {
+    _locationFocusNode.unfocus();
+
     final LatLng? pickedLocation = await Navigator.push<LatLng>(
       context,
       MaterialPageRoute(
         builder: (context) => MapPickerPage(
-          initialLocation: LatLng(_latitude ?? 60.4518, _longitude ?? 22.2666),
+          initialLocation: LatLng(
+            _latitude ?? 60.4518,
+            _longitude ?? 22.2666,
+          ),
         ),
       ),
     );
@@ -265,13 +264,16 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
               .where((element) => element != null && element.isNotEmpty)
               .join(', ');
 
-          if (placemark.locality != null && placemark.country != null) {
-            displayAddress = '${placemark.locality}, ${placemark.country}';
-          } else if (placemark.name != null && placemark.locality != null) {
-            displayAddress = '${placemark.name}, ${placemark.locality}';
-          } else if (placemark.thoroughfare != null &&
-              placemark.locality != null) {
-            displayAddress = '${placemark.thoroughfare}, ${placemark.locality}';
+          if (displayAddress.length > 50) {
+            if (placemark.locality != null && placemark.country != null) {
+              displayAddress = '${placemark.locality}, ${placemark.country}';
+            } else if (placemark.name != null && placemark.locality != null) {
+              displayAddress = '${placemark.name}, ${placemark.locality}';
+            } else if (placemark.thoroughfare != null &&
+                placemark.locality != null) {
+              displayAddress =
+                  '${placemark.thoroughfare}, ${placemark.locality}';
+            }
           }
         }
 
@@ -312,19 +314,7 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
     if (_startDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Select the hike start date.'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-      return;
-    }
-
-    if (_locationController.text.trim().isNotEmpty &&
-        (_latitude == null || _longitude == null)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('Select a valid location using autocomplete or the map.'),
+          content: Text('Please select the hike start date.'),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -446,6 +436,7 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
                   const SizedBox(height: 18),
                   TextFormField(
                     controller: _locationController,
+                    focusNode: _locationFocusNode,
                     style: inputTextStyle,
                     decoration: InputDecoration(
                       labelText: 'Location*',
@@ -477,14 +468,21 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 18, vertical: 14),
                     ),
+                    onChanged: (value) {
+                      _onLocationChanged();
+                    },
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
                         return 'Hike location is required';
                       }
+                      if (_latitude == null || _longitude == null) {
+                        return 'Select location from suggestions or map';
+                      }
                       return null;
                     },
                   ),
-                  if (_locationSuggestions.isNotEmpty)
+                  if (_locationSuggestions.isNotEmpty &&
+                      _locationFocusNode.hasFocus)
                     Container(
                       margin: const EdgeInsets.only(top: 8),
                       padding: const EdgeInsets.all(8.0),
@@ -506,58 +504,7 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
                         itemBuilder: (context, index) {
                           final suggestion = _locationSuggestions[index];
                           String displayCandidate =
-                              suggestion['display_name'] as String;
-
-                          if (suggestion.containsKey('address')) {
-                            final address = suggestion['address'];
-                            List<String> parts = [];
-                            if (address.containsKey('name')) {
-                              parts.add(address['name']);
-                            } else if (address.containsKey('road')) {
-                              parts.add(address['road']);
-                            }
-
-                            if (address.containsKey('city')) {
-                              parts.add(address['city']);
-                            } else if (address.containsKey('town')) {
-                              parts.add(address['town']);
-                            } else if (address.containsKey('village')) {
-                              parts.add(address['village']);
-                            }
-
-                            if (address.containsKey('county') &&
-                                !parts.contains(address['county'])) {
-                              parts.add(address['county']);
-                            }
-                            if (address.containsKey('state') &&
-                                !parts.contains(address['state'])) {
-                              parts.add(address['state']);
-                            }
-                            if (address.containsKey('country') &&
-                                !parts.contains(address['country'])) {
-                              parts.add(address['country']);
-                            }
-
-                            if (parts.isNotEmpty) {
-                              displayCandidate = parts.take(3).join(', ');
-                              if (displayCandidate.length > 50 &&
-                                  parts.length > 2) {
-                                displayCandidate = parts.take(2).join(', ');
-                              }
-                            }
-                          }
-                          if (displayCandidate.length > 50 &&
-                              suggestion['display_name'].length > 50) {
-                            final rawParts = suggestion['display_name']
-                                .split(',')
-                                .map((e) => e.trim())
-                                .toList();
-                            displayCandidate = rawParts.take(3).join(', ');
-                            if (displayCandidate.length > 50 &&
-                                rawParts.length > 2) {
-                              displayCandidate = rawParts.take(2).join(', ');
-                            }
-                          }
+                              _formatLocationSuggestionName(suggestion);
 
                           return ListTile(
                             leading: const Icon(Icons.place),
@@ -740,5 +687,64 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
         ),
       ],
     );
+  }
+
+  String _formatLocationSuggestionName(Map<String, dynamic> suggestion) {
+    final displayName = suggestion['display_name'] as String;
+    final address = suggestion['address'] as Map<String, dynamic>?;
+
+    if (address == null) return displayName;
+
+    List<String> parts = [];
+
+    if (suggestion.containsKey('name')) {
+      parts.add(suggestion['name']);
+    } else if (suggestion.containsKey('amenity')) {
+      parts.add(suggestion['amenity']);
+    } else if (suggestion.containsKey('tourism')) {
+      parts.add(suggestion['tourism']);
+    } else if (suggestion.containsKey('natural')) {
+      parts.add(suggestion['natural']);
+    } else if (suggestion.containsKey('water')) {
+      parts.add(suggestion['water']);
+    } else if (suggestion.containsKey('leisure')) {
+      parts.add(suggestion['leisure']);
+    } else if (address.containsKey('road')) {
+      parts.add(address['road']);
+    } else if (address.containsKey('building')) {
+      parts.add(address['building']);
+    }
+
+    String? cityPart;
+    if (address.containsKey('city'))
+      cityPart = address['city'];
+    else if (address.containsKey('town'))
+      cityPart = address['town'];
+    else if (address.containsKey('village')) cityPart = address['village'];
+
+    if (cityPart != null && !parts.contains(cityPart)) {
+      parts.add(cityPart);
+    }
+
+    String? countyPart = address['county'];
+    if (countyPart != null && !parts.contains(countyPart) && cityPart == null) {
+      parts.add(countyPart);
+    }
+
+    String formattedName = parts.toSet().where((p) => p.isNotEmpty).join(', ');
+
+    if (formattedName.isEmpty) {
+      formattedName = displayName;
+    }
+
+    List<String> finalParts =
+        formattedName.split(',').map((e) => e.trim()).toList();
+    if (finalParts.length > 3) {
+      return finalParts.take(3).join(', ') + '...';
+    } else if (formattedName.length > 50) {
+      return formattedName.substring(0, 47) + '...';
+    }
+
+    return formattedName;
   }
 }

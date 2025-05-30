@@ -38,7 +38,7 @@ class _MapPickerPageState extends State<MapPickerPage> {
   void _handleMapMoved(MapCamera camera, bool hasGesture) {
     // Jos karttaa liikutetaan (ei vain "initial build"), päivitä _pickedLocation
     // ja käynnistä viivästetty geokoodaus.
-    if (hasGesture && camera.center != null) {
+    if (hasGesture) {
       setState(() {
         _pickedLocation = camera.center;
         _pickedAddress = 'Haetaan osoitetta...'; // Päivitä teksti heti
