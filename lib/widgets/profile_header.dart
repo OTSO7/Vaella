@@ -153,7 +153,7 @@ class ProfileHeader extends StatelessWidget {
                     LinearProgressIndicator(
                       value: experienceProgress,
                       backgroundColor: theme.colorScheme.surfaceContainerHighest
-                          .withOpacity(0.3), // Vaaleampi tausta
+                          .withOpacity(0.3), // Vaaleampi tausta.
                       valueColor: AlwaysStoppedAnimation<Color>(
                           theme.colorScheme.secondary),
                       minHeight: 8, // Paksumpi palkki

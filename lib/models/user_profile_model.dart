@@ -1,49 +1,68 @@
-// lib/models/user_profile_model.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+// Apufunktio ikonien nimien muuttamiseen IconData:ksi
+IconData getIconFromName(String name) {
+  switch (name) {
+    case 'emoji_events_outlined':
+      return Icons.emoji_events_outlined;
+    case 'star':
+      return Icons.star;
+    case 'park':
+      return Icons.park;
+    case 'check_circle':
+      return Icons.check_circle;
+    case 'hiking':
+      return Icons.hiking;
+    case 'landscape':
+      return Icons.landscape;
+    // Lisää tarvittavat ikonit tähän
+    default:
+      return Icons.help_outline;
+  }
+}
 
 // Achievement-malli
 class Achievement {
   final String id;
   final String title;
   final String description;
-  final IconData icon; // Ikonipohjainen saavutus
+  final IconData icon;
   final Color iconColor;
   final DateTime dateAchieved;
-  final String? imageUrl; // Valinnainen kuva (esim. kansallispuisto-tarra)
+  final String? imageUrl;
+  final String iconName; // Uusi kenttä Firestore-tallennukseen
 
   Achievement({
     required this.id,
     required this.title,
     required this.description,
-    this.icon = Icons.emoji_events_outlined, // Oletusikoni
-    this.iconColor = Colors.amber, // Oletusväri
+    this.icon = Icons.emoji_events_outlined,
+    this.iconColor = Colors.amber,
     required this.dateAchieved,
-    this.imageUrl, // Ota huomioon konstruktorissa
+    this.imageUrl,
+    this.iconName = 'emoji_events_outlined',
   });
 
-  // Luo Achievement Firestore-dokumentista (myöhempää laajennusta varten)
   factory Achievement.fromFirestore(Map<String, dynamic> data, String id) {
+    final name = data['iconName'] ?? 'emoji_events_outlined';
     return Achievement(
       id: id,
       title: data['title'] ?? '',
       description: data['description'] ?? '',
-      icon: IconData(data['iconCodePoint'],
-          fontFamily: data['iconFontFamily'] ??
-              'MaterialIcons'), // Vaatii koodipisteen ja fonttifamilian
+      icon: getIconFromName(name),
       iconColor: Color(data['iconColorValue'] ?? Colors.amber.value),
       dateAchieved: (data['dateAchieved'] as Timestamp).toDate(),
       imageUrl: data['imageUrl'],
+      iconName: name,
     );
   }
 
-  // Muunna Achievement Mapiksi Firestoreen tallentamista varten
   Map<String, dynamic> toFirestore() {
     return {
       'title': title,
       'description': description,
-      'iconCodePoint': icon.codePoint,
-      'iconFontFamily': icon.fontFamily,
+      'iconName': iconName,
       'iconColorValue': iconColor.value,
       'dateAchieved': dateAchieved,
       'imageUrl': imageUrl,
@@ -51,12 +70,11 @@ class Achievement {
   }
 }
 
-// Sticker-malli (voit yhdistää tämän Achievement-malliin, jos ne ovat samankaltaisia)
-// Pidetään erillään nyt selkeyden vuoksi, mutta harkitse yhdistämistä
+// Sticker-malli
 class Sticker {
   final String id;
-  final String name; // Kansallispuiston nimi tai tarran nimi
-  final String imageUrl; // Kuva tarrasta/merkistä
+  final String name;
+  final String imageUrl;
 
   Sticker({
     required this.id,
@@ -64,7 +82,6 @@ class Sticker {
     required this.imageUrl,
   });
 
-  // Luo Sticker Firestore-dokumentista (myöhempää laajennusta varten)
   factory Sticker.fromFirestore(Map<String, dynamic> data, String id) {
     return Sticker(
       id: id,
@@ -73,7 +90,6 @@ class Sticker {
     );
   }
 
-  // Muunna Sticker Mapiksi Firestoreen tallentamista varten
   Map<String, dynamic> toFirestore() {
     return {
       'name': name,
@@ -82,18 +98,18 @@ class Sticker {
   }
 }
 
-// PÄIVITETTY UserProfile-malli
+// UserProfile-malli
 class UserProfile {
   final String uid;
-  String username; // Nyt tallennetaan myös käyttäjätunnus
-  String displayName; // Esim. "Matti Meikäläinen"
+  String username;
+  String displayName;
   String email;
-  String? photoURL; // Profiilikuvan URL
+  String? photoURL;
   String? bio;
-  String? bannerImageUrl; // UUSI: Profiilisivun bannerikuva
+  String? bannerImageUrl;
   Map<String, dynamic> stats;
   List<Achievement> achievements;
-  List<Sticker> stickers; // Esim. kerätyt kansallispuistotarrat
+  List<Sticker> stickers;
 
   UserProfile({
     required this.uid,
@@ -102,26 +118,22 @@ class UserProfile {
     required this.email,
     this.photoURL,
     this.bio,
-    this.bannerImageUrl, // Ota huomioon konstruktorissa
+    this.bannerImageUrl,
     this.stats = const {},
     this.achievements = const [],
     this.stickers = const [],
   });
 
-  // Luo UserProfile Firestore-dokumentista
   factory UserProfile.fromFirestore(Map<String, dynamic> data, String uid) {
     return UserProfile(
       uid: uid,
       username: data['username'] ?? '',
-      displayName: data['name'] ?? '', // Oletetaan 'name' Firestoresta
+      displayName: data['name'] ?? '',
       email: data['email'] ?? '',
       photoURL: data['photoURL'],
       bio: data['bio'],
       bannerImageUrl: data['bannerImageUrl'],
       stats: Map<String, dynamic>.from(data['stats'] ?? {}),
-      // Huom: achievements ja stickers vaatisivat alikokoelmien haun
-      // tai niiden sisällyttämisen päädokumenttiin, jos ne ovat pieniä listoja.
-      // Tässä esimerkissä oletetaan ne tyhjiksi toistaiseksi, jos et hae niitä Firebasesta.
       achievements: (data['achievements'] as List<dynamic>?)
               ?.map((a) => Achievement.fromFirestore(
                   Map<String, dynamic>.from(a), a['id'] ?? ''))
@@ -135,7 +147,6 @@ class UserProfile {
     );
   }
 
-  // Muunna UserProfile Mapiksi Firestoreen tallentamista varten
   Map<String, dynamic> toFirestore() {
     return {
       'username': username,
@@ -150,7 +161,6 @@ class UserProfile {
     };
   }
 
-  // Kopio-metodi päivitystä varten
   UserProfile copyWith({
     String? username,
     String? displayName,
