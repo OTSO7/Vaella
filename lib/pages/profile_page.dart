@@ -3,10 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/auth_provider.dart';
 import '../models/user_profile_model.dart' as user_model;
-import '../widgets/profile_header.dart'; // Profiilin yläosan widget
-import '../widgets/profile_stats_grid.dart'; // Tilastojen esitykseen
-import '../widgets/achievement_grid.dart'
-    as achievement_widget; // Alias lisätty
+import '../widgets/profile_header.dart'; // Profile header widget
+import '../widgets/profile_stats_grid.dart'; // For displaying stats
+import '../widgets/achievement_grid.dart' as achievement_widget; // Alias added
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -16,10 +15,6 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  // Ei enää _userProfile-statea täällä, haetaan se AuthProviderista
-
-  // Simuloitu data (poistetaan myöhemmin, kun data tulee Firestoresta)
-
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
@@ -27,18 +22,18 @@ class _ProfilePageState extends State<ProfilePage> {
 
     if (!authProvider.isLoggedIn || authProvider.userProfile == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Profiili')),
+        appBar: AppBar(title: const Text('Profile')),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               authProvider.isLoading
                   ? const CircularProgressIndicator()
-                  : const Text('Ladataan profiilia...'),
+                  : const Text('Loading profile...'),
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: () => authProvider.logout(),
-                child: const Text('Kirjaudu ulos'),
+                child: const Text('Log out'),
               ),
             ],
           ),
@@ -48,7 +43,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
     final user_model.UserProfile userProfile = authProvider.userProfile!;
 
-    // Funktio profiilin muokkaukseen navigointiin
+    // Function to navigate to edit profile
     void navigateToEditProfile() async {
       final updatedProfile = await context.push<user_model.UserProfile>(
         '/profile/edit',
@@ -59,7 +54,7 @@ class _ProfilePageState extends State<ProfilePage> {
         await authProvider.updateLocalUserProfile(updatedProfile);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text('Profiili päivitetty onnistuneesti!'),
+              content: Text('Profile updated successfully!'),
               backgroundColor: Colors.green),
         );
       }
@@ -77,7 +72,7 @@ class _ProfilePageState extends State<ProfilePage> {
             backgroundColor: theme.scaffoldBackgroundColor,
             leading: IconButton(
               icon: Icon(Icons.logout, color: theme.colorScheme.onSurface),
-              tooltip: 'Kirjaudu ulos',
+              tooltip: 'Log out',
               onPressed: () {
                 authProvider.logout();
               },
@@ -96,18 +91,17 @@ class _ProfilePageState extends State<ProfilePage> {
                     ((userProfile.stats['Vaelluksia'] ?? 0) % 5) / 5.0,
               ),
             ),
-            // Poistettu actions-lista, logout on nyt leadingissä
           ),
-          _buildSectionHeader(context, 'Tilastot', Icons.bar_chart_outlined),
+          _buildSectionHeader(context, 'Statistics', Icons.bar_chart_outlined),
           SliverToBoxAdapter(
             child: ProfileStatsGrid(stats: userProfile.stats),
           ),
           _buildSectionHeader(
-              context, 'Saavutukset', Icons.emoji_events_outlined),
+              context, 'Achievements', Icons.emoji_events_outlined),
           userProfile.achievements.isEmpty
               ? SliverToBoxAdapter(
                   child: _buildEmptySectionPlaceholder(
-                      context, 'Ei vielä saavutuksia. Lähde seikkailemaan!'))
+                      context, 'No achievements yet. Go explore!'))
               : SliverToBoxAdapter(
                   child: achievement_widget.AchievementGrid(
                     achievements: userProfile.achievements
@@ -125,12 +119,12 @@ class _ProfilePageState extends State<ProfilePage> {
                     isStickerGrid: false,
                   ),
                 ),
-          _buildSectionHeader(context, 'Kansallispuistomerkit',
+          _buildSectionHeader(context, 'National Park Badges',
               Icons.collections_bookmark_outlined),
           userProfile.stickers.isEmpty
               ? SliverToBoxAdapter(
                   child: _buildEmptySectionPlaceholder(
-                      context, 'Ei vielä kerättyjä kansallispuistomerkkejä.'))
+                      context, 'No national park badges collected yet.'))
               : SliverToBoxAdapter(
                   child: achievement_widget.AchievementGrid(
                     achievements: userProfile.stickers

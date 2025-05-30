@@ -2,14 +2,14 @@
 import 'package:flutter/material.dart';
 
 class ProfileHeader extends StatelessWidget {
-  final String username; // Uusi: Käyttäjätunnus näkyvissä
+  final String username; // Username visible
   final String displayName;
   final String? photoURL;
   final String? bio;
-  final String? bannerImageUrl; // UUSI: Bannerikuva
+  final String? bannerImageUrl; // Banner image
   final VoidCallback onEditProfile;
-  final int level; // Esimerkkitaso
-  final double experienceProgress; // Esim. 0.0 - 1.0
+  final int level; // Example level
+  final double experienceProgress; // E.g. 0.0 - 1.0
 
   const ProfileHeader({
     super.key,
@@ -31,7 +31,7 @@ class ProfileHeader extends StatelessWidget {
     return Stack(
       alignment: Alignment.center,
       children: [
-        // Bannerikuva
+        // Banner image
         Positioned.fill(
           child: Container(
             decoration: BoxDecoration(
@@ -39,33 +39,32 @@ class ProfileHeader extends StatelessWidget {
                 image: (bannerImageUrl != null && bannerImageUrl!.isNotEmpty)
                     ? NetworkImage(bannerImageUrl!)
                     : const AssetImage('assets/images/default_banner.jpg')
-                        as ImageProvider, // OLETUS BANNERIKUVA
+                        as ImageProvider, // DEFAULT BANNER IMAGE
                 fit: BoxFit.cover,
                 colorFilter: ColorFilter.mode(
-                  Colors.black
-                      .withOpacity(0.4), // Tummempi, jotta teksti erottuu
+                  Colors.black.withOpacity(0.4), // Darker for text contrast
                   BlendMode.darken,
                 ),
               ),
               borderRadius: const BorderRadius.vertical(
-                  bottom: Radius.circular(30)), // Pyöreämpi alareuna
+                  bottom: Radius.circular(30)), // More rounded bottom
             ),
             child: Align(
               alignment: Alignment.topRight,
               child: Padding(
                 padding: const EdgeInsets.only(
-                    top: 50, right: 16), // Säädetty padding
+                    top: 50, right: 16), // Adjusted padding
                 child: IconButton(
                   icon: Icon(Icons.edit_outlined,
                       color: Colors.white.withOpacity(0.9),
-                      size: 28), // Isompi ikoni
+                      size: 28), // Larger icon
                   style: IconButton.styleFrom(
                     backgroundColor:
-                        Colors.black.withOpacity(0.4), // Tummempi tausta
-                    shape: const CircleBorder(), // Pyöreä tausta
-                    padding: const EdgeInsets.all(12), // Pienempi padding
+                        Colors.black.withOpacity(0.4), // Darker background
+                    shape: const CircleBorder(), // Circular background
+                    padding: const EdgeInsets.all(12), // Smaller padding
                   ),
-                  tooltip: 'Muokkaa profiilia',
+                  tooltip: 'Edit profile',
                   onPressed: onEditProfile,
                 ),
               ),
@@ -73,9 +72,9 @@ class ProfileHeader extends StatelessWidget {
           ),
         ),
 
-        // Profiilikuva ja tiedot
+        // Profile picture and info
         Positioned(
-          bottom: 0, // Asetetaan pohjaan
+          bottom: 0, // Positioned at the bottom
           left: 0,
           right: 0,
           child: Column(
@@ -85,24 +84,24 @@ class ProfileHeader extends StatelessWidget {
                   shape: BoxShape.circle,
                   border: Border.all(
                       color: theme.scaffoldBackgroundColor,
-                      width: 4), // Kehys profiilikuvalle
+                      width: 4), // Border for profile picture
                 ),
                 child: CircleAvatar(
-                  radius: 70, // Isompi profiilikuva
+                  radius: 70, // Larger profile picture
                   backgroundColor: theme.colorScheme.surface,
                   backgroundImage: (photoURL != null && photoURL!.isNotEmpty)
                       ? NetworkImage(photoURL!)
                       : const AssetImage('assets/images/default_avatar.png')
                           as ImageProvider,
                   onBackgroundImageError: (_, __) {
-                    // Käsittele virhe, jos kuvaa ei voida ladata
+                    // Handle error if image can't be loaded
                   },
                   child: (photoURL == null || photoURL!.isEmpty)
                       ? Icon(Icons.person, size: 80, color: Colors.grey[500])
                       : null,
                 ),
               ),
-              const SizedBox(height: 16), // Väli profiilikuvan ja nimen välissä
+              const SizedBox(height: 16), // Space between avatar and name
               Text(
                 displayName,
                 style: textTheme.headlineMedium?.copyWith(
@@ -110,7 +109,7 @@ class ProfileHeader extends StatelessWidget {
                     color: theme.colorScheme.onSurface),
               ),
               Text(
-                '@$username', // Käyttäjätunnus
+                '@$username', // Username
                 style: textTheme.titleMedium?.copyWith(
                     color: theme.colorScheme.onSurface.withOpacity(0.6)),
               ),
@@ -129,9 +128,9 @@ class ProfileHeader extends StatelessWidget {
                   ),
                 ),
               ],
-              const SizedBox(height: 24), // Väli biosta tilastoihin
+              const SizedBox(height: 24), // Space between bio and stats
 
-              // Taso- ja kokemuspalkki
+              // Level and experience bar
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32.0),
                 child: Column(
@@ -139,11 +138,11 @@ class ProfileHeader extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Taso $level',
+                        Text('Level $level',
                             style: textTheme.titleMedium
                                 ?.copyWith(color: theme.colorScheme.secondary)),
                         Text(
-                            '${(experienceProgress * 100).toInt()}% seuraavaan tasoon',
+                            '${(experienceProgress * 100).toInt()}% to next level',
                             style: textTheme.bodyMedium?.copyWith(
                                 color: theme.colorScheme.onSurface
                                     .withOpacity(0.7))),
@@ -153,12 +152,12 @@ class ProfileHeader extends StatelessWidget {
                     LinearProgressIndicator(
                       value: experienceProgress,
                       backgroundColor: theme.colorScheme.surfaceContainerHighest
-                          .withOpacity(0.3), // Vaaleampi tausta.
+                          .withOpacity(0.3), // Lighter background.
                       valueColor: AlwaysStoppedAnimation<Color>(
                           theme.colorScheme.secondary),
-                      minHeight: 8, // Paksumpi palkki
+                      minHeight: 8, // Thicker bar
                       borderRadius:
-                          BorderRadius.circular(4), // Pyöreämmät kulmat
+                          BorderRadius.circular(4), // More rounded corners
                     ),
                   ],
                 ),

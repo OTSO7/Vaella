@@ -1,10 +1,10 @@
 // lib/widgets/achievement_grid.dart
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // Päivämäärien muotoiluun
+import 'package:intl/intl.dart'; // For date formatting
 
 enum BadgeType { achievement, sticker }
 
-// Yksinkertainen Achievement-luokka malliksi:
+// Simple Achievement class as a model:
 class Achievement {
   final String title;
   final String description;
@@ -55,8 +55,8 @@ class AchievementGrid extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 isStickerGrid
-                    ? 'Ei kerättyjä kansallispuistomerkkejä vielä.'
-                    : 'Ei vielä saavutuksia. Lähde seikkailemaan!',
+                    ? 'No national park badges collected yet.'
+                    : 'No achievements yet. Go explore!',
                 textAlign: TextAlign.center,
                 style: textTheme.titleMedium?.copyWith(
                   color: theme.colorScheme.onSurface.withOpacity(0.6),
@@ -124,7 +124,7 @@ class AchievementGrid extends StatelessWidget {
                       const SizedBox(height: 8),
                       if (item.dateAchieved != null)
                         Text(
-                          'Ansaittu: ${DateFormat('d.M.yyyy', 'fi_FI').format(item.dateAchieved!)}',
+                          'Achieved: ${DateFormat('d.M.yyyy', 'en_US').format(item.dateAchieved!)}',
                           style: textTheme.bodySmall?.copyWith(
                               color:
                                   theme.colorScheme.onSurface.withOpacity(0.6)),
@@ -134,7 +134,7 @@ class AchievementGrid extends StatelessWidget {
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      child: Text('Sulje',
+                      child: Text('Close',
                           style: textTheme.labelLarge
                               ?.copyWith(color: theme.colorScheme.secondary)),
                     )

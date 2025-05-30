@@ -30,37 +30,36 @@ class ProfileStatsGrid extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: Card(
         color: theme.cardColor,
-        elevation:
-            0, // Ei Cardin omaa varjoa, käytetään Containerin BoxShadowia
+        elevation: 0, // No Card shadow, use Container's BoxShadow if needed
         shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16)), // Pyöreämmät kulmat
+            borderRadius: BorderRadius.circular(16)), // More rounded corners
         child: Container(
           padding: const EdgeInsets.symmetric(
-              horizontal: 16.0, vertical: 20.0), // Sisäpadding
+              horizontal: 16.0, vertical: 20.0), // Inner padding
           decoration: BoxDecoration(
             color: theme.cardColor,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Wrap(
-            spacing: 16.0, // Horisontaalinen väli
-            runSpacing: 20.0, // Vertikaalinen väli
-            alignment: WrapAlignment.spaceAround, // Tasainen jakautuminen
+            spacing: 16.0, // Horizontal spacing
+            runSpacing: 20.0, // Vertical spacing
+            alignment: WrapAlignment.spaceAround, // Even distribution
             children: stats.entries.map((entry) {
               return SizedBox(
-                // Rajoitetaan StatItemin leveyttä
+                // Limit StatItem width
                 width: MediaQuery.of(context).size.width / 4 -
-                    32, // Noin neljäsosa leveydestä miinus padding
+                    32, // About a quarter of width minus padding
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(_getStatIcon(entry.key),
                         size: 36,
-                        color: theme.colorScheme.primary), // Isompi ikoni
+                        color: theme.colorScheme.primary), // Larger icon
                     const SizedBox(height: 8),
                     Text(
                       entry.value.toString(),
                       style: textTheme.headlineSmall?.copyWith(
-                          // Isompi ja lihavampi arvo
+                          // Larger and bolder value
                           fontWeight: FontWeight.bold,
                           color: theme.colorScheme.onSurface),
                     ),
@@ -69,7 +68,7 @@ class ProfileStatsGrid extends StatelessWidget {
                       entry.key,
                       textAlign: TextAlign.center,
                       style: textTheme.bodySmall?.copyWith(
-                          // Pienempi label
+                          // Smaller label
                           color: theme.colorScheme.onSurface.withOpacity(0.7)),
                     ),
                   ],

@@ -2,11 +2,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart'; // Kuvan valintaan
-import 'dart:io'; // Tiedostokäsittelyyn
-import 'package:firebase_storage/firebase_storage.dart'; // Tallentaa kuvat Firebase Storageen
-import 'package:firebase_auth/firebase_auth.dart'; // Päivittää Auth-profiilia
-import 'package:cloud_firestore/cloud_firestore.dart'; // Firestore-tietokanta
+import 'package:image_picker/image_picker.dart'; // For picking images
+import 'dart:io'; // For file handling
+import 'package:firebase_storage/firebase_storage.dart'; // For uploading images to Firebase Storage
+import 'package:firebase_auth/firebase_auth.dart'; // For updating Auth profile
+import 'package:cloud_firestore/cloud_firestore.dart'; // Firestore database
 
 import '../models/user_profile_model.dart';
 import '../providers/auth_provider.dart' as local_auth;
@@ -27,8 +27,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
   late TextEditingController _bioController;
   late TextEditingController _bannerImageUrlController;
 
-  String? _profileImageUrl; // Paikallinen URL tai tiedostopolku
-  File? _pickedProfileImage; // Valittu kuva tiedostona
+  String? _profileImageUrl; // Local URL or file path
+  File? _pickedProfileImage; // Picked image as file
 
   bool _isLoading = false;
 
@@ -43,7 +43,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     _bannerImageUrlController =
         TextEditingController(text: widget.initialProfile.bannerImageUrl);
     _profileImageUrl =
-        widget.initialProfile.photoURL; // Aseta oletusarvo profiilikuvalle
+        widget.initialProfile.photoURL; // Set default profile image
   }
 
   @override
@@ -55,26 +55,25 @@ class _EditProfilePageState extends State<EditProfilePage> {
     super.dispose();
   }
 
-  // Kuvan valinta galleriasta tai kamerasta
+  // Pick image from gallery or camera
   Future<void> _pickImage(ImageSource source, bool isProfileImage) async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(
-        source: source, imageQuality: 70); // Vähennä laatua
+        source: source, imageQuality: 70); // Lower quality
     if (pickedFile != null) {
       setState(() {
         if (isProfileImage) {
           _pickedProfileImage = File(pickedFile.path);
-          _profileImageUrl =
-              null; // Nollaa vanha URL, jos uusi tiedosto on valittu
+          _profileImageUrl = null; // Reset old URL if a new file is picked
         } else {
           _bannerImageUrlController.text =
-              pickedFile.path; // Tilapäisesti paikallinen polku
+              pickedFile.path; // Temporarily local path
         }
       });
     }
   }
 
-  // Kuvan lataus Firebase Storageen
+  // Upload image to Firebase Storage
   Future<String?> _uploadImage(File imageFile, String path) async {
     try {
       final ref = FirebaseStorage.instance.ref().child(path).child(
@@ -82,8 +81,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
       await ref.putFile(imageFile);
       return await ref.getDownloadURL();
     } catch (e) {
-      print('Kuvan lataus epäonnistui: $e');
-      _showSnackBar('Kuvan lataus epäonnistui.', Colors.redAccent);
+      print('Image upload failed: $e');
+      _showSnackBar('Image upload failed.', Colors.redAccent);
       return null;
     }
   }
@@ -101,7 +100,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     final currentUser = auth.user;
     if (currentUser == null) {
       _showSnackBar(
-          'Kirjautuminen vaaditaan profiilin muokkaukseen.', Colors.redAccent);
+          'You must be logged in to edit your profile.', Colors.redAccent);
       setState(() {
         _isLoading = false;
       });
@@ -109,12 +108,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
     }
 
     String? newProfilePhotoUrl =
-        _profileImageUrl; // Säilytä vanha URL, jos ei uutta kuvaa valittu
-    String? newBannerImageUrl = _bannerImageUrlController
-        .text; // Säilytä vanha URL, jos ei uutta kuvaa valittu
+        _profileImageUrl; // Keep old URL if no new image picked
+    String? newBannerImageUrl =
+        _bannerImageUrlController.text; // Keep old URL if no new image picked
 
     try {
-      // Tarkista käyttäjätunnuksen uniikkius, jos sitä muutetaan
+      // Check username uniqueness if changed
       if (_usernameController.text.trim().toLowerCase() !=
           widget.initialProfile.username.toLowerCase()) {
         final existingUsernameDocs = await FirebaseFirestore.instance
@@ -125,7 +124,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
             .get();
 
         if (existingUsernameDocs.docs.isNotEmpty) {
-          _showSnackBar('Käyttäjätunnus on jo varattu.', Colors.redAccent);
+          _showSnackBar('Username is already taken.', Colors.redAccent);
           setState(() {
             _isLoading = false;
           });
@@ -133,7 +132,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         }
       }
 
-      // Lataa uusi profiilikuva Firebase Storageen, jos valittu
+      // Upload new profile image to Firebase Storage if picked
       if (_pickedProfileImage != null) {
         newProfilePhotoUrl =
             await _uploadImage(_pickedProfileImage!, 'profile_photos');
@@ -141,11 +140,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
           setState(() {
             _isLoading = false;
           });
-          return; // Kuvan lataus epäonnistui
+          return; // Image upload failed
         }
       }
 
-      // Lataa uusi bannerikuva Firebase Storageen, jos valittu paikallisesta tiedostosta
+      // Upload new banner image to Firebase Storage if picked from local file
       if (_bannerImageUrlController.text.startsWith('file://') ||
           _bannerImageUrlController.text.startsWith('/data/')) {
         final bannerFile = File(_bannerImageUrlController.text);
@@ -158,7 +157,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         }
       }
 
-      // Luo päivitetty UserProfile-objekti
+      // Create updated UserProfile object
       final updatedProfile = widget.initialProfile.copyWith(
         username: _usernameController.text.trim().toLowerCase(),
         displayName: _displayNameController.text.trim(),
@@ -167,26 +166,25 @@ class _EditProfilePageState extends State<EditProfilePage> {
         bannerImageUrl: newBannerImageUrl,
       );
 
-      // Päivitä Firestore-dokumentti
+      // Update Firestore document
       await FirebaseFirestore.instance
           .collection('users')
           .doc(currentUser.uid)
           .update(updatedProfile.toFirestore());
 
-      // Päivitä AuthProviderin tila
+      // Update AuthProvider state
       await auth.updateLocalUserProfile(updatedProfile);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Profiili päivitetty!'),
-            backgroundColor: Colors.green),
+            content: Text('Profile updated!'), backgroundColor: Colors.green),
       );
-      context.pop(updatedProfile); // Palaa takaisin profiilisivulle
+      context.pop(updatedProfile); // Return to profile page
     } catch (e) {
       if (!mounted) return;
       _showSnackBar(
-          'Profiilin päivitys epäonnistui: ${e.toString().replaceFirst('Exception: ', '')}',
+          'Profile update failed: ${e.toString().replaceFirst('Exception: ', '')}',
           Colors.redAccent);
     } finally {
       if (mounted) {
@@ -214,7 +212,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Muokkaa profiilia'),
+        title: const Text('Edit profile'),
         backgroundColor: theme.scaffoldBackgroundColor,
         elevation: 0,
       ),
@@ -225,7 +223,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Profiilikuvan valitsin
+              // Profile image picker
               Center(
                 child: Stack(
                   children: [
@@ -242,7 +240,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                                   as ImageProvider),
                       onBackgroundImageError: (_, __) {
                         setState(() {
-                          _profileImageUrl = null; // Virhekuva, käytä oletusta
+                          _profileImageUrl = null; // Use default on error
                         });
                       },
                       child: (_pickedProfileImage == null &&
@@ -263,8 +261,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
                           shape: const CircleBorder(),
                           padding: const EdgeInsets.all(10),
                         ),
-                        onPressed: () => _pickImage(ImageSource.gallery,
-                            true), // Kutsutaan kuvavalitsinta
+                        onPressed: () => _pickImage(
+                            ImageSource.gallery, true), // Open image picker
                       ),
                     ),
                   ],
@@ -272,41 +270,41 @@ class _EditProfilePageState extends State<EditProfilePage> {
               ),
               const SizedBox(height: 32),
 
-              // Käyttäjätunnus
+              // Username
               TextFormField(
                 controller: _usernameController,
                 style: textTheme.bodyLarge
                     ?.copyWith(color: theme.colorScheme.onSurface),
                 decoration: InputDecoration(
-                  labelText: 'Käyttäjätunnus',
+                  labelText: 'Username',
                   prefixIcon: const Icon(Icons.alternate_email),
-                  enabled: !_isLoading, // Ei muokattavissa latauksen aikana
+                  enabled: !_isLoading, // Not editable while loading
                 ),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'Syötä käyttäjätunnus';
+                    return 'Enter a username';
                   }
                   if (value.trim().length < 3) {
-                    return 'Käyttäjätunnuksen tulee olla vähintään 3 merkkiä';
+                    return 'Username must be at least 3 characters';
                   }
                   return null;
                 },
               ),
               const SizedBox(height: 20),
 
-              // Näyttönimi
+              // Display name
               TextFormField(
                 controller: _displayNameController,
                 style: textTheme.bodyLarge
                     ?.copyWith(color: theme.colorScheme.onSurface),
                 decoration: InputDecoration(
-                  labelText: 'Näyttönimi',
+                  labelText: 'Display name',
                   prefixIcon: const Icon(Icons.person_outline),
                   enabled: !_isLoading,
                 ),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'Syötä näyttönimi';
+                    return 'Enter a display name';
                   }
                   return null;
                 },
@@ -320,7 +318,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     ?.copyWith(color: theme.colorScheme.onSurface),
                 decoration: InputDecoration(
                   labelText: 'Bio',
-                  hintText: 'Kerro itsestäsi lyhyesti...',
+                  hintText: 'Tell something about yourself...',
                   prefixIcon: const Icon(Icons.info_outline),
                   alignLabelWithHint: true,
                   enabled: !_isLoading,
@@ -330,24 +328,24 @@ class _EditProfilePageState extends State<EditProfilePage> {
               ),
               const SizedBox(height: 20),
 
-              // Bannerikuvan URL (valinnainen)
+              // Banner image URL (optional)
               TextFormField(
                 controller: _bannerImageUrlController,
                 style: textTheme.bodyLarge
                     ?.copyWith(color: theme.colorScheme.onSurface),
                 decoration: InputDecoration(
-                  labelText: 'Bannerikuvan URL (valinnainen)',
-                  hintText: 'Käytä URL:ia tai valitse galleriasta',
+                  labelText: 'Banner image URL (optional)',
+                  hintText: 'Use a URL or pick from gallery',
                   prefixIcon: const Icon(Icons.image_outlined),
                   enabled: !_isLoading,
                   suffixIcon: _isLoading
                       ? null
                       : IconButton(
-                          // Valintanappi
+                          // Picker button
                           icon: Icon(Icons.photo_library_outlined,
                               color: theme.colorScheme.secondary),
                           onPressed: () => _pickImage(
-                              ImageSource.gallery, false), // Bannerikuva
+                              ImageSource.gallery, false), // Banner image
                         ),
                 ),
                 keyboardType: TextInputType.url,
@@ -360,7 +358,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                             !uri.isScheme('https') &&
                             !value.startsWith('file://') &&
                             !value.startsWith('/data/'))) {
-                      return 'Syötä validi URL tai valitse kuva';
+                      return 'Enter a valid URL or pick an image';
                     }
                   }
                   return null;
@@ -380,8 +378,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                         ),
                       )
                     : const Icon(Icons.save_alt_outlined),
-                label:
-                    Text(_isLoading ? 'Tallennetaan...' : 'Tallenna muutokset'),
+                label: Text(_isLoading ? 'Saving...' : 'Save changes'),
               ),
               const SizedBox(height: 20),
             ],
