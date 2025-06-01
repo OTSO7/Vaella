@@ -258,7 +258,7 @@ class AppRouter extends StatelessWidget {
     );
 
     return MaterialApp.router(
-      title: 'TrekNote VaellusApp',
+      title: 'Vaella',
       debugShowCheckedModeBanner: false,
       theme: themeData,
       localizationsDelegates: const [

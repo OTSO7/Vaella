@@ -1,4 +1,3 @@
-// lib/pages/home_page.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
@@ -105,11 +104,18 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.logout),
+          tooltip: 'Log out',
+          onPressed: () {
+            authProvider.logout();
+          },
+        ),
         title: Hero(
           tag: 'appLogo',
           child: Image.asset(
-            'assets/images/white1.png',
-            height: 32,
+            'assets/images/white2.png',
+            height: 80,
             fit: BoxFit.contain,
           ),
         ),
@@ -121,18 +127,11 @@ class _HomePageState extends State<HomePage> {
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                    content:
-                        Text('Search functionality is not implemented yet.')),
+                  content: Text('Search functionality is not implemented yet.'),
+                ),
               );
             },
           ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Log out',
-            onPressed: () {
-              authProvider.logout();
-            },
-          )
         ],
       ),
       body: RefreshIndicator(
@@ -144,7 +143,8 @@ class _HomePageState extends State<HomePage> {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-                content: Text('Posts "refreshed" (order shuffled).')),
+              content: Text('Posts "refreshed" (order shuffled).'),
+            ),
           );
         },
         color: theme.colorScheme.secondary,
@@ -162,8 +162,8 @@ class _HomePageState extends State<HomePage> {
         onPressed: () {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-                content:
-                    Text('Adding a new post/note is not implemented yet.')),
+              content: Text('Adding a new post/note is not implemented yet.'),
+            ),
           );
         },
         tooltip: 'Add post or note',

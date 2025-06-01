@@ -26,15 +26,35 @@ class HikePlanCard extends StatelessWidget {
       dateText += ' - ${dateFormat.format(plan.endDate!)}';
     }
 
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    HikeStatus status;
+    if (plan.status == HikeStatus.cancelled) {
+      status = HikeStatus.cancelled;
+    } else if (plan.endDate != null) {
+      final end =
+          DateTime(plan.endDate!.year, plan.endDate!.month, plan.endDate!.day);
+      if (today.isAfter(end)) {
+        status = HikeStatus.completed;
+      } else {
+        status = HikeStatus.upcoming;
+      }
+    } else {
+      // No end date, treat as single day hike
+      final start = DateTime(
+          plan.startDate.year, plan.startDate.month, plan.startDate.day);
+      if (today.isAfter(start)) {
+        status = HikeStatus.completed;
+      } else {
+        status = HikeStatus.upcoming;
+      }
+    }
+
     Color statusColor;
     IconData statusIcon;
     String statusLabel;
-    switch (plan.status) {
-      case HikeStatus.planned:
-        statusColor = Colors.blueGrey.shade400;
-        statusIcon = Icons.pending_actions_outlined;
-        statusLabel = 'Planned';
-        break;
+    switch (status) {
       case HikeStatus.upcoming:
         statusColor = theme.colorScheme.secondary;
         statusIcon = Icons.access_time_outlined;
@@ -49,6 +69,11 @@ class HikePlanCard extends StatelessWidget {
         statusColor = Colors.red.shade400;
         statusIcon = Icons.cancel_outlined;
         statusLabel = 'Cancelled';
+        break;
+      default:
+        statusColor = Colors.blueGrey.shade400;
+        statusIcon = Icons.pending_actions_outlined;
+        statusLabel = 'Planned';
         break;
     }
 

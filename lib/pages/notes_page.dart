@@ -159,14 +159,40 @@ class _NotesPageState extends State<NotesPage>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final textTheme = theme.textTheme;
     final authProvider = Provider.of<AuthProvider>(context);
     final userId = authProvider.user?.uid;
 
     return Scaffold(
       appBar: AppBar(
-        centerTitle: false,
-        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.logout),
+          tooltip: 'Log out',
+          onPressed: () {
+            authProvider.logout();
+          },
+        ),
+        title: Hero(
+          tag: 'appLogo',
+          child: Image.asset(
+            'assets/images/white2.png',
+            height: 80,
+            fit: BoxFit.contain,
+          ),
+        ),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            tooltip: 'Search hikes',
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                    content:
+                        Text('Search functionality is not implemented yet.')),
+              );
+            },
+          ),
+        ],
       ),
       body: SlideTransition(
         position: _slideAnimation,
