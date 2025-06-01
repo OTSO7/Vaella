@@ -133,39 +133,22 @@ class _LoginPageState extends State<LoginPage>
                           Hero(
                             tag: 'appLogo',
                             child: Image.asset(
-                              'assets/images/white1.png',
-                              height: screenHeight * 0.1,
+                              'assets/images/white2.png',
+                              height: screenHeight * 0.25,
                               fit: BoxFit.contain,
                             ),
                           ),
-                          SizedBox(height: screenHeight * 0.02),
-                          Text(
-                            'Vaella',
-                            textAlign: TextAlign.center,
-                            style: textTheme.headlineLarge?.copyWith(
-                              color: Colors.white,
-                              fontSize: 48,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 2.0,
-                              shadows: [
-                                Shadow(
-                                  blurRadius: 10.0,
-                                  color: Colors.black.withOpacity(0.4),
-                                  offset: const Offset(2.0, 2.0),
-                                ),
-                              ],
-                            ),
-                          ),
-                          SizedBox(height: screenHeight * 0.01),
+
                           Text(
                             'Adventures await!',
                             textAlign: TextAlign.center,
                             style: textTheme.titleLarge?.copyWith(
                               color: Colors.white70,
-                              fontSize: 20,
+                              fontSize: 17,
                               fontWeight: FontWeight.w400,
                             ),
                           ),
+
                           SizedBox(height: screenHeight * 0.06),
 
                           TextFormField(
