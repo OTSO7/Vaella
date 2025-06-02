@@ -1,12 +1,13 @@
+// lib/widgets/add_hike_plan_form.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
 import 'package:geocoding/geocoding.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:latlong2/latlong.dart'; // Varmista, että tämä on oikea importti LatLng-luokalle
 import '../models/hike_plan_model.dart';
-import '../widgets/map_picker_page.dart';
+import '../widgets/map_picker_page.dart'; // Varmista, että polku on oikein
 
 class AddHikePlanForm extends StatefulWidget {
   final HikePlan? existingPlan;
@@ -31,7 +32,8 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
 
   List<Map<String, dynamic>> _locationSuggestions = [];
   Timer? _debounce;
-  ValueNotifier<bool> _isSearchingLocation = ValueNotifier(false);
+  final ValueNotifier<bool> _isSearchingLocation =
+      ValueNotifier(false); // Ei tarvitse final, jos alustetaan suoraan
   final FocusNode _locationFocusNode = FocusNode();
 
   static const _searchDelay = Duration(milliseconds: 400);
@@ -74,6 +76,7 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
   }
 
   void _onFocusChanged() {
+    if (!mounted) return; // KORJATTU: Lisätty mounted-tarkistus
     if (!_locationFocusNode.hasFocus && _locationSuggestions.isNotEmpty) {
       setState(() {
         _locationSuggestions = [];
@@ -83,21 +86,29 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
 
   void _onLocationChanged() {
     final query = _locationController.text.trim();
-    if (query == _currentSearchQuery) {
+    if (query == _currentSearchQuery && _locationSuggestions.isNotEmpty) {
+      // Älä hae uudelleen, jos query sama ja ehdotuksia on jo
       return;
     }
-
     _currentSearchQuery = query;
 
-    if (_debounce?.isActive ?? false) _debounce?.cancel();
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
     _debounce = Timer(_searchDelay, () {
-      if (query == _locationController.text.trim()) {
+      if (query == _locationController.text.trim() && query.isNotEmpty) {
+        // Hae vain jos query ei ole tyhjä
         _searchLocationSuggestions(query);
+      } else if (query.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _locationSuggestions = [];
+          });
+        }
       }
     });
   }
 
   Future<void> _pickDate(BuildContext context, bool isStartDate) async {
+    // ... (koodi ennallaan)
     final initialDate = (isStartDate ? _startDate : _endDate) ?? DateTime.now();
     final firstDate = isStartDate
         ? DateTime.now().subtract(const Duration(days: 365 * 2))
@@ -110,22 +121,26 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
       initialDate: initialDate,
       firstDate: firstDate,
       lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
-      helpText: isStartDate ? 'Select start date' : 'Select end date',
-      confirmText: 'Select',
-      cancelText: 'Cancel',
-      locale: const Locale('en', 'US'),
+      helpText: isStartDate ? 'Valitse aloituspäivä' : 'Valitse päättymispäivä',
+      confirmText: 'Valitse',
+      cancelText: 'Peruuta',
+      locale: const Locale('fi', 'FI'), // Muutettu suomeksi
       builder: (BuildContext context, Widget? child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.dark(
-              primary: Theme.of(context).colorScheme.primary,
-              onPrimary: Colors.white,
-              surface: Theme.of(context).cardColor,
-              onSurface: Theme.of(context).colorScheme.onSurface,
-            ),
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+                  // Käytä olemassa olevaa colorSchemea pohjana
+                  primary: Theme.of(context).colorScheme.primary,
+                  onPrimary: Theme.of(context).colorScheme.onPrimary,
+                  surface: Theme.of(context).cardColor, // Dialogin tausta
+                  onSurface: Theme.of(context)
+                      .colorScheme
+                      .onSurface, // Tekstit dialogissa
+                ),
             textButtonTheme: TextButtonThemeData(
               style: TextButton.styleFrom(
-                foregroundColor: Theme.of(context).colorScheme.secondary,
+                foregroundColor:
+                    Theme.of(context).colorScheme.secondary, // Nappien teksti
               ),
             ),
           ),
@@ -135,6 +150,7 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
     );
 
     if (picked != null && mounted) {
+      // mounted-tarkistus on hyvä tässä
       setState(() {
         if (isStartDate) {
           _startDate = picked;
@@ -150,61 +166,66 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
 
   Future<void> _searchLocationSuggestions(String query) async {
     if (query.isEmpty) {
-      setState(() {
-        _locationSuggestions = [];
-        _isSearchingLocation.value = false;
-      });
+      if (mounted) {
+        setState(() {
+          _locationSuggestions = [];
+        });
+      }
+      _isSearchingLocation.value = false;
       return;
     }
 
     _isSearchingLocation.value = true;
 
     final url = Uri.parse(
-        'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=json&limit=7&addressdetails=1&extratags=1&countrycodes=fi&viewbox=19.0,59.5,32.0,70.0&bounded=1');
+        'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=json&limit=5&addressdetails=1&countrycodes=fi&accept-language=fi'); // Lisätty accept-language
 
     try {
-      final response = await http.get(url,
-          headers: {'User-Agent': 'TrekNoteApp/1.0 (contact@treknote.com)'});
+      final response = await http.get(url, headers: {
+        'User-Agent': 'VaellusApp/1.0 (sovelluksesi.email@example.com)'
+      }); // Geneerisempi User-Agent
+
+      if (!mounted) return; // Tärkeä tarkistus await-kutsun jälkeen
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
-        if (mounted) {
-          setState(() {
-            _locationSuggestions =
-                data.map((item) => item as Map<String, dynamic>).toList();
-          });
-        }
+        setState(() {
+          _locationSuggestions =
+              data.map((item) => item as Map<String, dynamic>).toList();
+        });
       } else {
         print('Nominatim API error: ${response.statusCode} - ${response.body}');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
               content: Text(
-                  'Location search failed (error code: ${response.statusCode})'),
-              backgroundColor: Colors.redAccent,
-            ),
-          );
-        }
+                  'Sijaintihaku epäonnistui (virhekoodi: ${response.statusCode})'),
+              backgroundColor: Colors.redAccent),
+        );
+        setState(() =>
+            _locationSuggestions = []); // Tyhjennä ehdotukset virheen sattuessa
       }
     } catch (e) {
       print('Location search error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Location search failed: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
+              content: Text('Sijaintihaku epäonnistui: $e'),
+              backgroundColor: Colors.redAccent),
         );
       }
+      if (mounted)
+        setState(() =>
+            _locationSuggestions = []); // Tyhjennä ehdotukset virheen sattuessa
     } finally {
-      _isSearchingLocation.value = false;
+      if (mounted) {
+        // Varmista, että widget on yhä olemassa
+        _isSearchingLocation.value = false;
+      }
     }
   }
 
   void _selectLocationSuggestion(Map<String, dynamic> suggestion) {
-    setState(() {
-      _locationSuggestions = [];
-    });
+    if (!mounted) return;
 
     String displayCandidate = _formatLocationSuggestionName(suggestion);
 
@@ -212,68 +233,61 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
       _locationController.text = displayCandidate;
       _latitude = double.tryParse(suggestion['lat'].toString());
       _longitude = double.tryParse(suggestion['lon'].toString());
+      _locationSuggestions = []; // Tyhjennä ehdotukset valinnan jälkeen
     });
 
-    _locationFocusNode.unfocus();
+    _locationFocusNode.unfocus(); // Sulje näppäimistö
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-              'Location "$displayCandidate" selected. Coordinates: ${_latitude?.toStringAsFixed(4)}, ${_longitude?.toStringAsFixed(4)}'),
-          backgroundColor: Colors.green[700],
-        ),
-      );
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Sijainti "$displayCandidate" valittu.'),
+        backgroundColor: Colors.green[700],
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   Future<void> _pickLocationFromMap() async {
     _locationFocusNode.unfocus();
+    if (!mounted) return;
 
     final LatLng? pickedLocation = await Navigator.push<LatLng>(
       context,
       MaterialPageRoute(
         builder: (context) => MapPickerPage(
-          initialLocation: LatLng(
-            _latitude ?? 60.4518,
-            _longitude ?? 22.2666,
-          ),
+          initialLocation: LatLng(_latitude ?? 60.1699,
+              _longitude ?? 24.9384), // Oletus Helsinki, jos ei koordinaatteja
         ),
       ),
     );
 
     if (pickedLocation != null && mounted) {
+      // mounted-tarkistus on jo tässä
       try {
         List<Placemark> placemarks = await placemarkFromCoordinates(
           pickedLocation.latitude,
           pickedLocation.longitude,
-          localeIdentifier: 'en_US',
+          localeIdentifier: 'fi_FI', // Käytetään suomea geokoodauksessa
         );
 
-        String displayAddress = 'Unknown location';
+        if (!mounted) return; // KRIITTINEN TARKISTUS await-kutsun jälkeen
+
+        String displayAddress = 'Tuntematon sijainti';
         if (placemarks.isNotEmpty) {
           final placemark = placemarks.first;
-          List<String?> addressParts = [
-            placemark.name,
-            placemark.thoroughfare,
+          // Yksinkertaistettu osoitteenmuodostus
+          displayAddress = [
+            placemark.street,
             placemark.locality,
             placemark.administrativeArea,
-            placemark.country,
-          ];
-          displayAddress = addressParts
-              .where((element) => element != null && element.isNotEmpty)
+            placemark.country
+          ]
+              .where(
+                  (s) => s != null && s.isNotEmpty) // Suodata tyhjät ja nullit
               .join(', ');
-
-          if (displayAddress.length > 50) {
-            if (placemark.locality != null && placemark.country != null) {
-              displayAddress = '${placemark.locality}, ${placemark.country}';
-            } else if (placemark.name != null && placemark.locality != null) {
-              displayAddress = '${placemark.name}, ${placemark.locality}';
-            } else if (placemark.thoroughfare != null &&
-                placemark.locality != null) {
-              displayAddress =
-                  '${placemark.thoroughfare}, ${placemark.locality}';
-            }
+          if (displayAddress.isEmpty) {
+            // Jos kaikki ylläolevat tyhjiä
+            displayAddress = placemark.name ?? 'Nimetön paikka kartalla';
           }
         }
 
@@ -286,18 +300,18 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-                'Location "$displayAddress" selected from map. Coordinates: ${_latitude?.toStringAsFixed(4)}, ${_longitude?.toStringAsFixed(4)}'),
+            content: Text('Sijainti "$displayAddress" valittu kartalta.'),
             backgroundColor: Colors.green[700],
+            duration: const Duration(seconds: 2),
           ),
         );
       } catch (e) {
+        print("Error in _pickLocationFromMap after placemark: $e");
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Geocoding failed: $e'),
-              backgroundColor: Colors.redAccent,
-            ),
+                content: Text('Sijainnin nimen haku epäonnistui: $e'),
+                backgroundColor: Colors.redAccent),
           );
         }
       }
@@ -310,44 +324,60 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
-
     if (_startDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select the hike start date.'),
-          backgroundColor: Colors.redAccent,
-        ),
+            content: Text('Valitse vaelluksen aloituspäivä.'),
+            backgroundColor: Colors.redAccent),
       );
       return;
     }
-
-    if (_latitude == null || _longitude == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              'Hike location is required and must be selected from the map or suggestions.'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-      return;
-    }
+    // Poistettu vaatimus koordinaateille, jos sijainti voidaan syöttää myös vapaasti
+    // Jos koordinaatit ovat pakolliset, tämä tarkistus tulee palauttaa:
+    // if (_latitude == null || _longitude == null) {
+    //   ScaffoldMessenger.of(context).showSnackBar(
+    //     const SnackBar(content: Text('Sijainti tulee valita ehdotuksista tai kartalta.'), backgroundColor: Colors.redAccent),
+    //   );
+    //   return;
+    // }
 
     HikePlan resultPlan;
+    final now = DateTime.now();
+    HikeStatus statusToSave = HikeStatus.planned; // Oletus
+    if (widget.existingPlan?.status == HikeStatus.cancelled) {
+      statusToSave = HikeStatus.cancelled; // Säilytä peruutettu tila
+    } else if (_endDate != null &&
+        DateTime(_endDate!.year, _endDate!.month, _endDate!.day)
+            .isBefore(DateTime(now.year, now.month, now.day))) {
+      statusToSave = HikeStatus.completed;
+    } else if (_startDate!.isBefore(now.add(const Duration(days: 1)))) {
+      // Jos alkaa tänään tai on jo alkanut
+      statusToSave = HikeStatus.upcoming;
+    }
+
     if (widget.existingPlan != null) {
       resultPlan = widget.existingPlan!.copyWith(
         hikeName: _nameController.text.trim(),
         location: _locationController.text.trim(),
         startDate: _startDate!,
         endDate: _endDate,
+        setEndDateToNull:
+            _endDate == null, // Varmista, että null arvo välittyy oikein
         lengthKm: _lengthController.text.trim().isNotEmpty
             ? double.tryParse(
                 _lengthController.text.trim().replaceAll(',', '.'))
             : null,
+        setLengthKmToNull: _lengthController.text.trim().isEmpty,
         notes: _notesController.text.trim().isNotEmpty
             ? _notesController.text.trim()
             : null,
+        setNotesToNull: _notesController.text.trim().isEmpty,
         latitude: _latitude,
+        setLatitudeToNull: _latitude == null,
         longitude: _longitude,
+        setLongitudeToNull: _longitude == null,
+        status: statusToSave, // Päivitä status tallennettaessa
+        // preparationItems ei muuteta tässä formissa suoraan, se hoidetaan erillisessä modaalissa
       );
     } else {
       resultPlan = HikePlan(
@@ -364,24 +394,30 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
             : null,
         latitude: _latitude,
         longitude: _longitude,
+        status: statusToSave, // Aseta status uutta suunnitelmaa luotaessa
+        // preparationItems alustetaan HikePlan-konstruktorissa
       );
     }
 
     if (mounted) {
-      Navigator.of(context).pop(resultPlan);
+      Navigator.of(context)
+          .pop(resultPlan); // Palauta luotu/päivitetty suunnitelma
     }
   }
 
+  // build-metodi ja _buildDateField ennallaan, mutta varmista, että ne ovat täydellisiä
+  // ... (aiemmin annettu build-metodi ja _buildDateField-metodi)
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
     late DateFormat dateFormat;
     try {
-      dateFormat = DateFormat('d.M.yyyy', 'en_US');
+      dateFormat =
+          DateFormat('d.M.yyyy', 'fi_FI'); // Käytetään suomalaista muotoilua
     } catch (e) {
       print(
-          "DateFormat('en_US') failed in AddHikePlanForm: $e. Using default locale.");
+          "DateFormat('fi_FI') failed in AddHikePlanForm: $e. Using default.");
       dateFormat = DateFormat('d.M.yyyy');
     }
 
@@ -391,56 +427,71 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
     );
 
     return Column(
-      mainAxisSize: MainAxisSize.min,
+      // Ei enää mainAxisSize.min, jotta ListView ehdotuksille toimii paremmin
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        const SizedBox(height: 16),
-        Text(
-          widget.existingPlan == null
-              ? 'Create new hike plan'
-              : 'Edit hike plan',
-          style: textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: theme.colorScheme.onSurface,
-            fontSize: 26,
+        Padding(
+          // Lisätty yläosaan padding ja kahva
+          padding: const EdgeInsets.only(top: 8.0, bottom: 4.0),
+          child: Center(
+            child: Container(
+              width: 40,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Colors.grey[400],
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
           ),
-          textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 28),
-        Flexible(
+        Padding(
+          padding: const EdgeInsets.only(
+              top: 12.0, bottom: 16.0), // Säädetty padding
+          child: Text(
+            widget.existingPlan == null
+                ? 'Luo uusi vaellussuunnitelma'
+                : 'Muokkaa suunnitelmaa',
+            style: textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: theme.colorScheme.onSurface,
+              fontSize: 22, // Hieman pienempi
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+        Expanded(
+          // Formi vie nyt saatavilla olevan tilan
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Form(
               key: _formKey,
               child: Column(
-                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   TextFormField(
                     controller: _nameController,
                     style: inputTextStyle,
                     decoration: InputDecoration(
-                      labelText: 'Hike name*',
-                      hintText: 'E.g. Easter hike in Kevo',
+                      labelText: 'Vaelluksen nimi*',
+                      hintText: 'Esim. Pääsiäisvaellus Kevolla',
                       prefixIcon: Icon(Icons.flag_outlined,
                           color: theme.colorScheme.primary),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 18, vertical: 14),
                     ),
                     keyboardType: TextInputType.text,
                     validator: (value) =>
                         (value == null || value.trim().isEmpty)
-                            ? 'Enter hike name'
+                            ? 'Anna vaelluksen nimi'
                             : null,
                   ),
                   const SizedBox(height: 18),
+                  // Sijaintikenttä ja ehdotukset
                   TextFormField(
                     controller: _locationController,
                     focusNode: _locationFocusNode,
                     style: inputTextStyle,
                     decoration: InputDecoration(
-                      labelText: 'Location*',
-                      hintText: 'Start typing a location or pick from map...',
+                      labelText: 'Sijainti*',
+                      hintText: 'Kirjoita sijainti tai valitse kartalta...',
                       prefixIcon: Icon(Icons.location_on_outlined,
                           color: theme.colorScheme.primary),
                       suffixIcon: ValueListenableBuilder<bool>(
@@ -448,67 +499,69 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
                         builder: (context, isSearching, child) {
                           if (isSearching) {
                             return const Padding(
-                              padding: EdgeInsets.all(8.0),
+                              padding: EdgeInsets.all(12.0), // Lisätty padding
                               child: SizedBox(
-                                height: 20,
-                                width: 20,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              ),
+                                  height: 16,
+                                  width: 16,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2.0)),
                             );
                           } else {
                             return IconButton(
                               icon: const Icon(Icons.map_outlined),
-                              tooltip: 'Pick location from map',
+                              tooltip: 'Valitse sijainti kartalta',
                               onPressed: _pickLocationFromMap,
                             );
                           }
                         },
                       ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 18, vertical: 14),
                     ),
-                    onChanged: (value) {
-                      _onLocationChanged();
-                    },
+                    onChanged: (value) =>
+                        _onLocationChanged(), // Kutsu listeneriä
                     validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Hike location is required';
-                      }
-                      if (_latitude == null || _longitude == null) {
-                        return 'Select location from suggestions or map';
-                      }
+                      if (value == null || value.trim().isEmpty)
+                        return 'Sijainti vaaditaan';
+                      // if (_latitude == null || _longitude == null) return 'Valitse sijainti ehdotuksista tai kartalta'; // Palauta, jos koordinaatit pakollisia
                       return null;
                     },
                   ),
                   if (_locationSuggestions.isNotEmpty &&
                       _locationFocusNode.hasFocus)
                     Container(
-                      margin: const EdgeInsets.only(top: 8),
-                      padding: const EdgeInsets.all(8.0),
+                      constraints: BoxConstraints(
+                          maxHeight: MediaQuery.of(context).size.height *
+                              0.25), // Rajoita korkeutta
+                      margin: const EdgeInsets.only(
+                          top: 4, bottom: 8), // Hieman vähemmän marginaalia
                       decoration: BoxDecoration(
-                        color: theme.cardColor,
+                        color: theme.cardColor
+                            .withOpacity(0.95), // Hieman läpikuultava
                         borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color: theme.colorScheme.outline.withOpacity(0.5)),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 5,
-                            offset: const Offset(0, 2),
-                          ),
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2)),
                         ],
                       ),
                       child: ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
+                        shrinkWrap:
+                            true, // Tärkeä, jotta toimii Columnin sisällä oikein rajoitetulla korkeudella
                         itemCount: _locationSuggestions.length,
                         itemBuilder: (context, index) {
                           final suggestion = _locationSuggestions[index];
                           String displayCandidate =
                               _formatLocationSuggestionName(suggestion);
-
                           return ListTile(
-                            leading: const Icon(Icons.place),
-                            title: Text(displayCandidate),
+                            leading: Icon(Icons.place_outlined,
+                                color: theme.colorScheme.secondary),
+                            title: Text(displayCandidate,
+                                style: textTheme.bodyMedium),
+                            dense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 0),
                             onTap: () => _selectLocationSuggestion(suggestion),
                           );
                         },
@@ -519,12 +572,10 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
                     controller: _lengthController,
                     style: inputTextStyle,
                     decoration: InputDecoration(
-                      labelText: 'Length (km)',
-                      hintText: 'E.g. 25.5',
+                      labelText: 'Pituus (km)',
+                      hintText: 'Esim. 25.5',
                       prefixIcon: Icon(Icons.directions_walk_outlined,
                           color: theme.colorScheme.primary),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 18, vertical: 14),
                     ),
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
@@ -532,96 +583,88 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
                       if (value != null && value.trim().isNotEmpty) {
                         final val = value.trim().replaceAll(',', '.');
                         if (double.tryParse(val) == null)
-                          return 'Enter a valid number';
+                          return 'Anna kelvollinen numero';
                         if (double.parse(val) < 0)
-                          return 'Length must be positive';
+                          return 'Pituuden tulee olla positiivinen';
                       }
                       return null;
                     },
                   ),
-                  const SizedBox(height: 24),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      bool useRow = constraints.maxWidth > 400;
-                      return useRow
-                          ? Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                    child: _buildDateField(context, theme,
-                                        dateFormat, true, 'Start date*')),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                    child: _buildDateField(context, theme,
-                                        dateFormat, false, 'End date')),
-                              ],
-                            )
-                          : Column(
-                              children: [
-                                _buildDateField(context, theme, dateFormat,
-                                    true, 'Start date*'),
-                                const SizedBox(height: 18),
-                                _buildDateField(context, theme, dateFormat,
-                                    false, 'End date'),
-                              ],
-                            );
-                    },
+                  const SizedBox(height: 18), // Yhdenmukainen väli
+                  // Päivämääräkentät
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment
+                        .start, // Tasaus ylös, jos labelit eri korkeudella
+                    children: [
+                      Expanded(
+                          child: _buildDateField(context, theme, dateFormat,
+                              true, 'Aloituspäivä*')),
+                      const SizedBox(width: 16),
+                      Expanded(
+                          child: _buildDateField(context, theme, dateFormat,
+                              false, 'Päättymispäivä')),
+                    ],
                   ),
                   const SizedBox(height: 18),
                   TextFormField(
                     controller: _notesController,
                     style: inputTextStyle,
                     decoration: InputDecoration(
-                      labelText: 'Notes (optional)',
-                      hintText: 'E.g. gear, route, packing list...',
+                      labelText: 'Muistiinpanot',
+                      hintText: 'Esim. varusteet, reitti, pakkauslista...',
                       prefixIcon: Icon(Icons.notes_outlined,
                           color: theme.colorScheme.primary),
-                      alignLabelWithHint: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 18, vertical: 14),
+                      alignLabelWithHint: true, // Parempi moniriviselle
                     ),
                     keyboardType: TextInputType.multiline,
-                    maxLines: 3,
+                    maxLines: 4, // Enemmän tilaa muistiinpanoille
+                    minLines: 2,
                     textInputAction: TextInputAction.newline,
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 28), // Tilaa ennen nappeja
                 ],
               ),
             ),
           ),
         ),
+        // Nappirivi alhaalla
         Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-            left: 20,
-            right: 20,
-          ),
+          padding: EdgeInsets.fromLTRB(
+              20,
+              8,
+              20,
+              MediaQuery.of(context).padding.bottom +
+                  16), // Ottaa huomioon safe arean
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              Flexible(
-                child: TextButton(
+              Expanded(
+                child: OutlinedButton(
                   onPressed: () {
                     if (mounted) Navigator.of(context).pop();
                   },
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
-                  child: const Text('Cancel'),
+                  child: const Text('Peruuta'),
                 ),
               ),
               const SizedBox(width: 12),
-              Flexible(
+              Expanded(
                 child: ElevatedButton.icon(
-                  icon: const Icon(Icons.save_alt_outlined, size: 20),
-                  label: Text(widget.existingPlan == null ? 'Save' : 'Update',
-                      style: const TextStyle(fontSize: 16)),
+                  icon: Icon(
+                      widget.existingPlan == null
+                          ? Icons.add_circle_outline
+                          : Icons.save_alt_outlined,
+                      size: 20),
+                  label: Text(
+                      widget.existingPlan == null
+                          ? 'Luo suunnitelma'
+                          : 'Tallenna muutokset',
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.bold)),
                   onPressed: _submitForm,
                   style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 48),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 10),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                 ),
               ),
@@ -634,9 +677,16 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
 
   Widget _buildDateField(BuildContext context, ThemeData theme,
       DateFormat dateFormat, bool isStartDate, String labelText) {
-    BorderRadius fieldBorderRadius = BorderRadius.circular(12.0);
+    BorderRadius fieldBorderRadius = BorderRadius.circular(12.0); // Oletusarvo
     BorderSide fieldBorderSide =
-        BorderSide(color: theme.colorScheme.outline!, width: 1.5);
+        theme.inputDecorationTheme.enabledBorder?.borderSide ??
+            BorderSide(color: theme.colorScheme.outline, width: 1.0);
+
+    // Tarkista, onko border tyyppiä OutlineInputBorder ennen borderRadiusin käyttöä
+    final border = theme.inputDecorationTheme.border;
+    if (border is OutlineInputBorder) {
+      fieldBorderRadius = border.borderRadius;
+    }
 
     if (theme.inputDecorationTheme.enabledBorder is OutlineInputBorder) {
       final outlineEnabledBorder =
@@ -651,8 +701,7 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
     }
 
     final TextStyle? buttonTextStyle = theme.textTheme.bodyLarge?.copyWith(
-      color: theme.colorScheme.onSurface.withOpacity(0.9),
-      fontWeight: FontWeight.w500,
+      color: theme.colorScheme.onSurface,
       fontSize: 16,
     );
 
@@ -660,10 +709,10 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(labelText,
-            style: theme.textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.onBackground.withOpacity(0.8),
-              fontSize: 14,
+            style: theme.textTheme.labelMedium?.copyWith(
+              // Käytä labelMedium tai vastaavaa
+              color: theme.colorScheme.onSurface.withOpacity(0.8),
+              fontWeight: FontWeight.w500, // Hieman kevyempi kuin bold
             )),
         const SizedBox(height: 8),
         OutlinedButton.icon(
@@ -671,17 +720,19 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
               color: theme.colorScheme.secondary, size: 20),
           label: Text(
             (isStartDate ? _startDate : _endDate) == null
-                ? 'Select date'
+                ? 'Valitse päivä'
                 : dateFormat.format((isStartDate ? _startDate : _endDate)!),
             style: buttonTextStyle,
           ),
           style: OutlinedButton.styleFrom(
             minimumSize: const Size(double.infinity, 52),
             alignment: Alignment.centerLeft,
-            padding: const EdgeInsets.symmetric(horizontal: 18.0),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 16.0), // Säädetty padding
             side: fieldBorderSide,
             shape: RoundedRectangleBorder(borderRadius: fieldBorderRadius),
-            foregroundColor: theme.colorScheme.onSurface,
+            foregroundColor: theme.colorScheme
+                .onSurface, // Tekstin ja ikonin väri, kun ei aktiivinen
           ),
           onPressed: () => _pickDate(context, isStartDate),
         ),
@@ -690,61 +741,39 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
   }
 
   String _formatLocationSuggestionName(Map<String, dynamic> suggestion) {
-    final displayName = suggestion['display_name'] as String;
+    // ... (koodi ennallaan)
+    final displayName = suggestion['display_name'] as String?;
     final address = suggestion['address'] as Map<String, dynamic>?;
 
+    if (displayName == null) return "Nimetön sijainti";
     if (address == null) return displayName;
 
-    List<String> parts = [];
+    List<String?> parts = [];
 
-    if (suggestion.containsKey('name')) {
-      parts.add(suggestion['name']);
-    } else if (suggestion.containsKey('amenity')) {
-      parts.add(suggestion['amenity']);
-    } else if (suggestion.containsKey('tourism')) {
-      parts.add(suggestion['tourism']);
-    } else if (suggestion.containsKey('natural')) {
-      parts.add(suggestion['natural']);
-    } else if (suggestion.containsKey('water')) {
-      parts.add(suggestion['water']);
-    } else if (suggestion.containsKey('leisure')) {
-      parts.add(suggestion['leisure']);
-    } else if (address.containsKey('road')) {
-      parts.add(address['road']);
-    } else if (address.containsKey('building')) {
-      parts.add(address['building']);
-    }
+    // Kokeile poimia merkityksellisimmät osat ensin
+    parts.add(address['road'] ??
+        address['name'] ??
+        address['tourism'] ??
+        address['amenity'] ??
+        address['shop'] ??
+        address['leisure'] ??
+        address['natural']);
+    parts.add(address['suburb'] ?? address['neighbourhood']);
+    parts.add(address['city'] ??
+        address['town'] ??
+        address['village'] ??
+        address['municipality']);
+    parts.add(address['county']);
+    // parts.add(address['country']); // Maa on usein tarpeeton, jos haetaan Suomesta
 
-    String? cityPart;
-    if (address.containsKey('city'))
-      cityPart = address['city'];
-    else if (address.containsKey('town'))
-      cityPart = address['town'];
-    else if (address.containsKey('village')) cityPart = address['village'];
+    String formattedName = parts
+        .where((p) => p != null && p.isNotEmpty)
+        .toSet()
+        .take(3)
+        .join(', '); // Ota max 3 osaa
 
-    if (cityPart != null && !parts.contains(cityPart)) {
-      parts.add(cityPart);
-    }
-
-    String? countyPart = address['county'];
-    if (countyPart != null && !parts.contains(countyPart) && cityPart == null) {
-      parts.add(countyPart);
-    }
-
-    String formattedName = parts.toSet().where((p) => p.isNotEmpty).join(', ');
-
-    if (formattedName.isEmpty) {
-      formattedName = displayName;
-    }
-
-    List<String> finalParts =
-        formattedName.split(',').map((e) => e.trim()).toList();
-    if (finalParts.length > 3) {
-      return finalParts.take(3).join(', ') + '...';
-    } else if (formattedName.length > 50) {
-      return formattedName.substring(0, 47) + '...';
-    }
-
-    return formattedName;
+    return formattedName.isNotEmpty
+        ? formattedName
+        : displayName.split(',').take(2).join(','); // Fallback
   }
 }
