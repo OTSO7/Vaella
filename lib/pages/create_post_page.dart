@@ -1,19 +1,21 @@
 // lib/pages/create_post_page.dart
-import 'dart:io'; // Tarvitaan File-objektin käsittelyyn
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart'; // Kuvan valintaan
-import 'package:firebase_storage/firebase_storage.dart'; // Kuvan tallennukseen
-import 'package:cloud_firestore/cloud_firestore.dart'; // Postauksen tallennukseen
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart'; // Päivämäärämuotoiluun
-import 'package:path/path.dart' as p; // Tiedostopolkujen käsittelyyn
+import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
 
 import '../providers/auth_provider.dart';
 import '../models/post_model.dart';
-import '../models/user_profile_model.dart'; // Varmista että tämä on tuotu
+import '../models/user_profile_model.dart';
 
 class CreatePostPage extends StatefulWidget {
-  const CreatePostPage({super.key});
+  final PostVisibility initialVisibility;
+
+  const CreatePostPage({super.key, required this.initialVisibility});
 
   @override
   State<CreatePostPage> createState() => _CreatePostPageState();
@@ -30,13 +32,18 @@ class _CreatePostPageState extends State<CreatePostPage> {
   final TextEditingController _caloriesController = TextEditingController();
 
   XFile? _imageFile;
-  String? _postImageUrl; // Ladatun kuvan URL
   DateTime? _startDate;
   DateTime? _endDate;
-  PostVisibility _selectedVisibility = PostVisibility.public;
+  late PostVisibility _selectedVisibility;
   final List<String> _selectedSharedData = [];
 
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedVisibility = widget.initialVisibility;
+  }
 
   @override
   void dispose() {
@@ -50,18 +57,33 @@ class _CreatePostPageState extends State<CreatePostPage> {
     super.dispose();
   }
 
-  // Kuvan valinta galleriasta/kamerasta
   Future<void> _pickImage() async {
+    if (_isLoading) return;
     final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-    setState(() {
-      _imageFile = image;
-    });
+    try {
+      final XFile? image =
+          await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+      if (image != null) {
+        setState(() {
+          _imageFile = image;
+        });
+      }
+    } catch (e) {
+      print("Error picking image: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Kuvan valinta epäonnistui: $e'),
+              backgroundColor: Theme.of(context).colorScheme.error),
+        );
+      }
+    }
   }
 
-  // Päivämäärän valinta
   Future<void> _selectDate(BuildContext context,
       {required bool isStart}) async {
+    if (_isLoading) return;
+    final theme = Theme.of(context);
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: isStart
@@ -69,223 +91,390 @@ class _CreatePostPageState extends State<CreatePostPage> {
           : (_endDate ?? _startDate ?? DateTime.now()),
       firstDate: DateTime(2000),
       lastDate: DateTime(2101),
+      builder: (context, child) {
+        return Theme(
+          data: theme.copyWith(
+            colorScheme: theme.colorScheme.copyWith(
+              primary: theme.colorScheme.primary,
+              onPrimary: theme.colorScheme.onPrimary,
+              surface: theme.scaffoldBackgroundColor,
+              onSurface: theme.colorScheme.onSurface,
+            ),
+            dialogBackgroundColor: theme.cardColor,
+          ),
+          child: child!,
+        );
+      },
     );
     if (picked != null) {
       setState(() {
         if (isStart) {
           _startDate = picked;
           if (_endDate != null && _endDate!.isBefore(_startDate!)) {
-            _endDate = _startDate; // End date cannot be before start date
+            _endDate = _startDate;
           }
         } else {
           _endDate = picked;
           if (_startDate != null && _startDate!.isAfter(_endDate!)) {
-            _startDate = _endDate; // Start date cannot be after end date
+            _startDate = _endDate;
           }
         }
       });
     }
   }
 
-  // Kuvan lataus Firebase Storageen
-  Future<String?> _uploadImage() async {
-    if (_imageFile == null) return null;
-
+  Future<String?> _uploadImageInternal(XFile imageFile) async {
     try {
-      final String fileName = p.basename(_imageFile!.path);
+      final String fileName =
+          '${DateTime.now().millisecondsSinceEpoch}_${p.basename(imageFile.path)}';
       final Reference storageRef =
           FirebaseStorage.instance.ref().child('post_images/$fileName');
-      await storageRef.putFile(File(_imageFile!.path));
+      await storageRef.putFile(File(imageFile.path));
       return await storageRef.getDownloadURL();
     } catch (e) {
-      print('Error uploading image: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Kuvan lataus epäonnistui: $e')),
-      );
-      return null;
+      print('Error uploading image internally: $e');
+      throw Exception('Kuvan lataus epäonnistui: $e');
     }
   }
 
-  // Postauksen luominen ja tallennus Firestoreen
+  Widget _buildAnimatedIcon(bool isSuccess) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      transitionBuilder: (Widget child, Animation<double> animation) {
+        return ScaleTransition(scale: animation, child: child);
+      },
+      child: isSuccess
+          ? Icon(
+              Icons.check_circle_outline,
+              key: const ValueKey('success_icon'),
+              color: Colors.green.shade600,
+              size: 70,
+            )
+          : Icon(
+              Icons.error_outline,
+              key: const ValueKey('error_icon'),
+              color: Colors.red.shade600,
+              size: 70,
+            ),
+    );
+  }
+
+  Future<void> _showOutcomeDialog({
+    required bool isSuccess,
+    required String title,
+    required String message,
+    required VoidCallback onDismissed,
+  }) async {
+    if (!mounted) return;
+
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        Future.delayed(const Duration(seconds: 2), () {
+          if (Navigator.of(dialogContext).canPop()) {
+            Navigator.of(dialogContext).pop();
+          }
+          onDismissed();
+        });
+
+        return AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          backgroundColor: Theme.of(context).cardColor,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildAnimatedIcon(isSuccess),
+              const SizedBox(height: 20),
+              Text(title,
+                  style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface)),
+              const SizedBox(height: 10),
+              Text(message,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(dialogContext).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withOpacity(0.8))),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _createPost() async {
     if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    // Tarkista, että päivämäärät on valittu
-    if (_startDate == null || _endDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
             content:
-                Text('Valitse vaelluksen aloitus- ja päättymispäivämäärät.')),
+                const Text('Täytä kaikki pakolliset kentät huolellisesti.'),
+            backgroundColor: Theme.of(context).colorScheme.error),
       );
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    if (_startDate == null || _endDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: const Text(
+                'Valitse vaelluksen aloitus- ja päättymispäivämäärät.'),
+            backgroundColor: Theme.of(context).colorScheme.error),
+      );
+      return;
+    }
+
+    // --- POISTETTU KUVA PAKOLLISUUDEN TARKISTUS ---
+    // if (_imageFile == null) {
+    //   ScaffoldMessenger.of(context).showSnackBar(
+    //     SnackBar(content: const Text('Lisääthän vaellukselle kuvan.'), backgroundColor: Theme.of(context).colorScheme.error),
+    //   );
+    //   return;
+    // }
+    // --- POISTETTU LOPPUU ---
+
+    setState(() => _isLoading = true);
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final UserProfile? currentUserProfile = authProvider.userProfile;
 
     if (currentUserProfile == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Käyttäjäprofiilia ei löytynyt. Kirjaudu sisään.')),
-      );
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _showOutcomeDialog(
+          isSuccess: false,
+          title: 'Virhe',
+          message: 'Käyttäjäprofiilia ei löytynyt. Kirjaudu sisään uudelleen.',
+          onDismissed: () {},
+        );
+      }
       return;
     }
 
-    try {
-      _postImageUrl = await _uploadImage(); // Lataa kuva ensin
+    String? uploadedImageUrl;
 
-      final newPostRef = FirebaseFirestore.instance
-          .collection('posts')
-          .doc(); // Luo uusi dokumentti-ID
+    try {
+      if (_imageFile != null) {
+        // Lataa kuva vain, jos se on valittu
+        uploadedImageUrl = await _uploadImageInternal(_imageFile!);
+      }
+
+      final newPostRef = FirebaseFirestore.instance.collection('posts').doc();
       final newPost = Post(
-        id: newPostRef.id, // Käytä luotua ID:tä
+        id: newPostRef.id,
         userId: currentUserProfile.uid,
-        username:
-            currentUserProfile.displayName, // Käytä displayNamea postauksessa
+        username: currentUserProfile.displayName,
         userAvatarUrl: currentUserProfile.photoURL ??
-            'https://i.pravatar.cc/150?img=0', // Oletuskuva
-        postImageUrl: _postImageUrl,
+            'https://firebasestorage.googleapis.com/v0/b/vaellus-app.appspot.com/o/profile_images%2Fdefault_avatar.png?alt=media&token=0default1-0000-0000-0000-0default00000',
+        postImageUrl:
+            uploadedImageUrl, // Tämä on nyt null, jos kuvaa ei valittu
         title: _titleController.text.trim(),
         caption: _captionController.text.trim(),
-        timestamp: DateTime.now(), // Postauksen luontiaika
+        timestamp: DateTime.now(),
         location: _locationController.text.trim(),
         startDate: _startDate!,
         endDate: _endDate!,
-        distanceKm: double.tryParse(_distanceController.text.trim()) ?? 0.0,
+        distanceKm: double.tryParse(
+                _distanceController.text.trim().replaceAll(',', '.')) ??
+            0.0,
         nights: int.tryParse(_nightsController.text.trim()) ?? 0,
-        weightKg: double.tryParse(_weightController.text.trim()),
+        weightKg:
+            double.tryParse(_weightController.text.trim().replaceAll(',', '.')),
         caloriesPerDay: double.tryParse(_caloriesController.text.trim()),
-        planId: null, // Tässä vaiheessa emme linkkaa suunnitelmaan
+        planId: null,
         visibility: _selectedVisibility,
         likes: [],
         commentCount: 0,
         sharedData: _selectedSharedData,
       );
 
-      await newPostRef
-          .set(newPost.toFirestore()); // Tallenna postaus Firestoreen
+      await newPostRef.set(newPost.toFirestore());
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Postaus luotu onnistuneesti!')),
-      );
-      Navigator.pop(context); // Palaa edelliselle sivulle (HomePage)
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _showOutcomeDialog(
+          isSuccess: true,
+          title: 'Onnistui!',
+          message: 'Uusi vaelluspostaus luotu.',
+          onDismissed: () {
+            if (mounted) {
+              Navigator.of(context).pop();
+            }
+          },
+        );
+      }
     } catch (e) {
       print('Error creating post: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Postauksen luominen epäonnistui: $e')),
-      );
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _showOutcomeDialog(
+          isSuccess: false,
+          title: 'Virhe',
+          message:
+              'Postauksen luominen epäonnistui:\n${e.toString().replaceFirst("Exception: ", "")}',
+          onDismissed: () {},
+        );
+      }
     }
+  }
+
+  Widget _buildSectionTitle(String title, IconData icon) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 24.0, bottom: 12.0),
+      child: Row(
+        children: [
+          Icon(icon, color: theme.colorScheme.secondary, size: 22),
+          const SizedBox(width: 8),
+          Text(title,
+              style: theme.textTheme.titleLarge
+                  ?.copyWith(fontSize: 18, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVisibilityIndicator() {
+    final theme = Theme.of(context);
+    IconData icon;
+    String text;
+    Color color;
+    switch (_selectedVisibility) {
+      case PostVisibility.public:
+        icon = Icons.public;
+        text = 'Julkinen';
+        color = theme.colorScheme.primary;
+        break;
+      case PostVisibility.friends:
+        icon = Icons.group_outlined;
+        text = 'Ystävät';
+        color = theme.colorScheme.secondary;
+        break;
+      case PostVisibility.private:
+        icon = Icons.lock_outline;
+        text = 'Yksityinen';
+        color = Colors.grey.shade500;
+        break;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withOpacity(0.3))),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: 8),
+          Text(text,
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(color: color, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Luo uusi postaus'),
-        centerTitle: true,
+        title: const Text('Lisää uusi vaellus'),
+        elevation: 0,
+        backgroundColor: theme.scaffoldBackgroundColor,
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Form(
-                key: _formKey,
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20.0, 16.0, 20.0, 100.0),
+            child: Form(
+              key: _formKey,
+              child: AbsorbPointer(
+                absorbing: _isLoading,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Kuvan valinta
                     GestureDetector(
                       onTap: _pickImage,
                       child: Container(
-                        height: 200,
+                        height: 220,
                         decoration: BoxDecoration(
-                          color: Colors.grey[200],
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.grey),
+                          color: theme.colorScheme.surface.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: _imageFile == null
+                                ? theme.colorScheme.outline.withOpacity(0.5)
+                                : Colors.transparent,
+                            width: 1.5,
+                          ),
+                          image: _imageFile != null
+                              ? DecorationImage(
+                                  image: FileImage(File(_imageFile!.path)),
+                                  fit: BoxFit.cover)
+                              : null,
                         ),
                         child: _imageFile == null
-                            ? Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.add_a_photo_outlined,
-                                      size: 50, color: Colors.grey[600]),
-                                  const SizedBox(height: 8),
-                                  Text('Valitse kuva vaelluksesta',
-                                      style:
-                                          TextStyle(color: Colors.grey[700])),
-                                ],
-                              )
-                            : ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Image.file(
-                                  File(_imageFile!.path),
-                                  fit: BoxFit.cover,
-                                  width: double.infinity,
+                            ? Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.add_a_photo_outlined,
+                                        size: 60,
+                                        color: theme.colorScheme.secondary
+                                            .withOpacity(0.8)),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                        'Lisää kuva vaelluksesta (valinnainen)', // Päivitetty teksti
+                                        style: theme.textTheme.titleMedium
+                                            ?.copyWith(
+                                                color: theme
+                                                    .colorScheme.onSurface
+                                                    .withOpacity(0.7))),
+                                  ],
                                 ),
-                              ),
+                              )
+                            : null,
                       ),
                     ),
-                    const SizedBox(height: 16),
-
-                    // Otsikko
+                    _buildSectionTitle('Perustiedot', Icons.article_outlined),
                     TextFormField(
                       controller: _titleController,
                       decoration: const InputDecoration(
-                        labelText: 'Otsikko (esim. Vaellus Lemmenjoella)',
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Otsikko on pakollinen.';
-                        }
-                        return null;
-                      },
+                          labelText: 'Otsikko',
+                          hintText: 'esim. Upea viikonloppu Kolilla',
+                          prefixIcon: Icon(Icons.title)),
+                      validator: (value) => (value == null || value.isEmpty)
+                          ? 'Otsikko on pakollinen.'
+                          : null,
                     ),
                     const SizedBox(height: 16),
-
-                    // Kuvaus/Kuvateksti ("Miten meni?")
                     TextFormField(
                       controller: _captionController,
                       decoration: const InputDecoration(
-                        labelText: 'Miten vaellus meni? (Kuvateksti)',
-                        alignLabelWithHint: true,
-                        border: OutlineInputBorder(),
-                      ),
+                          labelText: 'Miten reissu meni?',
+                          hintText: 'Kerro tarinasi, fiilikset ja vinkit...',
+                          prefixIcon: Icon(Icons.description_outlined),
+                          alignLabelWithHint: true),
                       maxLines: 5,
                       minLines: 3,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Kuvateksti on pakollinen.';
-                        }
-                        return null;
-                      },
+                      validator: (value) => (value == null || value.isEmpty)
+                          ? 'Kuvaus on pakollinen.'
+                          : null,
                     ),
-                    const SizedBox(height: 16),
-
-                    // Sijainti
+                    _buildSectionTitle(
+                        'Vaelluksen Yksityiskohdat', Icons.hiking_outlined),
                     TextFormField(
                       controller: _locationController,
                       decoration: const InputDecoration(
-                        labelText: 'Sijainti (esim. Teijon kansallispuisto)',
-                        border: OutlineInputBorder(),
-                      ),
+                          labelText: 'Sijainti',
+                          hintText: 'esim. Patvinsuon kansallispuisto',
+                          prefixIcon: Icon(Icons.location_on_outlined)),
                     ),
                     const SizedBox(height: 16),
-
-                    // Päivämäärät
                     Row(
                       children: [
                         Expanded(
@@ -293,17 +482,19 @@ class _CreatePostPageState extends State<CreatePostPage> {
                             onTap: () => _selectDate(context, isStart: true),
                             child: InputDecorator(
                               decoration: const InputDecoration(
-                                labelText: 'Aloituspäivä',
-                                border: OutlineInputBorder(),
-                                suffixIcon: Icon(Icons.calendar_today),
-                              ),
+                                  labelText: 'Aloituspäivä',
+                                  prefixIcon:
+                                      Icon(Icons.calendar_today_outlined)),
                               child: Text(
-                                _startDate == null
-                                    ? 'Valitse'
-                                    : DateFormat('d.M.yyyy')
-                                        .format(_startDate!),
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
+                                  _startDate == null
+                                      ? 'Valitse'
+                                      : DateFormat('d.M.yyyy')
+                                          .format(_startDate!),
+                                  style: theme.textTheme.bodyLarge?.copyWith(
+                                      color: _startDate == null
+                                          ? theme.hintColor
+                                          : theme.colorScheme.onSurface,
+                                      fontSize: 16)),
                             ),
                           ),
                         ),
@@ -313,42 +504,44 @@ class _CreatePostPageState extends State<CreatePostPage> {
                             onTap: () => _selectDate(context, isStart: false),
                             child: InputDecorator(
                               decoration: const InputDecoration(
-                                labelText: 'Päättymispäivä',
-                                border: OutlineInputBorder(),
-                                suffixIcon: Icon(Icons.calendar_today),
-                              ),
+                                  labelText: 'Päättymispäivä',
+                                  prefixIcon:
+                                      Icon(Icons.event_available_outlined)),
                               child: Text(
-                                _endDate == null
-                                    ? 'Valitse'
-                                    : DateFormat('d.M.yyyy').format(_endDate!),
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
+                                  _endDate == null
+                                      ? 'Valitse'
+                                      : DateFormat('d.M.yyyy')
+                                          .format(_endDate!),
+                                  style: theme.textTheme.bodyLarge?.copyWith(
+                                      color: _endDate == null
+                                          ? theme.hintColor
+                                          : theme.colorScheme.onSurface,
+                                      fontSize: 16)),
                             ),
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 16),
-
-                    // Matka ja yöt
                     Row(
                       children: [
                         Expanded(
                           child: TextFormField(
                             controller: _distanceController,
-                            keyboardType: TextInputType.number,
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
                             decoration: const InputDecoration(
-                              labelText: 'Matka (km)',
-                              border: OutlineInputBorder(),
-                            ),
-                            validator: (value) {
-                              if (value != null &&
-                                  value.isNotEmpty &&
-                                  double.tryParse(value) == null) {
-                                return 'Anna kelvollinen numero.';
-                              }
-                              return null;
-                            },
+                                labelText: 'Matka (km)',
+                                prefixIcon:
+                                    Icon(Icons.directions_walk_outlined)),
+                            validator: (v) => (v != null &&
+                                    v.isNotEmpty &&
+                                    double.tryParse(v.replaceAll(',', '.')) ==
+                                        null)
+                                ? 'Virheellinen numero'
+                                : null,
+                            onChanged: (v) => _distanceController.text =
+                                v.replaceAll(',', '.'),
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -357,42 +550,37 @@ class _CreatePostPageState extends State<CreatePostPage> {
                             controller: _nightsController,
                             keyboardType: TextInputType.number,
                             decoration: const InputDecoration(
-                              labelText: 'Yöt (kpl)',
-                              border: OutlineInputBorder(),
-                            ),
-                            validator: (value) {
-                              if (value != null &&
-                                  value.isNotEmpty &&
-                                  int.tryParse(value) == null) {
-                                return 'Anna kelvollinen kokonaisluku.';
-                              }
-                              return null;
-                            },
+                                labelText: 'Yöt (kpl)',
+                                prefixIcon: Icon(Icons.night_shelter_outlined)),
+                            validator: (v) => (v != null &&
+                                    v.isNotEmpty &&
+                                    int.tryParse(v) == null)
+                                ? 'Virheellinen numero'
+                                : null,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
-
-                    // Paino ja kalorit (valinnaiset)
+                    _buildSectionTitle('Lisätiedot (Valinnainen)',
+                        Icons.add_circle_outline_outlined),
                     Row(
                       children: [
                         Expanded(
                           child: TextFormField(
                             controller: _weightController,
-                            keyboardType: TextInputType.number,
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
                             decoration: const InputDecoration(
-                              labelText: 'Repun paino (kg, valinnainen)',
-                              border: OutlineInputBorder(),
-                            ),
-                            validator: (value) {
-                              if (value != null &&
-                                  value.isNotEmpty &&
-                                  double.tryParse(value) == null) {
-                                return 'Anna kelvollinen numero.';
-                              }
-                              return null;
-                            },
+                                labelText: 'Repun paino (kg)',
+                                prefixIcon: Icon(Icons.backpack_outlined)),
+                            validator: (v) => (v != null &&
+                                    v.isNotEmpty &&
+                                    double.tryParse(v.replaceAll(',', '.')) ==
+                                        null)
+                                ? 'Virheellinen numero'
+                                : null,
+                            onChanged: (v) =>
+                                _weightController.text = v.replaceAll(',', '.'),
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -401,125 +589,107 @@ class _CreatePostPageState extends State<CreatePostPage> {
                             controller: _caloriesController,
                             keyboardType: TextInputType.number,
                             decoration: const InputDecoration(
-                              labelText: 'Kalorit/pv (valinnainen)',
-                              border: OutlineInputBorder(),
-                            ),
-                            validator: (value) {
-                              if (value != null &&
-                                  value.isNotEmpty &&
-                                  double.tryParse(value) == null) {
-                                return 'Anna kelvollinen numero.';
-                              }
-                              return null;
-                            },
+                                labelText: 'Kalorit/pv',
+                                prefixIcon:
+                                    Icon(Icons.local_fire_department_outlined)),
+                            validator: (v) => (v != null &&
+                                    v.isNotEmpty &&
+                                    int.tryParse(v) == null)
+                                ? 'Virheellinen numero'
+                                : null,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
-
-                    // Näkyvyysvalinta
-                    InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Näkyvyys',
-                        border: OutlineInputBorder(),
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<PostVisibility>(
-                          value: _selectedVisibility,
-                          onChanged: (PostVisibility? newValue) {
-                            if (newValue != null) {
-                              setState(() {
-                                _selectedVisibility = newValue;
-                              });
-                            }
-                          },
-                          items: PostVisibility.values
-                              .map<DropdownMenuItem<PostVisibility>>(
-                                  (PostVisibility value) {
-                            String text;
-                            switch (value) {
-                              case PostVisibility.public:
-                                text = 'Julkinen (näkyy kaikille)';
-                                break;
-                              case PostVisibility.friends:
-                                text = 'Ystävät (näkyy vain ystäville)';
-                                break;
-                              case PostVisibility.private:
-                                text = 'Yksityinen (näkyy vain minulle)';
-                                break;
-                            }
-                            return DropdownMenuItem<PostVisibility>(
-                              value: value,
-                              child: Text(text),
-                            );
-                          }).toList(),
-                        ),
-                      ),
+                    _buildSectionTitle(
+                        'Postauksen Asetukset', Icons.settings_outlined),
+                    Row(
+                      children: [
+                        Text("Näkyvyys: ", style: theme.textTheme.titleMedium),
+                        const SizedBox(width: 8),
+                        _buildVisibilityIndicator(),
+                      ],
                     ),
                     const SizedBox(height: 16),
-
-                    // Jaettavat tiedot (valintaruudut)
-                    Text(
-                        'Jaettavat suunnitelman tiedot (näkyvät postauksessa):',
-                        style: Theme.of(context).textTheme.titleMedium),
-                    CheckboxListTile(
-                      title: const Text('Reittikartta (paikkamerkki)'),
-                      value: _selectedSharedData.contains('route'),
-                      onChanged: (bool? value) {
-                        setState(() {
-                          if (value == true) {
-                            _selectedSharedData.add('route');
-                          } else {
-                            _selectedSharedData.remove('route');
-                          }
-                        });
-                      },
-                    ),
-                    CheckboxListTile(
-                      title: const Text('Pakkauslista (paino)'),
-                      value: _selectedSharedData.contains('packing'),
-                      onChanged: (bool? value) {
-                        setState(() {
-                          if (value == true) {
-                            _selectedSharedData.add('packing');
-                          } else {
-                            _selectedSharedData.remove('packing');
-                          }
-                        });
-                      },
-                    ),
-                    CheckboxListTile(
-                      title: const Text('Ruokasuunnitelma (kalorit/pv)'),
-                      value: _selectedSharedData.contains('food'),
-                      onChanged: (bool? value) {
-                        setState(() {
-                          if (value == true) {
-                            _selectedSharedData.add('food');
-                          } else {
-                            _selectedSharedData.remove('food');
-                          }
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Luo postaus -nappi
-                    ElevatedButton.icon(
-                      onPressed: _createPost,
-                      icon: const Icon(Icons.send),
-                      label: const Text('Luo postaus'),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        textStyle: const TextStyle(fontSize: 18),
-                      ),
-                    ),
+                    Text('Mitä tietoja jaetaan postauksessa?',
+                        style: theme.textTheme.titleMedium),
+                    _buildShareOption('Reittikartta (paikkamerkki)', 'route',
+                        Icons.map_outlined),
+                    _buildShareOption('Pakkauslista (repun paino)', 'packing',
+                        Icons.inventory_2_outlined),
+                    _buildShareOption('Ruokasuunnitelma (kalorit/pv)', 'food',
+                        Icons.restaurant_menu_outlined),
+                    const SizedBox(height: 32),
                   ],
                 ),
               ),
             ),
+          ),
+          if (_isLoading)
+            Container(
+              color: Colors.black.withOpacity(0.65),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                            theme.colorScheme.secondary)),
+                    const SizedBox(height: 20),
+                    Text("Tallennetaan vaellusta...",
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(color: Colors.white70))
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+      bottomNavigationBar: Padding(
+        padding: EdgeInsets.only(
+            left: 20.0,
+            right: 20.0,
+            top: 8.0,
+            bottom: MediaQuery.of(context).padding.bottom + 12.0),
+        child: ElevatedButton.icon(
+          onPressed: _isLoading ? null : _createPost,
+          icon: const Icon(Icons.send_outlined, size: 20),
+          label: const Text('Julkaise vaellus'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: theme.colorScheme.primary,
+            foregroundColor: theme.colorScheme.onPrimary,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            textStyle:
+                const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            disabledBackgroundColor: theme.colorScheme.primary.withOpacity(0.5),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShareOption(String title, String key, IconData icon) {
+    final theme = Theme.of(context);
+    return CheckboxListTile(
+      title: Text(title, style: theme.textTheme.bodyLarge),
+      value: _selectedSharedData.contains(key),
+      onChanged: _isLoading
+          ? null
+          : (bool? value) {
+              setState(() {
+                if (value == true) {
+                  _selectedSharedData.add(key);
+                } else {
+                  _selectedSharedData.remove(key);
+                }
+              });
+            },
+      secondary: Icon(icon, color: theme.colorScheme.secondary),
+      activeColor: theme.colorScheme.primary,
+      controlAffinity: ListTileControlAffinity.leading,
+      contentPadding: EdgeInsets.zero,
+      checkboxShape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
     );
   }
 }

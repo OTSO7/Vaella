@@ -1,12 +1,14 @@
-// lib/home_page.dart
+// lib/pages/home_page.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../providers/auth_provider.dart';
-import '../models/post_model.dart'; // Tuo päivitetty Post-malli
-import '../models/user_profile_model.dart'; // Tuo UserProfile-malli
+import '../models/post_model.dart';
+import '../models/user_profile_model.dart';
 import '../widgets/post_card.dart';
-import 'create_post_page.dart'; // UUSI: Tuo uusi postauksen luontisivu
+import '../pages/create_post_page.dart';
+import '../widgets/select_visibility_modal.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -20,17 +22,15 @@ class _HomePageState extends State<HomePage> {
   List<Post> _posts = [];
   bool _isLoadingPosts = true;
   String? _errorMessage;
-  Stream<List<Post>>? _postsStream; // Muutettu nullableksi
+  StreamSubscription<List<Post>>? _postsSubscription;
 
   @override
   void initState() {
     super.initState();
-    // Kuunnellaan auth-tilan muutoksia, jotta voidaan aloittaa postausten haku
-    // vasta kun käyttäjäprofiili on latautunut.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       authProvider.addListener(_onAuthChanged);
-      _onAuthChanged(); // Tarkista tila heti alussa
+      _onAuthChanged();
     });
   }
 
@@ -38,6 +38,7 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     Provider.of<AuthProvider>(context, listen: false)
         .removeListener(_onAuthChanged);
+    _postsSubscription?.cancel();
     super.dispose();
   }
 
@@ -46,77 +47,94 @@ class _HomePageState extends State<HomePage> {
     if (authProvider.isLoggedIn && authProvider.userProfile != null) {
       _startPostsStream(authProvider.userProfile!);
     } else {
-      // Jos käyttäjä ei ole kirjautunut tai profiili ei ole saatavilla,
-      // tyhjennä postaukset ja aseta lataustila.
-      setState(() {
-        _posts = [];
-        _isLoadingPosts = false;
-        _errorMessage = 'Kirjaudu sisään nähdäksesi postaukset.';
-        _postsStream = null; // Lopeta stream-kuuntelu
-      });
+      _postsSubscription?.cancel();
+      if (mounted) {
+        setState(() {
+          _posts = [];
+          _isLoadingPosts = false;
+          _errorMessage = 'Kirjaudu sisään nähdäksesi postaukset.';
+        });
+      }
     }
   }
 
   void _startPostsStream(UserProfile currentUserProfile) {
-    // Aseta Stream uudelleen, jos käyttäjäprofiili muuttuu (esim. uloskirjautuminen/sisäänkirjautuminen)
-    // Tässä on tärkeää varmistaa, että kuuntelija asetetaan vain kerran tai resetoidaan oikein.
-    // Koska käytämme listenereitä AuthProviderissa, tämä metodi kutsutaan aina, kun _userProfile muuttuu.
-    // Varmistetaan, ettei luoda useita kuuntelijoita.
-    if (_postsStream != null) {
-      // Voit harkita vanhan stream-subscriptionin peruuttamista, jos se on olemassa.
-      // Tässä tapauksessa suora _postsStream-muuttujan uudelleenasetus ja map-funktioiden käyttö
-      // hoitaa uudelleenkuuntelun tehokkaasti, koska stream on Single Subscription Stream.
-    }
+    _postsSubscription?.cancel();
 
-    _postsStream = _firestore.collection('posts').snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) => Post.fromFirestore(doc)).toList();
-    }).map((allPosts) {
-      // Suodata postaukset näkyvyyden perusteella
-      return allPosts.where((post) {
-        if (post.visibility == PostVisibility.public) {
-          return true; // Julkiset postaukset näkyvät kaikille
-        } else if (post.visibility == PostVisibility.private) {
-          return post.userId == currentUserProfile.uid; // Vain oma yksityinen
-        } else if (post.visibility == PostVisibility.friends) {
-          // Postaus näkyy, jos käyttäjä on postauksen tekijä TAI
-          // jos postauksen tekijä on ystävä.
-          // HUOM: Postauksen tekijä näkee aina omat "ystäville"-postauksensa.
-          return post.userId == currentUserProfile.uid ||
-              currentUserProfile.friends.contains(post.userId);
-        }
-        return false;
-      }).toList();
-    });
-
-    _postsStream!.listen((posts) {
+    if (mounted) {
       setState(() {
-        // Järjestä postaukset aikaleiman mukaan laskevasti (uusin ensin)
-        _posts = posts..sort((a, b) => b.timestamp.compareTo(a.timestamp));
-        _isLoadingPosts = false;
+        _isLoadingPosts = true;
         _errorMessage = null;
       });
-    }, onError: (error) {
-      setState(() {
-        _isLoadingPosts = false;
-        _errorMessage = 'Virhe postausten lataamisessa: $error';
-        print('Error loading posts: $error');
-      });
+    }
+
+    final stream = _firestore
+        .collection('posts')
+        .orderBy('timestamp', descending: true)
+        .snapshots()
+        .map((snapshot) =>
+            snapshot.docs.map((doc) => Post.fromFirestore(doc)).toList())
+        .map((allPosts) => allPosts.where((post) {
+              if (post.visibility == PostVisibility.public) return true;
+              if (post.visibility == PostVisibility.private)
+                return post.userId == currentUserProfile.uid;
+              if (post.visibility == PostVisibility.friends) {
+                return post.userId == currentUserProfile.uid ||
+                    (currentUserProfile.friends.contains(post.userId));
+              }
+              return false;
+            }).toList());
+
+    _postsSubscription = stream.listen((posts) {
+      if (mounted) {
+        setState(() {
+          _posts = posts;
+          _isLoadingPosts = false;
+          _errorMessage = null;
+        });
+      }
+    }, onError: (error, stackTrace) {
+      print('Posts stream error: $error \nStackTrace: $stackTrace');
+      if (mounted) {
+        setState(() {
+          _isLoadingPosts = false;
+          _errorMessage =
+              'Virhe postausten lataamisessa.'; // Yksinkertaistettu virheilmoitus
+        });
+      }
     });
   }
 
   Future<void> _refreshPosts() async {
-    // onSnapshot kuuntelee jo muutoksia, joten erillistä refresh-logiikkaa ei tarvita
-    // tässä kuin vain ilmoituksen antaminen.
-    // Jos haluttaisiin pakottaa uudelleenlataus, voisi esim. nollata stream-kuuntelijan.
-    // Tässä tapauksessa, koska käytämme onSnapshotia, data päivittyy automaattisesti.
-    // Simuloidaan pientä viivettä, jotta käyttäjä näkee latausindikaattorin.
-    await Future.delayed(const Duration(seconds: 1));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Postaukset päivitetty.'),
-      ),
-    );
+    setState(() {
+      _isLoadingPosts = true;
+    });
+
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (authProvider.isLoggedIn && authProvider.userProfile != null) {
+      _startPostsStream(authProvider.userProfile!);
+    } else {
+      if (mounted) {
+        setState(() {
+          _isLoadingPosts = false;
+          _errorMessage = 'Kirjaudu sisään päivittääksesi postaukset.';
+        });
+      }
+    }
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (mounted && _isLoadingPosts && _posts.isNotEmpty) {
+      setState(() {
+        _isLoadingPosts = false;
+      });
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Postaukset päivitetty.'),
+            duration: Duration(seconds: 1)),
+      );
+    }
   }
 
   @override
@@ -128,29 +146,23 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.logout),
-          tooltip: 'Kirjaudu ulos',
-          onPressed: () {
-            authProvider.logout();
-          },
+          // tooltip: 'Kirjaudu ulos', // PIDÄ POIS, JOS TOOLTIP-VIRHEET JATKUVAT
+          onPressed: () => authProvider.logout(),
         ),
         title: Hero(
           tag: 'appLogo',
-          child: Image.asset(
-            'assets/images/white2.png',
-            height: 80,
-            fit: BoxFit.contain,
-          ),
+          child: Image.asset('assets/images/white2.png',
+              height: 80, fit: BoxFit.contain),
         ),
         centerTitle: true,
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
-            tooltip: 'Hae postauksia',
+            // tooltip: 'Hae postauksia', // PIDÄ POIS, JOS TOOLTIP-VIRHEET JATKUVAT
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Hakuominaisuus ei ole vielä toteutettu.'),
-                ),
+                    content: Text('Hakuominaisuus ei ole vielä toteutettu.')),
               );
             },
           ),
@@ -159,38 +171,42 @@ class _HomePageState extends State<HomePage> {
       body: RefreshIndicator(
         onRefresh: _refreshPosts,
         color: theme.colorScheme.secondary,
-        backgroundColor: theme.primaryColor,
+        backgroundColor: theme.colorScheme.primaryContainer,
         child: _isLoadingPosts
             ? const Center(child: CircularProgressIndicator())
             : _errorMessage != null
                 ? Center(
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
-                      child: Text(
-                        _errorMessage!,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            color: theme.colorScheme.error, fontSize: 16),
-                      ),
+                      child: Text(_errorMessage!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: theme.colorScheme.error, fontSize: 16)),
                     ),
                   )
                 : _posts.isEmpty
                     ? Center(
-                        child: Text(
-                          authProvider.isLoggedIn
-                              ? 'Ei postauksia näytettävänä. Aloita luomalla uusi!'
-                              : 'Kirjaudu sisään nähdäksesi vaelluspostaukset.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color:
-                                  theme.colorScheme.onSurface.withOpacity(0.7)),
+                        child: Padding(
+                          padding: const EdgeInsets.all(20.0),
+                          child: Text(
+                            authProvider.isLoggedIn
+                                ? 'Ei vaelluspostauksia vielä.\nLuo ensimmäinen omasi!'
+                                : 'Kirjaudu sisään nähdäksesi vaelluspostaukset.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                color: theme.colorScheme.onSurface
+                                    .withOpacity(0.7),
+                                fontSize: 17,
+                                height: 1.5),
+                          ),
                         ),
                       )
                     : ListView.separated(
-                        padding: const EdgeInsets.only(top: 8.0, bottom: 80.0),
+                        padding: const EdgeInsets.only(top: 8.0, bottom: 90.0),
                         itemCount: _posts.length,
                         itemBuilder: (context, index) {
-                          return PostCard(post: _posts[index]);
+                          final post = _posts[index];
+                          return PostCard(key: ValueKey(post.id), post: post);
                         },
                         separatorBuilder: (context, index) =>
                             const SizedBox(height: 16.0),
@@ -198,15 +214,48 @@ class _HomePageState extends State<HomePage> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          // NYT TÄMÄ NAVIGOIDAAN UUDELLE SIVULLE!
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const CreatePostPage()),
-          );
+          final currentAuthProvider =
+              Provider.of<AuthProvider>(context, listen: false);
+          if (!currentAuthProvider.isLoggedIn ||
+              currentAuthProvider.userProfile == null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Kirjaudu sisään luodaksesi postauksen.'),
+                backgroundColor: theme.colorScheme.error,
+              ),
+            );
+            return;
+          }
+
+          showSelectVisibilityModal(context, (selectedVisibility) async {
+            if (mounted) {
+              try {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (navContext) =>
+                        CreatePostPage(initialVisibility: selectedVisibility),
+                  ),
+                );
+              } catch (e, s) {
+                print(
+                    'ERROR during Navigator.push or CreatePostPage build: $e\nStackTrace: $s');
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                        content: Text('Sivun avaaminen epäonnistui.'),
+                        backgroundColor: theme.colorScheme.error),
+                  );
+                }
+              }
+            }
+          });
         },
-        tooltip: 'Lisää postaus',
+        // tooltip: 'Lisää postaus', // PIDÄ POIS, JOS TOOLTIP-VIRHEET JATKUVAT
         icon: const Icon(Icons.add_a_photo_outlined),
-        label: const Text("Lisää postaus"),
+        label: const Text("Uusi vaellus"),
+        backgroundColor: theme.colorScheme.secondary,
+        foregroundColor: theme.colorScheme.onSecondary,
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );

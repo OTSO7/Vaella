@@ -1,7 +1,8 @@
+// lib/widgets/post_card.dart
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // Import for DateFormat
-import 'package:intl/date_symbol_data_local.dart'; // Import for initializeDateFormatting
-import '../models/post_model.dart'; // Varmista, että Post-malli on tuotu
+import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import '../models/post_model.dart';
 
 class PostCard extends StatefulWidget {
   final Post post;
@@ -16,13 +17,9 @@ class _PostCardState extends State<PostCard> {
   @override
   void initState() {
     super.initState();
-    // Initialize date formatting for the 'fi_FI' locale
-    // This needs to be called once, typically at app startup or before using DateFormat for a specific locale.
-    // For this widget, calling it in initState is fine, but it's more efficient to do it globally if many widgets use it.
     initializeDateFormatting('fi_FI', null).then((_) {
       if (mounted) {
-        setState(
-            () {}); // Trigger a rebuild if formatting initializes after build
+        setState(() {});
       }
     });
   }
@@ -33,7 +30,7 @@ class _PostCardState extends State<PostCard> {
     final textTheme = theme.textTheme;
     final timeAgo = _getTimeAgo(widget.post.timestamp);
     final hikeDuration =
-        '${widget.post.nights} yö${widget.post.nights != 1 ? 'tä' : ''}'; // Esim. "3 yötä"
+        '${widget.post.nights} yö${widget.post.nights != 1 ? 'tä' : ''}';
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
@@ -45,13 +42,11 @@ class _PostCardState extends State<PostCard> {
             color: Colors.black.withOpacity(0.15),
             blurRadius: 10,
             offset: const Offset(0, 5),
-            spreadRadius: 0,
           ),
           BoxShadow(
             color: Colors.black.withOpacity(0.1),
             blurRadius: 4,
             offset: const Offset(0, 2),
-            spreadRadius: 0,
           ),
         ],
       ),
@@ -60,7 +55,6 @@ class _PostCardState extends State<PostCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            // Header: Avatar, Username, Location, Options
             Padding(
               padding: const EdgeInsets.fromLTRB(16.0, 16.0, 12.0, 8.0),
               child: Row(
@@ -93,12 +87,15 @@ class _PostCardState extends State<PostCard> {
                                     size: 15,
                                     color: theme.colorScheme.secondary),
                                 const SizedBox(width: 4),
-                                Text(
-                                  widget.post.location,
-                                  style: textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.onSurface
-                                        .withOpacity(0.7),
-                                    fontSize: 12,
+                                Flexible(
+                                  child: Text(
+                                    widget.post.location,
+                                    style: textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.onSurface
+                                          .withOpacity(0.7),
+                                      fontSize: 12,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                               ],
@@ -110,15 +107,14 @@ class _PostCardState extends State<PostCard> {
                   IconButton(
                     icon: Icon(Icons.more_horiz,
                         color: theme.colorScheme.onSurface.withOpacity(0.8)),
+                    // tooltip: 'Lisävalinnat', // POISTETTU
                     onPressed: () {
-                      _showFeatureComingSoon(context, "Post settings");
+                      _showFeatureComingSoon(context, "Postausasetukset");
                     },
                   ),
                 ],
               ),
             ),
-
-            // Post Image (if available)
             if (widget.post.postImageUrl != null &&
                 widget.post.postImageUrl!.isNotEmpty)
               AspectRatio(
@@ -150,8 +146,6 @@ class _PostCardState extends State<PostCard> {
             if (widget.post.postImageUrl != null &&
                 widget.post.postImageUrl!.isNotEmpty)
               const SizedBox(height: 12.0),
-
-            // NEW: Post Title
             Padding(
               padding: EdgeInsets.fromLTRB(
                   16.0,
@@ -170,8 +164,6 @@ class _PostCardState extends State<PostCard> {
                 ),
               ),
             ),
-
-            // NEW: Dates, Distance, Nights
             Padding(
               padding:
                   const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
@@ -181,13 +173,13 @@ class _PostCardState extends State<PostCard> {
                       size: 16, color: theme.colorScheme.secondary),
                   const SizedBox(width: 6),
                   Text(
-                    '${DateFormat('d.M.yyyy').format(widget.post.startDate)} - ${DateFormat('d.M.yyyy').format(widget.post.endDate)}',
+                    '${DateFormat('d.M.yyyy', 'fi_FI').format(widget.post.startDate)} - ${DateFormat('d.M.yyyy', 'fi_FI').format(widget.post.endDate)}',
                     style: textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurface.withOpacity(0.8),
                       fontSize: 13,
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 12.0),
                   Icon(Icons.hiking_outlined,
                       size: 18, color: theme.colorScheme.secondary),
                   const SizedBox(width: 6),
@@ -201,128 +193,137 @@ class _PostCardState extends State<PostCard> {
                 ],
               ),
             ),
-
-            // NEW: Optional shared data (Weight, Calories)
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-              child: Wrap(
-                spacing: 12.0, // horizontal space between chips
-                runSpacing: 4.0, // vertical space between lines of chips
-                children: [
-                  if (widget.post.sharedData.contains('packing') &&
-                      widget.post.weightKg != null)
-                    _buildInfoChip(context, Icons.backpack_outlined,
-                        '${widget.post.weightKg!.toStringAsFixed(1)} kg'),
-                  if (widget.post.sharedData.contains('food') &&
-                      widget.post.caloriesPerDay != null)
-                    _buildInfoChip(context, Icons.restaurant_menu_outlined,
-                        '${widget.post.caloriesPerDay!.round()} kcal/pv'),
-                  // Add more shared data chips here if needed, e.g., 'route' for a map button
-                ],
+            if (widget.post.sharedData.isNotEmpty &&
+                (widget.post.sharedData.contains('packing') &&
+                        widget.post.weightKg != null ||
+                    widget.post.sharedData.contains('food') &&
+                        widget.post.caloriesPerDay != null))
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                child: Wrap(
+                  spacing: 12.0,
+                  runSpacing: 4.0,
+                  children: [
+                    if (widget.post.sharedData.contains('packing') &&
+                        widget.post.weightKg != null)
+                      _buildInfoChip(context, Icons.backpack_outlined,
+                          '${widget.post.weightKg!.toStringAsFixed(1)} kg'),
+                    if (widget.post.sharedData.contains('food') &&
+                        widget.post.caloriesPerDay != null)
+                      _buildInfoChip(context, Icons.restaurant_menu_outlined,
+                          '${widget.post.caloriesPerDay!.round()} kcal/pv'),
+                  ],
+                ),
               ),
-            ),
-
-            // Caption
             Padding(
-              padding: const EdgeInsets.fromLTRB(16.0, 12.0, 16.0, 12.0),
+              padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 12.0),
               child: Text(
                 widget.post.caption.isNotEmpty
                     ? widget.post.caption
-                    : 'Ei lisäkommenttia tähän vaellukseen.',
+                    : 'Ei kuvausta.',
                 style: textTheme.bodyLarge?.copyWith(
-                  color: theme.colorScheme.onSurface.withOpacity(0.95),
-                  fontSize: 16,
+                  color: theme.colorScheme.onSurface.withOpacity(0.9),
+                  fontSize: 15,
                   height: 1.4,
                 ),
+                maxLines: 5,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-
-            // NEW: Action buttons for "Route Map" and "Copy Plan"
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  if (widget.post.sharedData.contains('route'))
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () =>
-                            _showFeatureComingSoon(context, "Reittikartta"),
-                        icon: const Icon(Icons.map_outlined),
-                        label: const Text('Reittikartta'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: theme.colorScheme.secondary,
-                          side: BorderSide(
-                              color:
-                                  theme.colorScheme.secondary.withOpacity(0.5)),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
+            if (widget.post.sharedData.contains('route') ||
+                widget.post.planId != null)
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    if (widget.post.sharedData.contains('route'))
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () =>
+                              _showFeatureComingSoon(context, "Reittikartta"),
+                          icon: const Icon(Icons.map_outlined),
+                          label: const Text('Reittikartta'),
+                          style: OutlinedButton.styleFrom(
+                            // Palautettu tyyli
+                            foregroundColor: theme.colorScheme.secondary,
+                            side: BorderSide(
+                                color: theme.colorScheme.secondary
+                                    .withOpacity(0.5)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                          ),
                         ),
                       ),
-                    ),
-                  if (widget.post.sharedData.contains('route') &&
-                      widget.post.planId != null)
-                    const SizedBox(width: 12), // Space between buttons
-                  if (widget.post.planId != null)
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () => _showFeatureComingSoon(
-                            context, "Kopioi suunnitelma"),
-                        icon: const Icon(Icons.copy_all_outlined),
-                        label: const Text('Kopioi suunnitelma'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: theme.colorScheme.primary,
-                          foregroundColor: theme.colorScheme.onPrimary,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
+                    if (widget.post.sharedData.contains('route') &&
+                        widget.post.planId != null)
+                      const SizedBox(width: 12),
+                    if (widget.post.planId != null)
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () => _showFeatureComingSoon(
+                              context, "Kopioi suunnitelma"),
+                          icon: const Icon(Icons.copy_all_outlined),
+                          label: const Text('Kopioi suunnitelma'),
+                          style: ElevatedButton.styleFrom(
+                            // Palautettu tyyli
+                            backgroundColor: theme.colorScheme.primary,
+                            foregroundColor: theme.colorScheme.onPrimary,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                          ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
-            ),
-
-            // Divider before actions
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Divider(
                   color: theme.colorScheme.onSurface.withOpacity(0.15),
                   height: 1),
             ),
-            const SizedBox(height: 8.0),
-
-            // Footer: Actions (Likes, Comments, Share), Timestamp
+            const SizedBox(height: 4.0),
             Padding(
-              padding: const EdgeInsets.fromLTRB(12.0, 0.0, 12.0, 12.0),
+              padding: const EdgeInsets.fromLTRB(12.0, 0.0, 12.0, 8.0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: <Widget>[
                   Row(
                     children: <Widget>[
                       _buildActionButton(
-                          context,
-                          widget.post.likes.contains('current_user_id')
-                              ? Icons.favorite
-                              : Icons
-                                  .favorite_border, // TODO: Replace with actual current user ID check
-                          widget.post.likes.length.toString(), () {
-                        _showFeatureComingSoon(context, "Like feature");
-                      }),
-                      const SizedBox(width: 16.0),
-                      _buildActionButton(context, Icons.chat_bubble_outline,
-                          widget.post.commentCount.toString(), () {
-                        // FIXED: Changed post.comments to post.commentCount
-                        _showFeatureComingSoon(context, "Comment feature");
-                      }),
-                      const SizedBox(width: 16.0),
-                      _buildActionButton(context, Icons.share_outlined, "Jaa",
-                          () {
-                        _showFeatureComingSoon(context, "Share feature");
-                      }),
+                        context,
+                        widget.post.likes
+                                .contains('current_user_id_placeholder')
+                            ? Icons.favorite
+                            : Icons.favorite_border,
+                        widget.post.likes.length.toString(),
+                        () {
+                          _showFeatureComingSoon(context, "Tykkäys");
+                        },
+                      ),
+                      const SizedBox(width: 12.0),
+                      _buildActionButton(
+                        context,
+                        Icons.chat_bubble_outline,
+                        widget.post.commentCount.toString(),
+                        () {
+                          _showFeatureComingSoon(context, "Kommentit");
+                        },
+                      ),
+                      const SizedBox(width: 12.0),
+                      _buildActionButton(
+                        context,
+                        Icons.share_outlined,
+                        "Jaa",
+                        () {
+                          _showFeatureComingSoon(context, "Jako");
+                        },
+                      ),
                     ],
                   ),
                   Text(
@@ -340,7 +341,6 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
-  // Helper for info chips (weight, calories)
   Widget _buildInfoChip(BuildContext context, IconData icon, String text) {
     final theme = Theme.of(context);
     return Container(
@@ -403,25 +403,31 @@ class _PostCardState extends State<PostCard> {
   String _getTimeAgo(DateTime dateTime) {
     final Duration diff = DateTime.now().difference(dateTime);
     if (diff.inDays > 7) {
-      // Ensure 'fi_FI' locale data is loaded for accurate formatting
-      return DateFormat('d.M.yyyy', 'fi_FI').format(dateTime);
+      try {
+        return DateFormat('d.M.yyyy', 'fi_FI').format(dateTime);
+      } catch (e) {
+        return DateFormat('dd/MM/yyyy').format(dateTime);
+      }
     } else if (diff.inDays >= 1) {
-      return '${diff.inDays} pv sitten';
+      return '${diff.inDays} pv';
     } else if (diff.inHours >= 1) {
-      return '${diff.inHours} t sitten';
+      return '${diff.inHours} t';
     } else if (diff.inMinutes >= 1) {
-      return '${diff.inMinutes} min sitten';
+      return '${diff.inMinutes} min';
     } else {
-      return 'Juuri nyt';
+      return 'Nyt';
     }
   }
 
   void _showFeatureComingSoon(BuildContext context, String featureName) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('$featureName ei ole vielä toteutettu.'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        duration: const Duration(seconds: 1),
+        content: Text('$featureName ei ole vielä käytössä.'),
+        backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        margin: const EdgeInsets.all(10),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
