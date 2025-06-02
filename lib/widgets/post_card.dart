@@ -1,18 +1,39 @@
-// lib/widgets/post_card.dart
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import '../models/post_model.dart';
+import 'package:intl/intl.dart'; // Import for DateFormat
+import 'package:intl/date_symbol_data_local.dart'; // Import for initializeDateFormatting
+import '../models/post_model.dart'; // Varmista, että Post-malli on tuotu
 
-class PostCard extends StatelessWidget {
+class PostCard extends StatefulWidget {
   final Post post;
 
   const PostCard({super.key, required this.post});
 
   @override
+  State<PostCard> createState() => _PostCardState();
+}
+
+class _PostCardState extends State<PostCard> {
+  @override
+  void initState() {
+    super.initState();
+    // Initialize date formatting for the 'fi_FI' locale
+    // This needs to be called once, typically at app startup or before using DateFormat for a specific locale.
+    // For this widget, calling it in initState is fine, but it's more efficient to do it globally if many widgets use it.
+    initializeDateFormatting('fi_FI', null).then((_) {
+      if (mounted) {
+        setState(
+            () {}); // Trigger a rebuild if formatting initializes after build
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
-    final timeAgo = _getTimeAgo(post.timestamp);
+    final timeAgo = _getTimeAgo(widget.post.timestamp);
+    final hikeDuration =
+        '${widget.post.nights} yö${widget.post.nights != 1 ? 'tä' : ''}'; // Esim. "3 yötä"
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
@@ -46,7 +67,7 @@ class PostCard extends StatelessWidget {
                 children: <Widget>[
                   CircleAvatar(
                     radius: 24,
-                    backgroundImage: NetworkImage(post.userAvatarUrl),
+                    backgroundImage: NetworkImage(widget.post.userAvatarUrl),
                     backgroundColor:
                         theme.colorScheme.secondary.withOpacity(0.5),
                   ),
@@ -56,14 +77,14 @@ class PostCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          post.username,
+                          widget.post.username,
                           style: textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                             color: theme.colorScheme.onSurface,
                             fontSize: 17,
                           ),
                         ),
-                        if (post.location.isNotEmpty)
+                        if (widget.post.location.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(top: 2.0),
                             child: Row(
@@ -73,7 +94,7 @@ class PostCard extends StatelessWidget {
                                     color: theme.colorScheme.secondary),
                                 const SizedBox(width: 4),
                                 Text(
-                                  post.location,
+                                  widget.post.location,
                                   style: textTheme.bodySmall?.copyWith(
                                     color: theme.colorScheme.onSurface
                                         .withOpacity(0.7),
@@ -98,11 +119,12 @@ class PostCard extends StatelessWidget {
             ),
 
             // Post Image (if available)
-            if (post.postImageUrl != null && post.postImageUrl!.isNotEmpty)
+            if (widget.post.postImageUrl != null &&
+                widget.post.postImageUrl!.isNotEmpty)
               AspectRatio(
                 aspectRatio: 16 / 9,
                 child: Image.network(
-                  post.postImageUrl!,
+                  widget.post.postImageUrl!,
                   fit: BoxFit.cover,
                   loadingBuilder: (BuildContext context, Widget child,
                       ImageChunkEvent? loadingProgress) {
@@ -125,20 +147,89 @@ class PostCard extends StatelessWidget {
                   ),
                 ),
               ),
-            if (post.postImageUrl != null && post.postImageUrl!.isNotEmpty)
+            if (widget.post.postImageUrl != null &&
+                widget.post.postImageUrl!.isNotEmpty)
               const SizedBox(height: 12.0),
 
-            // Caption
+            // NEW: Post Title
             Padding(
               padding: EdgeInsets.fromLTRB(
                   16.0,
-                  post.postImageUrl != null && post.postImageUrl!.isNotEmpty
+                  widget.post.postImageUrl != null &&
+                          widget.post.postImageUrl!.isNotEmpty
                       ? 0.0
                       : 12.0,
                   16.0,
-                  12.0),
+                  4.0),
               child: Text(
-                post.caption,
+                widget.post.title,
+                style: textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onSurface,
+                  fontSize: 20,
+                ),
+              ),
+            ),
+
+            // NEW: Dates, Distance, Nights
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+              child: Row(
+                children: [
+                  Icon(Icons.calendar_today_outlined,
+                      size: 16, color: theme.colorScheme.secondary),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${DateFormat('d.M.yyyy').format(widget.post.startDate)} - ${DateFormat('d.M.yyyy').format(widget.post.endDate)}',
+                    style: textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withOpacity(0.8),
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Icon(Icons.hiking_outlined,
+                      size: 18, color: theme.colorScheme.secondary),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${widget.post.distanceKm.toStringAsFixed(1)} km, $hikeDuration',
+                    style: textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withOpacity(0.8),
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // NEW: Optional shared data (Weight, Calories)
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+              child: Wrap(
+                spacing: 12.0, // horizontal space between chips
+                runSpacing: 4.0, // vertical space between lines of chips
+                children: [
+                  if (widget.post.sharedData.contains('packing') &&
+                      widget.post.weightKg != null)
+                    _buildInfoChip(context, Icons.backpack_outlined,
+                        '${widget.post.weightKg!.toStringAsFixed(1)} kg'),
+                  if (widget.post.sharedData.contains('food') &&
+                      widget.post.caloriesPerDay != null)
+                    _buildInfoChip(context, Icons.restaurant_menu_outlined,
+                        '${widget.post.caloriesPerDay!.round()} kcal/pv'),
+                  // Add more shared data chips here if needed, e.g., 'route' for a map button
+                ],
+              ),
+            ),
+
+            // Caption
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16.0, 12.0, 16.0, 12.0),
+              child: Text(
+                widget.post.caption.isNotEmpty
+                    ? widget.post.caption
+                    : 'Ei lisäkommenttia tähän vaellukseen.',
                 style: textTheme.bodyLarge?.copyWith(
                   color: theme.colorScheme.onSurface.withOpacity(0.95),
                   fontSize: 16,
@@ -146,6 +237,55 @@ class PostCard extends StatelessWidget {
                 ),
               ),
             ),
+
+            // NEW: Action buttons for "Route Map" and "Copy Plan"
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  if (widget.post.sharedData.contains('route'))
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () =>
+                            _showFeatureComingSoon(context, "Reittikartta"),
+                        icon: const Icon(Icons.map_outlined),
+                        label: const Text('Reittikartta'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: theme.colorScheme.secondary,
+                          side: BorderSide(
+                              color:
+                                  theme.colorScheme.secondary.withOpacity(0.5)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                      ),
+                    ),
+                  if (widget.post.sharedData.contains('route') &&
+                      widget.post.planId != null)
+                    const SizedBox(width: 12), // Space between buttons
+                  if (widget.post.planId != null)
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _showFeatureComingSoon(
+                            context, "Kopioi suunnitelma"),
+                        icon: const Icon(Icons.copy_all_outlined),
+                        label: const Text('Kopioi suunnitelma'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: theme.colorScheme.primary,
+                          foregroundColor: theme.colorScheme.onPrimary,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
             // Divider before actions
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -164,17 +304,22 @@ class PostCard extends StatelessWidget {
                   Row(
                     children: <Widget>[
                       _buildActionButton(
-                          context, Icons.favorite_border, post.likes.toString(),
-                          () {
+                          context,
+                          widget.post.likes.contains('current_user_id')
+                              ? Icons.favorite
+                              : Icons
+                                  .favorite_border, // TODO: Replace with actual current user ID check
+                          widget.post.likes.length.toString(), () {
                         _showFeatureComingSoon(context, "Like feature");
                       }),
                       const SizedBox(width: 16.0),
                       _buildActionButton(context, Icons.chat_bubble_outline,
-                          post.comments.toString(), () {
+                          widget.post.commentCount.toString(), () {
+                        // FIXED: Changed post.comments to post.commentCount
                         _showFeatureComingSoon(context, "Comment feature");
                       }),
                       const SizedBox(width: 16.0),
-                      _buildActionButton(context, Icons.share_outlined, "Share",
+                      _buildActionButton(context, Icons.share_outlined, "Jaa",
                           () {
                         _showFeatureComingSoon(context, "Share feature");
                       }),
@@ -191,6 +336,33 @@ class PostCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // Helper for info chips (weight, calories)
+  Widget _buildInfoChip(BuildContext context, IconData icon, String text) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8.0),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: theme.colorScheme.primary),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -231,22 +403,23 @@ class PostCard extends StatelessWidget {
   String _getTimeAgo(DateTime dateTime) {
     final Duration diff = DateTime.now().difference(dateTime);
     if (diff.inDays > 7) {
-      return DateFormat('d MMM', 'en_US').format(dateTime);
+      // Ensure 'fi_FI' locale data is loaded for accurate formatting
+      return DateFormat('d.M.yyyy', 'fi_FI').format(dateTime);
     } else if (diff.inDays >= 1) {
-      return '${diff.inDays}d ago';
+      return '${diff.inDays} pv sitten';
     } else if (diff.inHours >= 1) {
-      return '${diff.inHours}h ago';
+      return '${diff.inHours} t sitten';
     } else if (diff.inMinutes >= 1) {
-      return '${diff.inMinutes} min ago';
+      return '${diff.inMinutes} min sitten';
     } else {
-      return 'Just now';
+      return 'Juuri nyt';
     }
   }
 
   void _showFeatureComingSoon(BuildContext context, String featureName) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('$featureName is not implemented yet.'),
+        content: Text('$featureName ei ole vielä toteutettu.'),
         backgroundColor: Theme.of(context).colorScheme.primary,
         duration: const Duration(seconds: 1),
       ),

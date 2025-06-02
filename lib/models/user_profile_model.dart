@@ -110,6 +110,7 @@ class UserProfile {
   Map<String, dynamic> stats;
   List<Achievement> achievements;
   List<Sticker> stickers;
+  List<String> friends; // UUSI: Lista ystävien UID:stä
 
   UserProfile({
     required this.uid,
@@ -122,13 +123,20 @@ class UserProfile {
     this.stats = const {},
     this.achievements = const [],
     this.stickers = const [],
+    this.friends = const [], // Alustetaan tyhjällä listalla
   });
 
   factory UserProfile.fromFirestore(Map<String, dynamic> data, String uid) {
+    // Varmista, että 'name' (displayName) on oikea kenttä, jos 'displayName' puuttuu
+    // Firestore-skeemasi näytti aiemmin käyttävän 'name' displayNameksi,
+    // joten huomioidaan se tässä.
+    final String retrievedDisplayName =
+        data['displayName'] ?? data['name'] ?? '';
+
     return UserProfile(
       uid: uid,
       username: data['username'] ?? '',
-      displayName: data['name'] ?? '',
+      displayName: retrievedDisplayName,
       email: data['email'] ?? '',
       photoURL: data['photoURL'],
       bio: data['bio'],
@@ -144,13 +152,14 @@ class UserProfile {
                   Map<String, dynamic>.from(s), s['id'] ?? ''))
               .toList() ??
           [],
+      friends: List<String>.from(data['friends'] ?? []), // Hae friends-lista
     );
   }
 
   Map<String, dynamic> toFirestore() {
     return {
       'username': username,
-      'displayName': displayName,
+      'displayName': displayName, // Varmista, että käytät 'displayName' tässä
       'email': email,
       'photoURL': photoURL,
       'bio': bio,
@@ -158,10 +167,13 @@ class UserProfile {
       'stats': stats,
       'achievements': achievements.map((a) => a.toFirestore()).toList(),
       'stickers': stickers.map((s) => s.toFirestore()).toList(),
+      'friends': friends, // Tallenna friends-lista
     };
   }
 
+  // Lisää myös UID copyWith-metodiin varmuuden vuoksi, jos sitä tarvittaisiin
   UserProfile copyWith({
+    String? uid,
     String? username,
     String? displayName,
     String? email,
@@ -171,9 +183,10 @@ class UserProfile {
     Map<String, dynamic>? stats,
     List<Achievement>? achievements,
     List<Sticker>? stickers,
+    List<String>? friends,
   }) {
     return UserProfile(
-      uid: uid,
+      uid: uid ?? this.uid,
       username: username ?? this.username,
       displayName: displayName ?? this.displayName,
       email: email ?? this.email,
@@ -183,6 +196,7 @@ class UserProfile {
       stats: stats ?? this.stats,
       achievements: achievements ?? this.achievements,
       stickers: stickers ?? this.stickers,
+      friends: friends ?? this.friends,
     );
   }
 }

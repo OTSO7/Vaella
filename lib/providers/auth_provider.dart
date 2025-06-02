@@ -64,6 +64,7 @@ class AuthProvider with ChangeNotifier {
             },
             achievements: [],
             stickers: [],
+            friends: [], // UUSI: Alusta tyhjällä friends-listalla
           );
           await _firestore
               .collection('users')
@@ -187,6 +188,7 @@ class AuthProvider with ChangeNotifier {
           },
           achievements: [],
           stickers: [],
+          friends: [], // UUSI: Alusta tyhjällä friends-listalla
         );
         await _firestore
             .collection('users')
