@@ -1,12 +1,15 @@
+// lib/widgets/hike_plan_card.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../models/hike_plan_model.dart';
+import '../models/hike_plan_model.dart'; // Varmista, että PrepItemKeys on tässä tai HikePlanModelissa
 
 class HikePlanCard extends StatelessWidget {
   final HikePlan plan;
   final VoidCallback? onTap;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
+  final Function(HikePlan)?
+      onUpdatePreparation; // UUSI: Callback valmistautumisen päivitykseen
 
   const HikePlanCard({
     super.key,
@@ -14,207 +17,238 @@ class HikePlanCard extends StatelessWidget {
     this.onTap,
     this.onEdit,
     this.onDelete,
+    this.onUpdatePreparation, // UUSI
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
-    final dateFormat = DateFormat('d.M.yyyy', 'en_US');
+    late DateFormat dateFormat;
+    try {
+      dateFormat =
+          DateFormat('d.M.yyyy', 'fi_FI'); // Käytetään suomalaista muotoilua
+    } catch (e) {
+      dateFormat = DateFormat('d.M.yyyy'); // Fallback
+    }
+
     String dateText = dateFormat.format(plan.startDate);
-    if (plan.endDate != null && plan.endDate != plan.startDate) {
-      dateText += ' - ${dateFormat.format(plan.endDate!)}';
-    }
-
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-
-    HikeStatus status;
-    if (plan.status == HikeStatus.cancelled) {
-      status = HikeStatus.cancelled;
-    } else if (plan.endDate != null) {
-      final end =
-          DateTime(plan.endDate!.year, plan.endDate!.month, plan.endDate!.day);
-      if (today.isAfter(end)) {
-        status = HikeStatus.completed;
+    if (plan.endDate != null &&
+        plan.endDate!.isAtSameMomentAs(plan.startDate) == false) {
+      // Varmistetaan, ettei ole sama päivä
+      if (plan.endDate!.year == plan.startDate.year &&
+          plan.endDate!.month == plan.startDate.month) {
+        dateText +=
+            ' - ${DateFormat('d', 'fi_FI').format(plan.endDate!)}.${DateFormat('M.yyyy', 'fi_FI').format(plan.endDate!)}'; // Esim. 5. - 7.8.2025
+      } else if (plan.endDate!.year == plan.startDate.year) {
+        dateText +=
+            ' - ${DateFormat('d.M', 'fi_FI').format(plan.endDate!)}.${DateFormat('.yyyy', 'fi_FI').format(plan.endDate!)}'; // Esim. 5.8. - 10.9.2025
       } else {
-        status = HikeStatus.upcoming;
-      }
-    } else {
-      // No end date, treat as single day hike
-      final start = DateTime(
-          plan.startDate.year, plan.startDate.month, plan.startDate.day);
-      if (today.isAfter(start)) {
-        status = HikeStatus.completed;
-      } else {
-        status = HikeStatus.upcoming;
+        dateText +=
+            ' - ${dateFormat.format(plan.endDate!)}'; // Esim. 5.8.2025 - 10.1.2026
       }
     }
+
+    // Käytetään modelin laskemaa statusta
+    final HikeStatus displayStatus = plan.status;
 
     Color statusColor;
     IconData statusIcon;
     String statusLabel;
-    switch (status) {
+
+    switch (displayStatus) {
       case HikeStatus.upcoming:
         statusColor = theme.colorScheme.secondary;
-        statusIcon = Icons.access_time_outlined;
-        statusLabel = 'Upcoming';
+        statusIcon = Icons.access_time_filled_rounded;
+        statusLabel = 'Tulossa';
         break;
       case HikeStatus.completed:
         statusColor = Colors.green.shade600;
-        statusIcon = Icons.check_circle_outline;
-        statusLabel = 'Completed hike';
+        statusIcon = Icons.check_circle_rounded;
+        statusLabel = 'Tehty';
         break;
       case HikeStatus.cancelled:
         statusColor = Colors.red.shade400;
-        statusIcon = Icons.cancel_outlined;
-        statusLabel = 'Cancelled';
+        statusIcon = Icons.cancel_rounded;
+        statusLabel = 'Peruttu';
         break;
-      default:
+      default: // planned
         statusColor = Colors.blueGrey.shade400;
-        statusIcon = Icons.pending_actions_outlined;
-        statusLabel = 'Planned';
+        statusIcon = Icons.edit_calendar_outlined;
+        statusLabel = 'Suunniteltu';
         break;
     }
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(18.0),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-            spreadRadius: 0,
-          ),
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-            spreadRadius: 0,
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(18.0),
-          splashColor: theme.colorScheme.primary.withOpacity(0.1),
-          highlightColor: theme.colorScheme.primary.withOpacity(0.05),
-          child: Padding(
-            padding: const EdgeInsets.all(18.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        plan.hikeName,
-                        style: textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 22,
-                          color: theme.colorScheme.onSurface,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+    int completedItems = plan.completedPreparationItems;
+    int totalItems = plan.totalPreparationItems;
+    double progress = totalItems > 0 ? completedItems / totalItems : 0;
+
+    return Card(
+      elevation: 3.0,
+      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.0)),
+      color: theme.cardColor,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16.0),
+        splashColor: theme.colorScheme.primary.withOpacity(0.1),
+        highlightColor: theme.colorScheme.primary.withOpacity(0.05),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      plan.hikeName,
+                      style: textTheme.titleLarge?.copyWith(
+                        fontWeight:
+                            FontWeight.w700, // Hieman kevyempi kuin aiempi w800
+                        fontSize: 20, // Hieman pienempi
+                        color: theme.colorScheme.onSurface,
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    if (onEdit != null || onDelete != null)
-                      PopupMenuButton<String>(
-                        onSelected: (value) {
-                          if (value == 'edit' && onEdit != null) {
-                            onEdit!();
-                          } else if (value == 'delete' && onDelete != null) {
-                            onDelete!();
-                          }
-                        },
+                  ),
+                  if (onEdit != null || onDelete != null)
+                    SizedBox(
+                      // SizedBox rajoittaa PopupMenuButtonin kokoa
+                      width: 36,
+                      height: 36,
+                      child: PopupMenuButton<String>(
+                        icon: Icon(Icons.more_vert_rounded,
+                            color:
+                                theme.colorScheme.onSurface.withOpacity(0.7)),
+                        iconSize: 22,
+                        tooltip: 'Lisävalinnat',
+                        padding: EdgeInsets.zero,
                         itemBuilder: (BuildContext context) =>
                             <PopupMenuEntry<String>>[
                           if (onEdit != null)
                             const PopupMenuItem<String>(
                               value: 'edit',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.edit_outlined),
-                                  SizedBox(width: 8),
-                                  Text('Edit'),
-                                ],
-                              ),
+                              child: Row(children: [
+                                Icon(Icons.edit_outlined, size: 20),
+                                SizedBox(width: 8),
+                                Text('Muokkaa')
+                              ]),
                             ),
                           if (onDelete != null)
                             PopupMenuItem<String>(
                               value: 'delete',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.delete_outline, color: Colors.red),
-                                  SizedBox(width: 8),
-                                  Text('Delete',
-                                      style: TextStyle(color: Colors.red)),
-                                ],
-                              ),
+                              child: Row(children: [
+                                Icon(Icons.delete_outline_rounded,
+                                    color: Colors.red, size: 20),
+                                SizedBox(width: 8),
+                                Text('Poista',
+                                    style: TextStyle(color: Colors.red))
+                              ]),
                             ),
                         ],
-                        icon: Icon(Icons.more_vert,
-                            color:
-                                theme.colorScheme.onSurface.withOpacity(0.7)),
-                        tooltip: 'More options',
+                        onSelected: (value) {
+                          if (value == 'edit' && onEdit != null)
+                            onEdit!();
+                          else if (value == 'delete' && onDelete != null)
+                            onDelete!();
+                        },
                       ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                _buildInfoRow(theme, Icons.calendar_today_outlined, dateText),
-                const SizedBox(height: 8),
-                _buildInfoRow(theme, Icons.location_on_outlined, plan.location),
-                if (plan.lengthKm != null) ...[
-                  const SizedBox(height: 8),
-                  _buildInfoRow(theme, Icons.directions_walk_outlined,
-                      '${plan.lengthKm?.toStringAsFixed(1)} km'),
-                ],
-                if (plan.notes != null && plan.notes!.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Divider(color: theme.colorScheme.onSurface.withOpacity(0.1)),
-                  const SizedBox(height: 12),
-                  Text('Notes:',
-                      style: textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.onSurface.withOpacity(0.8))),
-                  const SizedBox(height: 6),
-                  Text(
-                    plan.notes!,
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurface.withOpacity(0.8),
-                      height: 1.5,
                     ),
-                    maxLines: 4,
-                    overflow: TextOverflow.ellipsis,
-                  ),
                 ],
-                const SizedBox(height: 16),
-                _buildStatusBadge(theme, statusColor, statusIcon, statusLabel),
+              ),
+              const SizedBox(height: 10),
+              _buildInfoRow(theme, Icons.calendar_today_outlined, dateText,
+                  iconColor: theme.colorScheme.primary),
+              const SizedBox(height: 6),
+              _buildInfoRow(theme, Icons.location_on_outlined, plan.location,
+                  iconColor: theme.colorScheme.primary),
+              if (plan.lengthKm != null && plan.lengthKm! > 0) ...[
+                const SizedBox(height: 6),
+                _buildInfoRow(theme, Icons.directions_walk_outlined,
+                    '${plan.lengthKm?.toStringAsFixed(1)} km',
+                    iconColor: theme.colorScheme.primary),
               ],
-            ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Flexible(
+                      child: _buildStatusBadge(
+                          theme, statusColor, statusIcon, statusLabel)),
+                  if (onUpdatePreparation != null &&
+                      displayStatus != HikeStatus.completed &&
+                      displayStatus !=
+                          HikeStatus
+                              .cancelled) // Näytä vain jos ei valmis/peruttu
+                    TextButton.icon(
+                      icon: Icon(Icons.checklist_rtl_outlined,
+                          size: 18, color: theme.colorScheme.secondary),
+                      label: Text(
+                        '$completedItems/$totalItems tehty',
+                        style: textTheme.labelMedium?.copyWith(
+                            color: theme.colorScheme.secondary,
+                            fontWeight: FontWeight.w600),
+                      ),
+                      onPressed: () => onUpdatePreparation!(plan),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                      ),
+                    )
+                ],
+              ),
+              if (displayStatus != HikeStatus.completed &&
+                  displayStatus != HikeStatus.cancelled &&
+                  totalItems > 0) ...[
+                const SizedBox(height: 8),
+                LinearProgressIndicator(
+                  value: progress,
+                  backgroundColor:
+                      theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                      statusColor.withOpacity(0.8)),
+                  minHeight: 6, // Hieman paksumpi
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  completedItems == totalItems
+                      ? "Valmiina lähtöön!"
+                      : "Valmistautuminen kesken",
+                  style: textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withOpacity(0.7)),
+                )
+              ]
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildInfoRow(ThemeData theme, IconData icon, String text) {
+  Widget _buildInfoRow(ThemeData theme, IconData icon, String text,
+      {Color? iconColor}) {
     return Row(
+      crossAxisAlignment:
+          CrossAxisAlignment.start, // Tasaus ylhäältä, jos teksti rivittyy
       children: [
-        Icon(icon, size: 20, color: theme.colorScheme.primary),
+        Icon(icon,
+            size: 18,
+            color: iconColor ?? theme.colorScheme.primary.withOpacity(0.8)),
         const SizedBox(width: 10),
         Expanded(
           child: Text(
             text,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.9),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurface.withOpacity(0.85),
+              height: 1.3,
             ),
           ),
         ),
@@ -227,20 +261,20 @@ class HikePlanCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color, width: 1),
+        color: color.withOpacity(0.15), // Hieman vahvempi tausta
+        borderRadius: BorderRadius.circular(20), // Pyöreät kulmat
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: color),
+          Icon(icon, size: 15, color: color),
           const SizedBox(width: 6),
           Text(
             label,
             style: theme.textTheme.bodySmall?.copyWith(
               color: color,
               fontWeight: FontWeight.bold,
+              fontSize: 11.5,
             ),
           ),
         ],
