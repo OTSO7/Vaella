@@ -1,10 +1,9 @@
-// lib/widgets/achievement_grid.dart
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // For date formatting
+import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
 
-enum BadgeType { achievement, sticker }
-
-// Simple Achievement class as a model:
+// This local Achievement class is used by the widget.
+// The ProfilePage maps data to this.
 class Achievement {
   final String title;
   final String description;
@@ -36,11 +35,14 @@ class AchievementGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final textTheme = theme.textTheme;
 
+    // Empty state is now handled in ProfilePage, so this check might be redundant
+    // if ProfilePage doesn't render this widget when achievements are empty.
+    // However, keeping it provides a fallback.
     if (achievements.isEmpty) {
+      // This part can be removed if ProfilePage's _buildEmptySectionPlaceholder is always used.
       return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 24.0),
+        padding: const EdgeInsets.symmetric(vertical: 32.0, horizontal: 24.0),
         child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -49,17 +51,18 @@ class AchievementGrid extends StatelessWidget {
                 isStickerGrid
                     ? Icons.collections_bookmark_outlined
                     : Icons.emoji_events_outlined,
-                size: 60,
-                color: theme.colorScheme.onSurface.withOpacity(0.4),
+                size: 50,
+                color: theme.hintColor.withOpacity(0.5),
               ),
               const SizedBox(height: 12),
               Text(
                 isStickerGrid
-                    ? 'No national park badges collected yet.'
-                    : 'No achievements yet. Go explore!',
+                    ? 'No badges collected yet.'
+                    : 'No achievements earned yet.',
                 textAlign: TextAlign.center,
-                style: textTheme.titleMedium?.copyWith(
-                  color: theme.colorScheme.onSurface.withOpacity(0.6),
+                style: GoogleFonts.lato(
+                  fontSize: 16,
+                  color: theme.hintColor.withOpacity(0.7),
                 ),
               ),
             ],
@@ -69,49 +72,71 @@ class AchievementGrid extends StatelessWidget {
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 12.0),
+      padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 20.0),
       child: GridView.builder(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: isStickerGrid ? 4 : 3,
-          crossAxisSpacing: 10.0,
-          mainAxisSpacing: 10.0,
-          childAspectRatio: 1.0,
+          crossAxisSpacing: isStickerGrid ? 10.0 : 12.0,
+          mainAxisSpacing: isStickerGrid ? 10.0 : 12.0,
+          childAspectRatio:
+              isStickerGrid ? 1.0 : 0.9, // Adjust for better text fit
         ),
         itemCount: achievements.length,
         itemBuilder: (context, index) {
           final item = achievements[index];
           return InkWell(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16), // Consistent rounding
             onTap: () {
               showDialog(
                 context: context,
                 builder: (context) => AlertDialog(
-                  backgroundColor: theme.cardColor,
+                  backgroundColor:
+                      theme.dialogBackgroundColor, // Use dialog theme color
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16)),
+                      borderRadius:
+                          BorderRadius.circular(20)), // More rounded dialog
+                  titlePadding: const EdgeInsets.only(top: 24, bottom: 0),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                  actionsPadding: const EdgeInsets.only(right: 16, bottom: 12),
                   title: Column(
                     children: [
                       if (item.imageUrl != null && item.imageUrl!.isNotEmpty)
-                        Image.network(
-                          item.imageUrl!,
-                          width: 80,
-                          height: 80,
-                          fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) => Icon(
-                              Icons.image_not_supported_outlined,
-                              size: 60,
-                              color: Colors.grey[600]),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.network(
+                            item.imageUrl!,
+                            width: 70,
+                            height: 70,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) => Icon(
+                                Icons.broken_image_outlined,
+                                size: 60,
+                                color: theme.hintColor),
+                          ),
                         )
                       else if (item.icon != null)
-                        Icon(item.icon,
-                            size: 60,
-                            color: item.iconColor ?? theme.colorScheme.primary),
-                      const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: (item.iconColor ?? theme.colorScheme.primary)
+                                .withOpacity(0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(item.icon,
+                              size: 40,
+                              color:
+                                  item.iconColor ?? theme.colorScheme.primary),
+                        ),
+                      const SizedBox(height: 16),
                       Text(item.title,
                           textAlign: TextAlign.center,
-                          style: textTheme.titleLarge),
+                          style: GoogleFonts.poppins(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.onSurface)),
                     ],
                   ),
                   content: Column(
@@ -120,23 +145,28 @@ class AchievementGrid extends StatelessWidget {
                     children: [
                       Text(item.description,
                           textAlign: TextAlign.center,
-                          style: textTheme.bodyMedium),
-                      const SizedBox(height: 8),
-                      if (item.dateAchieved != null)
+                          style: GoogleFonts.lato(
+                              fontSize: 15,
+                              color: theme.colorScheme.onSurfaceVariant)),
+                      if (item.dateAchieved != null) ...[
+                        const SizedBox(height: 12),
                         Text(
-                          'Achieved: ${DateFormat('d.M.yyyy', 'en_US').format(item.dateAchieved!)}',
-                          style: textTheme.bodySmall?.copyWith(
-                              color:
-                                  theme.colorScheme.onSurface.withOpacity(0.6)),
+                          'Achieved: ${DateFormat('d MMM yyyy', Localizations.localeOf(context).languageCode).format(item.dateAchieved!)}',
+                          style: GoogleFonts.lato(
+                              fontSize: 12,
+                              color: theme.colorScheme.onSurfaceVariant
+                                  .withOpacity(0.7)),
                         ),
+                      ]
                     ],
                   ),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.of(context).pop(),
                       child: Text('Close',
-                          style: textTheme.labelLarge
-                              ?.copyWith(color: theme.colorScheme.secondary)),
+                          style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w500,
+                              color: theme.colorScheme.primary)),
                     )
                   ],
                 ),
@@ -144,52 +174,63 @@ class AchievementGrid extends StatelessWidget {
             },
             child: Container(
               decoration: BoxDecoration(
-                color: theme.cardColor.withOpacity(0.8),
-                borderRadius: BorderRadius.circular(12),
+                color: theme.cardColor,
+                borderRadius: BorderRadius.circular(16), // Increased rounding
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 5,
-                    offset: const Offset(0, 3),
+                    color: theme.shadowColor.withOpacity(0.08), // Softer shadow
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
                   ),
                 ],
               ),
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(10), // Adjusted padding
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  if (item.imageUrl != null && item.imageUrl!.isNotEmpty)
-                    Image.network(
-                      item.imageUrl!,
-                      width: isStickerGrid ? 50 : 40,
-                      height: isStickerGrid ? 50 : 40,
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) => Icon(
-                          Icons.image_not_supported_outlined,
-                          size: isStickerGrid ? 50 : 40,
-                          color: Colors.grey[600]),
-                    )
-                  else if (item.icon != null)
-                    Icon(
-                      item.icon,
-                      size: isStickerGrid ? 40 : 32,
-                      color: item.iconColor ?? theme.colorScheme.primary,
-                    )
-                  else
-                    Icon(
-                      Icons.emoji_events_outlined,
-                      size: isStickerGrid ? 40 : 32,
-                      color: Colors.grey[600],
+                  Expanded(
+                    flex: 3,
+                    child: Padding(
+                      padding: const EdgeInsets.all(
+                          4.0), // Padding around icon/image
+                      child: (item.imageUrl != null &&
+                              item.imageUrl!.isNotEmpty)
+                          ? ClipRRect(
+                              borderRadius:
+                                  BorderRadius.circular(8), // Rounded images
+                              child: Image.network(
+                                item.imageUrl!,
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Icon(Icons.broken_image_outlined,
+                                        size: isStickerGrid ? 40 : 32,
+                                        color:
+                                            theme.hintColor.withOpacity(0.6)),
+                              ),
+                            )
+                          : Icon(
+                              item.icon ?? Icons.emoji_events_outlined,
+                              size: isStickerGrid ? 36 : 30,
+                              color: item.iconColor ??
+                                  theme.colorScheme.secondary.withOpacity(0.8),
+                            ),
                     ),
-                  const SizedBox(height: 4),
-                  Text(
-                    item.title,
-                    textAlign: TextAlign.center,
-                    style: textTheme.bodySmall?.copyWith(
-                        fontSize: 10,
-                        color: theme.colorScheme.onSurface.withOpacity(0.9)),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      item.title,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.lato(
+                          fontSize: isStickerGrid ? 10 : 11.5,
+                          fontWeight: FontWeight.w500, // Slightly bolder title
+                          color: theme.colorScheme.onSurface.withOpacity(0.85),
+                          height: 1.2),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ],
               ),
