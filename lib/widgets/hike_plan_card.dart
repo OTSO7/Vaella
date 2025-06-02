@@ -168,7 +168,7 @@ class HikePlanCard extends StatelessWidget {
                               child: Row(children: [
                                 Icon(Icons.delete_outline_rounded,
                                     color: theme.colorScheme.error, size: 20),
-                                SizedBox(width: 10),
+                                const SizedBox(width: 10),
                                 Text('Poista',
                                     style: TextStyle(
                                         color: theme.colorScheme.error))
@@ -176,9 +176,9 @@ class HikePlanCard extends StatelessWidget {
                             ),
                         ],
                         onSelected: (value) {
-                          if (value == 'edit' && onEdit != null)
+                          if (value == 'edit' && onEdit != null) {
                             onEdit!();
-                          else if (value == 'delete' && onDelete != null)
+                          } else if (value == 'delete' && onDelete != null)
                             onDelete!();
                         },
                       ),

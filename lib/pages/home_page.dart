@@ -76,8 +76,9 @@ class _HomePageState extends State<HomePage> {
             snapshot.docs.map((doc) => Post.fromFirestore(doc)).toList())
         .map((allPosts) => allPosts.where((post) {
               if (post.visibility == PostVisibility.public) return true;
-              if (post.visibility == PostVisibility.private)
+              if (post.visibility == PostVisibility.private) {
                 return post.userId == currentUserProfile.uid;
+              }
               if (post.visibility == PostVisibility.friends) {
                 return post.userId == currentUserProfile.uid ||
                     (currentUserProfile.friends.contains(post.userId));
@@ -243,7 +244,7 @@ class _HomePageState extends State<HomePage> {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                        content: Text('Sivun avaaminen epäonnistui.'),
+                        content: const Text('Sivun avaaminen epäonnistui.'),
                         backgroundColor: theme.colorScheme.error),
                   );
                 }

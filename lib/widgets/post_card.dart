@@ -123,7 +123,7 @@ class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
               radius: 20,
               backgroundImage:
                   CachedNetworkImageProvider(widget.post.userAvatarUrl),
-              backgroundColor: theme.colorScheme.surfaceVariant,
+              backgroundColor: theme.colorScheme.surfaceContainerHighest,
             ),
           ),
           const SizedBox(width: 12.0),
@@ -203,7 +203,7 @@ class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
           fit: BoxFit.cover, // Peittää koko alueen
           placeholder: (context, url) => Container(
             height: 250, // Placeholderin korkeus
-            color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+            color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
             child: Center(
                 child: CircularProgressIndicator(
                     strokeWidth: 2, color: theme.colorScheme.secondary)),

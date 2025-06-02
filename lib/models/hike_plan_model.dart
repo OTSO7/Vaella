@@ -123,9 +123,12 @@ class HikePlan {
         if (endDate != null &&
             DateTime(endDate.year, endDate.month, endDate.day).isBefore(
                 DateTime(DateTime.now().year, DateTime.now().month,
-                    DateTime.now().day))) return HikeStatus.completed;
-        if (startDate.isBefore(DateTime.now().add(const Duration(days: 1))))
+                    DateTime.now().day))) {
+          return HikeStatus.completed;
+        }
+        if (startDate.isBefore(DateTime.now().add(const Duration(days: 1)))) {
           return HikeStatus.upcoming;
+        }
         return HikeStatus.planned;
       }),
       latitude: (data['latitude'] as num?)?.toDouble(),

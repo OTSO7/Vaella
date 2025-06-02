@@ -101,7 +101,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
               surface: theme.scaffoldBackgroundColor,
               onSurface: theme.colorScheme.onSurface,
             ),
-            dialogBackgroundColor: theme.cardColor,
+            dialogTheme: DialogThemeData(backgroundColor: theme.cardColor),
           ),
           child: child!,
         );

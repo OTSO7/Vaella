@@ -319,7 +319,7 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
                 decoration: BoxDecoration(
                     gradient: LinearGradient(colors: [
                   theme.colorScheme.surface,
-                  theme.colorScheme.surfaceVariant
+                  theme.colorScheme.surfaceContainerHighest
                 ], begin: Alignment.topCenter, end: Alignment.bottomCenter)),
                 child: Icon(Icons.terrain_rounded,
                     size: 120,
@@ -716,7 +716,7 @@ class _CustomSliverAppBarDelegate extends SliverPersistentHeaderDelegate {
               decoration: BoxDecoration(
                   gradient: LinearGradient(colors: [
                 theme.colorScheme.surface,
-                theme.colorScheme.surfaceVariant
+                theme.colorScheme.surfaceContainerHighest
               ], begin: Alignment.topCenter, end: Alignment.bottomCenter)),
               child: Icon(Icons.terrain_rounded,
                   size: 100,

@@ -213,9 +213,10 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
               backgroundColor: Colors.redAccent),
         );
       }
-      if (mounted)
+      if (mounted) {
         setState(() =>
             _locationSuggestions = []); // Tyhjennä ehdotukset virheen sattuessa
+      }
     } finally {
       if (mounted) {
         // Varmista, että widget on yhä olemassa
@@ -519,8 +520,9 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
                     onChanged: (value) =>
                         _onLocationChanged(), // Kutsu listeneriä
                     validator: (value) {
-                      if (value == null || value.trim().isEmpty)
+                      if (value == null || value.trim().isEmpty) {
                         return 'Sijainti vaaditaan';
+                      }
                       // if (_latitude == null || _longitude == null) return 'Valitse sijainti ehdotuksista tai kartalta'; // Palauta, jos koordinaatit pakollisia
                       return null;
                     },
@@ -582,10 +584,12 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
                     validator: (value) {
                       if (value != null && value.trim().isNotEmpty) {
                         final val = value.trim().replaceAll(',', '.');
-                        if (double.tryParse(val) == null)
+                        if (double.tryParse(val) == null) {
                           return 'Anna kelvollinen numero';
-                        if (double.parse(val) < 0)
+                        }
+                        if (double.parse(val) < 0) {
                           return 'Pituuden tulee olla positiivinen';
+                        }
                       }
                       return null;
                     },

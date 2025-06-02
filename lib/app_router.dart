@@ -132,15 +132,11 @@ class AppRouter extends StatelessWidget {
         colorScheme: ColorScheme.dark(
           primary: Colors.teal.shade400,
           secondary: Colors.orange.shade400, // Kirkastettu hieman
-          surface: const Color(
-              0xFF2C2C2C), // Käytetään korttien ja dialogien taustana
-          background: const Color(0xFF1A1A1A), // Sovelluksen päätausta
+          surface: const Color(0xFF2C2C2C), // Sovelluksen päätausta
           error: Colors.redAccent.shade200,
           onPrimary: Colors.black, // Teksti/ikonit primary-värin päällä
           onSecondary: Colors.black, // Teksti/ikonit secondary-värin päällä
           onSurface: Colors.white
-              .withOpacity(0.9), // Teksti/ikonit surface-värin päällä
-          onBackground: Colors.white
               .withOpacity(0.9), // Teksti/ikonit background-värin päällä
           onError: Colors.white,
           outline: Colors.grey.shade700,
@@ -276,38 +272,40 @@ class AppRouter extends StatelessWidget {
           backgroundColor: const Color(0xFF2C2C2C), // Dialogin tausta
           headerBackgroundColor: Colors.teal.shade700,
           headerForegroundColor: Colors.white,
-          dayForegroundColor: MaterialStateProperty.resolveWith((states) {
-            if (states.contains(MaterialState.selected))
+          dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
               return Colors.white; // Valittu päivä teksti
-            if (states.contains(MaterialState.disabled))
+            }
+            if (states.contains(WidgetState.disabled)) {
               return Colors.grey.shade700;
+            }
             return Colors.white.withOpacity(0.8); // Normaalit päivät
           }),
-          dayBackgroundColor: MaterialStateProperty.resolveWith((states) {
-            if (states.contains(MaterialState.selected))
+          dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
               return Colors.teal.shade500; // Valittu päivä tausta
+            }
             return Colors.transparent;
           }),
-          todayForegroundColor:
-              MaterialStateProperty.all(Colors.orange.shade300),
+          todayForegroundColor: WidgetStateProperty.all(Colors.orange.shade300),
           todayBorder:
               BorderSide(color: Colors.orange.shade300.withOpacity(0.5)),
           yearForegroundColor:
-              MaterialStateProperty.all(Colors.white.withOpacity(0.8)),
+              WidgetStateProperty.all(Colors.white.withOpacity(0.8)),
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           elevation: 4,
         ),
         checkboxTheme: CheckboxThemeData(
-          fillColor: MaterialStateProperty.resolveWith((states) {
-            if (states.contains(MaterialState.selected)) {
+          fillColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
               return Colors.teal.shade400; // valitun checkboxin väri
             }
             return Colors
                 .transparent; // valitsemattoman checkboxin täyttöväri (tai reunaväri jos checkColor ei asetettu)
           }),
-          checkColor: MaterialStateProperty.all(Colors.black), // ruksin väri
-          overlayColor: MaterialStateProperty.all(Colors.teal.withOpacity(0.1)),
+          checkColor: WidgetStateProperty.all(Colors.black), // ruksin väri
+          overlayColor: WidgetStateProperty.all(Colors.teal.withOpacity(0.1)),
           side: BorderSide(
               color: Colors.white.withOpacity(0.4),
               width: 1.5), // checkboxin reunaviiva

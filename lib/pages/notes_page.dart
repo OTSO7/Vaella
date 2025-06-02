@@ -432,7 +432,7 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
               'Kirjaudu nähdäksesi suunnitelmasi!',
               textAlign: TextAlign.center,
               style: textTheme.headlineMedium?.copyWith(
-                color: theme.colorScheme.onBackground.withOpacity(0.9),
+                color: theme.colorScheme.onSurface.withOpacity(0.9),
                 fontWeight: FontWeight.w700,
                 fontSize: 28,
               ),
@@ -442,7 +442,7 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
               'Sinun tulee olla kirjautuneena sisään nähdäksesi ja hallitaksesi vaellussuunnitelmiasi.',
               textAlign: TextAlign.center,
               style: textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onBackground.withOpacity(0.7),
+                color: theme.colorScheme.onSurface.withOpacity(0.7),
                 height: 1.4,
               ),
             ),
@@ -485,7 +485,7 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
               customMessage ?? 'Seikkailusi odottaa!',
               textAlign: TextAlign.center,
               style: textTheme.headlineSmall?.copyWith(
-                color: theme.colorScheme.onBackground.withOpacity(0.85),
+                color: theme.colorScheme.onSurface.withOpacity(0.85),
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -499,7 +499,7 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
                       : 'Aloita luomalla uusi suunnitelma!'),
               textAlign: TextAlign.center,
               style: textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onBackground.withOpacity(0.65),
+                color: theme.colorScheme.onSurface.withOpacity(0.65),
                 height: 1.4,
               ),
             ),
