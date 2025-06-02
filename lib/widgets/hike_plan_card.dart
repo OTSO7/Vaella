@@ -8,8 +8,7 @@ class HikePlanCard extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
-  final Function(HikePlan)?
-      onUpdatePreparation; // UUSI: Callback valmistautumisen päivitykseen
+  final Function(HikePlan)? onUpdatePreparation;
 
   const HikePlanCard({
     super.key,
@@ -17,88 +16,102 @@ class HikePlanCard extends StatelessWidget {
     this.onTap,
     this.onEdit,
     this.onDelete,
-    this.onUpdatePreparation, // UUSI
+    this.onUpdatePreparation,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
-    late DateFormat dateFormat;
+    late DateFormat dateFormatShort; // Esim. 5.8. tai 5.8.25
+    late DateFormat dateFormatRange; // Esim. 5.-7.8.2025
+
     try {
-      dateFormat =
-          DateFormat('d.M.yyyy', 'fi_FI'); // Käytetään suomalaista muotoilua
+      dateFormatShort = DateFormat('d.M.yy', 'fi_FI');
+      dateFormatRange = DateFormat('d.M.yyyy', 'fi_FI');
     } catch (e) {
-      dateFormat = DateFormat('d.M.yyyy'); // Fallback
+      dateFormatShort = DateFormat('d.M.yy');
+      dateFormatRange = DateFormat('d.M.yyyy');
     }
 
-    String dateText = dateFormat.format(plan.startDate);
+    String dateDisplay;
     if (plan.endDate != null &&
         plan.endDate!.isAtSameMomentAs(plan.startDate) == false) {
-      // Varmistetaan, ettei ole sama päivä
+      // Jos päättymispäivä on eri kuin alkamispäivä
       if (plan.endDate!.year == plan.startDate.year &&
           plan.endDate!.month == plan.startDate.month) {
-        dateText +=
-            ' - ${DateFormat('d', 'fi_FI').format(plan.endDate!)}.${DateFormat('M.yyyy', 'fi_FI').format(plan.endDate!)}'; // Esim. 5. - 7.8.2025
+        dateDisplay =
+            '${DateFormat('d.', 'fi_FI').format(plan.startDate)} - ${DateFormat('d.M.yyyy', 'fi_FI').format(plan.endDate!)}'; // Esim. 5. - 7.elokuuta 2025
       } else if (plan.endDate!.year == plan.startDate.year) {
-        dateText +=
-            ' - ${DateFormat('d.M', 'fi_FI').format(plan.endDate!)}.${DateFormat('.yyyy', 'fi_FI').format(plan.endDate!)}'; // Esim. 5.8. - 10.9.2025
+        dateDisplay =
+            '${DateFormat('d.M.', 'fi_FI').format(plan.startDate)} - ${DateFormat('d.M.yyyy', 'fi_FI').format(plan.endDate!)}'; // Esim. 5.elokuuta - 10.syyskuuta 2025
       } else {
-        dateText +=
-            ' - ${dateFormat.format(plan.endDate!)}'; // Esim. 5.8.2025 - 10.1.2026
+        dateDisplay =
+            '${dateFormatRange.format(plan.startDate)} - ${dateFormatRange.format(plan.endDate!)}';
       }
+    } else {
+      // Yhden päivän vaellus tai vain alkupäivä tiedossa
+      dateDisplay = dateFormatRange.format(plan.startDate);
     }
 
-    // Käytetään modelin laskemaa statusta
     final HikeStatus displayStatus = plan.status;
-
     Color statusColor;
     IconData statusIcon;
     String statusLabel;
 
     switch (displayStatus) {
       case HikeStatus.upcoming:
-        statusColor = theme.colorScheme.secondary;
-        statusIcon = Icons.access_time_filled_rounded;
-        statusLabel = 'Tulossa';
+        statusColor = theme.colorScheme.secondary; // Kirkas oranssi/keltainen
+        statusIcon = Icons.directions_walk_rounded; // Selkeämpi ikoni tulevalle
+        statusLabel = 'Tulossa pian';
         break;
       case HikeStatus.completed:
-        statusColor = Colors.green.shade600;
-        statusIcon = Icons.check_circle_rounded;
-        statusLabel = 'Tehty';
+        statusColor = Colors.green.shade700; // Tummempi vihreä
+        statusIcon = Icons.check_circle_outline_rounded;
+        statusLabel = 'Suoritettu';
         break;
       case HikeStatus.cancelled:
-        statusColor = Colors.red.shade400;
-        statusIcon = Icons.cancel_rounded;
+        statusColor = Colors.red.shade600;
+        statusIcon = Icons.cancel_outlined;
         statusLabel = 'Peruttu';
         break;
-      default: // planned
-        statusColor = Colors.blueGrey.shade400;
-        statusIcon = Icons.edit_calendar_outlined;
-        statusLabel = 'Suunniteltu';
+      case HikeStatus.planned: // MUUTETTU TILA
+        statusColor = theme.colorScheme
+            .tertiaryContainer; // Käytä teeman väriä, esim. sinertävä
+        statusIcon =
+            Icons.pending_actions_rounded; // Tai Icons.rule_folder_outlined
+        statusLabel = 'Valmistautuminen kesken'; // UUSI TEKSTI
+        break;
+      default:
+        statusColor = Colors.grey.shade500;
+        statusIcon = Icons.help_outline_rounded;
+        statusLabel = 'Tuntematon';
         break;
     }
 
     int completedItems = plan.completedPreparationItems;
     int totalItems = plan.totalPreparationItems;
-    double progress = totalItems > 0 ? completedItems / totalItems : 0;
+    double progress = totalItems > 0 ? completedItems / totalItems : 0.0;
+    bool isPreparationRelevant = displayStatus == HikeStatus.planned ||
+        displayStatus == HikeStatus.upcoming;
 
     return Card(
-      elevation: 3.0,
-      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      elevation: 2.5,
+      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.0)),
       color: theme.cardColor,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16.0),
-        splashColor: theme.colorScheme.primary.withOpacity(0.1),
-        highlightColor: theme.colorScheme.primary.withOpacity(0.05),
+        splashColor: theme.colorScheme.primary.withOpacity(0.08),
+        highlightColor: theme.colorScheme.primary.withOpacity(0.04),
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Yläosa: Nimi ja Toiminnot-valikko
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -107,9 +120,8 @@ class HikePlanCard extends StatelessWidget {
                     child: Text(
                       plan.hikeName,
                       style: textTheme.titleLarge?.copyWith(
-                        fontWeight:
-                            FontWeight.w700, // Hieman kevyempi kuin aiempi w800
-                        fontSize: 20, // Hieman pienempi
+                        fontWeight: FontWeight.w700,
+                        fontSize: 19, // Selkeä, mutta ei liian suuri
                         color: theme.colorScheme.onSurface,
                       ),
                       maxLines: 2,
@@ -118,13 +130,11 @@ class HikePlanCard extends StatelessWidget {
                   ),
                   if (onEdit != null || onDelete != null)
                     SizedBox(
-                      // SizedBox rajoittaa PopupMenuButtonin kokoa
-                      width: 36,
-                      height: 36,
+                      width: 40, height: 40, // Riittävä kosketusalue
                       child: PopupMenuButton<String>(
                         icon: Icon(Icons.more_vert_rounded,
                             color:
-                                theme.colorScheme.onSurface.withOpacity(0.7)),
+                                theme.colorScheme.onSurface.withOpacity(0.6)),
                         iconSize: 22,
                         tooltip: 'Lisävalinnat',
                         padding: EdgeInsets.zero,
@@ -135,7 +145,7 @@ class HikePlanCard extends StatelessWidget {
                               value: 'edit',
                               child: Row(children: [
                                 Icon(Icons.edit_outlined, size: 20),
-                                SizedBox(width: 8),
+                                SizedBox(width: 10),
                                 Text('Muokkaa')
                               ]),
                             ),
@@ -144,10 +154,11 @@ class HikePlanCard extends StatelessWidget {
                               value: 'delete',
                               child: Row(children: [
                                 Icon(Icons.delete_outline_rounded,
-                                    color: Colors.red, size: 20),
-                                SizedBox(width: 8),
+                                    color: theme.colorScheme.error, size: 20),
+                                SizedBox(width: 10),
                                 Text('Poista',
-                                    style: TextStyle(color: Colors.red))
+                                    style: TextStyle(
+                                        color: theme.colorScheme.error))
                               ]),
                             ),
                         ],
@@ -158,73 +169,81 @@ class HikePlanCard extends StatelessWidget {
                             onDelete!();
                         },
                       ),
-                    ),
+                    )
+                  else
+                    const SizedBox(
+                        width: 40,
+                        height: 40), // Placeholder, jotta layout pysyy samana
                 ],
               ),
-              const SizedBox(height: 10),
-              _buildInfoRow(theme, Icons.calendar_today_outlined, dateText,
-                  iconColor: theme.colorScheme.primary),
-              const SizedBox(height: 6),
-              _buildInfoRow(theme, Icons.location_on_outlined, plan.location,
-                  iconColor: theme.colorScheme.primary),
+              const SizedBox(height: 8),
+
+              // Info-rivit: Sijainti, Päivämäärä, Pituus
+              _buildInfoRowCompact(
+                  theme, Icons.location_on_outlined, plan.location,
+                  color: theme.colorScheme.secondary),
+              const SizedBox(height: 5),
+              _buildInfoRowCompact(
+                  theme, Icons.calendar_today_outlined, dateDisplay,
+                  color: theme.colorScheme.secondary),
               if (plan.lengthKm != null && plan.lengthKm! > 0) ...[
-                const SizedBox(height: 6),
-                _buildInfoRow(theme, Icons.directions_walk_outlined,
+                const SizedBox(height: 5),
+                _buildInfoRowCompact(theme, Icons.directions_walk_outlined,
                     '${plan.lengthKm?.toStringAsFixed(1)} km',
-                    iconColor: theme.colorScheme.primary),
+                    color: theme.colorScheme.secondary),
               ],
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
+
+              // Status ja Valmistautuminen
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment:
+                    CrossAxisAlignment.center, // Tasaa keskelle pystysuunnassa
                 children: [
-                  Flexible(
-                      child: _buildStatusBadge(
-                          theme, statusColor, statusIcon, statusLabel)),
-                  if (onUpdatePreparation != null &&
-                      displayStatus != HikeStatus.completed &&
-                      displayStatus !=
-                          HikeStatus
-                              .cancelled) // Näytä vain jos ei valmis/peruttu
-                    TextButton.icon(
-                      icon: Icon(Icons.checklist_rtl_outlined,
-                          size: 18, color: theme.colorScheme.secondary),
-                      label: Text(
-                        '$completedItems/$totalItems tehty',
-                        style: textTheme.labelMedium?.copyWith(
-                            color: theme.colorScheme.secondary,
-                            fontWeight: FontWeight.w600),
-                      ),
+                  _buildStatusBadge(
+                      theme, statusColor, statusIcon, statusLabel),
+                  if (onUpdatePreparation != null && isPreparationRelevant)
+                    TextButton(
                       onPressed: () => onUpdatePreparation!(plan),
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
+                            horizontal: 10, vertical: 4),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
+                            borderRadius: BorderRadius.circular(20)),
+                        backgroundColor:
+                            theme.colorScheme.primary.withOpacity(0.1),
                       ),
-                    )
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '$completedItems/$totalItems',
+                            style: textTheme.labelMedium?.copyWith(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(Icons.checklist_rtl_outlined,
+                              size: 16, color: theme.colorScheme.primary),
+                        ],
+                      ),
+                    ),
                 ],
               ),
-              if (displayStatus != HikeStatus.completed &&
-                  displayStatus != HikeStatus.cancelled &&
-                  totalItems > 0) ...[
+              if (isPreparationRelevant && totalItems > 0) ...[
                 const SizedBox(height: 8),
-                LinearProgressIndicator(
-                  value: progress,
-                  backgroundColor:
-                      theme.colorScheme.surfaceVariant.withOpacity(0.5),
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                      statusColor.withOpacity(0.8)),
-                  minHeight: 6, // Hieman paksumpi
-                  borderRadius: BorderRadius.circular(3),
+                ClipRRect(
+                  // Pyöristetyt kulmat progress barille
+                  borderRadius: BorderRadius.circular(5),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    backgroundColor: statusColor
+                        .withOpacity(0.2), // Käytä statusvärin vaaleampaa sävyä
+                    valueColor: AlwaysStoppedAnimation<Color>(statusColor),
+                    minHeight: 7,
+                  ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  completedItems == totalItems
-                      ? "Valmiina lähtöön!"
-                      : "Valmistautuminen kesken",
-                  style: textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withOpacity(0.7)),
-                )
+                const SizedBox(height: 6),
               ]
             ],
           ),
@@ -233,23 +252,24 @@ class HikePlanCard extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoRow(ThemeData theme, IconData icon, String text,
-      {Color? iconColor}) {
+  Widget _buildInfoRowCompact(ThemeData theme, IconData icon, String text,
+      {required Color color}) {
+    if (text.isEmpty)
+      return const SizedBox.shrink(); // Älä näytä, jos teksti on tyhjä
     return Row(
-      crossAxisAlignment:
-          CrossAxisAlignment.start, // Tasaus ylhäältä, jos teksti rivittyy
       children: [
         Icon(icon,
-            size: 18,
-            color: iconColor ?? theme.colorScheme.primary.withOpacity(0.8)),
-        const SizedBox(width: 10),
+            size: 16, color: color.withOpacity(0.9)), // Hieman himmeämpi ikoni
+        const SizedBox(width: 8),
         Expanded(
           child: Text(
             text,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.85),
-              height: 1.3,
+              color: theme.colorScheme.onSurface.withOpacity(0.8),
+              fontSize: 13.5, // Hieman pienempi selkeyden vuoksi
             ),
+            overflow: TextOverflow.ellipsis, // Estää ylivuodon
+            maxLines: 1,
           ),
         ),
       ],
@@ -259,22 +279,25 @@ class HikePlanCard extends StatelessWidget {
   Widget _buildStatusBadge(
       ThemeData theme, Color color, IconData icon, String label) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(
+          horizontal: 10, vertical: 6), // Hieman enemmän paddingia
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15), // Hieman vahvempi tausta
-        borderRadius: BorderRadius.circular(20), // Pyöreät kulmat
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(8), // Vähemmän pyöreä, modernimpi
+        // border: Border.all(color: color.withOpacity(0.5), width: 0.5), // Valinnainen reunaviiva
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 15, color: color),
+          Icon(icon, size: 16, color: color), // Hieman suurempi ikoni
           const SizedBox(width: 6),
           Text(
             label,
-            style: theme.textTheme.bodySmall?.copyWith(
+            style: theme.textTheme.labelSmall?.copyWith(
+              // Käytä labelSmall tai bodySmall
               color: color,
-              fontWeight: FontWeight.bold,
-              fontSize: 11.5,
+              fontWeight: FontWeight.bold, // Selkeä status
+              letterSpacing: 0.3, // Hieman välistystä
             ),
           ),
         ],
