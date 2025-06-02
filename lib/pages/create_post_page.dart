@@ -10,7 +10,7 @@ import 'package:path/path.dart' as p;
 
 import '../providers/auth_provider.dart';
 import '../models/post_model.dart';
-import '../models/user_profile_model.dart';
+import '../models/user_profile_model.dart'; // Varmista, että UserProfile-malli on tuotu
 
 class CreatePostPage extends StatefulWidget {
   final PostVisibility initialVisibility;
@@ -82,6 +82,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
   Future<void> _selectDate(BuildContext context,
       {required bool isStart}) async {
+    // ... (koodi ennallaan)
     if (_isLoading) return;
     final theme = Theme.of(context);
     final DateTime? picked = await showDatePicker(
@@ -124,6 +125,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
   }
 
   Future<String?> _uploadImageInternal(XFile imageFile) async {
+    // ... (koodi ennallaan)
     try {
       final String fileName =
           '${DateTime.now().millisecondsSinceEpoch}_${p.basename(imageFile.path)}';
@@ -138,6 +140,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
   }
 
   Widget _buildAnimatedIcon(bool isSuccess) {
+    // ... (koodi ennallaan)
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 300),
       transitionBuilder: (Widget child, Animation<double> animation) {
@@ -165,6 +168,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
     required String message,
     required VoidCallback onDismissed,
   }) async {
+    // ... (koodi ennallaan)
     if (!mounted) return;
 
     return showDialog<void>(
@@ -215,7 +219,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
       );
       return;
     }
-
     if (_startDate == null || _endDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -225,15 +228,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
       );
       return;
     }
-
-    // --- POISTETTU KUVA PAKOLLISUUDEN TARKISTUS ---
-    // if (_imageFile == null) {
-    //   ScaffoldMessenger.of(context).showSnackBar(
-    //     SnackBar(content: const Text('Lisääthän vaellukselle kuvan.'), backgroundColor: Theme.of(context).colorScheme.error),
-    //   );
-    //   return;
-    // }
-    // --- POISTETTU LOPPUU ---
 
     setState(() => _isLoading = true);
 
@@ -257,7 +251,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
     try {
       if (_imageFile != null) {
-        // Lataa kuva vain, jos se on valittu
         uploadedImageUrl = await _uploadImageInternal(_imageFile!);
       }
 
@@ -265,11 +258,15 @@ class _CreatePostPageState extends State<CreatePostPage> {
       final newPost = Post(
         id: newPostRef.id,
         userId: currentUserProfile.uid,
-        username: currentUserProfile.displayName,
+        // --- KORJATTU KOHTA ---
+        username: currentUserProfile.username.isNotEmpty
+            ? currentUserProfile.username
+            : currentUserProfile
+                .displayName, // Käytä ensisijaisesti usernamea, fallback displayName
+        // --- KORJATTU KOHTA LOPPUU ---
         userAvatarUrl: currentUserProfile.photoURL ??
             'https://firebasestorage.googleapis.com/v0/b/vaellus-app.appspot.com/o/profile_images%2Fdefault_avatar.png?alt=media&token=0default1-0000-0000-0000-0default00000',
-        postImageUrl:
-            uploadedImageUrl, // Tämä on nyt null, jos kuvaa ei valittu
+        postImageUrl: uploadedImageUrl,
         title: _titleController.text.trim(),
         caption: _captionController.text.trim(),
         timestamp: DateTime.now(),
@@ -320,6 +317,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
     }
   }
 
+  // ... (_buildSectionTitle, _buildVisibilityIndicator, build, _buildShareOption ennallaan)
   Widget _buildSectionTitle(String title, IconData icon) {
     final theme = Theme.of(context);
     return Padding(
@@ -428,7 +426,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                             .withOpacity(0.8)),
                                     const SizedBox(height: 12),
                                     Text(
-                                        'Lisää kuva vaelluksesta (valinnainen)', // Päivitetty teksti
+                                        'Lisää kuva vaelluksesta (valinnainen)',
                                         style: theme.textTheme.titleMedium
                                             ?.copyWith(
                                                 color: theme
