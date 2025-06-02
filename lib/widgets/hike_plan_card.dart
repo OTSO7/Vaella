@@ -1,4 +1,3 @@
-// lib/widgets/hike_plan_card.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/hike_plan_model.dart';
@@ -27,8 +26,8 @@ class HikePlanCard extends StatelessWidget {
     late DateFormat dateFormatRange;
 
     try {
-      dateFormatShort = DateFormat('d.M.yy', 'fi_FI');
-      dateFormatRange = DateFormat('d.M.yyyy', 'fi_FI');
+      dateFormatShort = DateFormat('d.M.yy', 'en_US');
+      dateFormatRange = DateFormat('d.M.yyyy', 'en_US');
     } catch (e) {
       dateFormatShort = DateFormat('d.M.yy');
       dateFormatRange = DateFormat('d.M.yyyy');
@@ -40,10 +39,10 @@ class HikePlanCard extends StatelessWidget {
       if (plan.endDate!.year == plan.startDate.year &&
           plan.endDate!.month == plan.startDate.month) {
         dateDisplay =
-            '${DateFormat('d.', 'fi_FI').format(plan.startDate)} - ${DateFormat('d.M.yyyy', 'fi_FI').format(plan.endDate!)}';
+            '${DateFormat('d.', 'en_US').format(plan.startDate)} - ${DateFormat('d.M.yyyy', 'en_US').format(plan.endDate!)}';
       } else if (plan.endDate!.year == plan.startDate.year) {
         dateDisplay =
-            '${DateFormat('d.M.', 'fi_FI').format(plan.startDate)} - ${DateFormat('d.M.yyyy', 'fi_FI').format(plan.endDate!)}';
+            '${DateFormat('d.M.', 'en_US').format(plan.startDate)} - ${DateFormat('d.M.yyyy', 'en_US').format(plan.endDate!)}';
       } else {
         dateDisplay =
             '${dateFormatRange.format(plan.startDate)} - ${dateFormatRange.format(plan.endDate!)}';
@@ -65,23 +64,23 @@ class HikePlanCard extends StatelessWidget {
       case HikeStatus.upcoming:
         statusColor = theme.colorScheme.secondary;
         statusIcon = Icons.directions_walk_rounded;
-        statusLabel = 'Tulossa pian';
+        statusLabel = 'Upcoming';
         break;
       case HikeStatus.completed:
-        statusColor = Colors.green.shade700;
+        statusColor = theme.colorScheme.primary;
         statusIcon = Icons.check_circle_outline_rounded;
-        statusLabel = 'Suoritettu';
+        statusLabel = 'Completed';
         break;
       case HikeStatus.cancelled:
         statusColor = Colors.red.shade600;
         statusIcon = Icons.cancel_outlined;
-        statusLabel = 'Peruttu';
+        statusLabel = 'Cancelled';
         break;
       case HikeStatus.planned:
         if (allPreparationsDone) {
           statusColor = theme.colorScheme.primary;
           statusIcon = Icons.task_alt_rounded;
-          statusLabel = 'Valmiina lähtöön!';
+          statusLabel = 'Ready to go!';
         } else {
           if (theme.brightness == Brightness.dark) {
             statusColor = theme.colorScheme.onSurface.withOpacity(0.5);
@@ -89,13 +88,13 @@ class HikePlanCard extends StatelessWidget {
             statusColor = Colors.blueGrey.shade300;
           }
           statusIcon = Icons.pending_actions_rounded;
-          statusLabel = 'Valmistautuminen kesken';
+          statusLabel = 'Preparation in progress';
         }
         break;
       default:
         statusColor = Colors.grey.shade500;
         statusIcon = Icons.help_outline_rounded;
-        statusLabel = 'Tuntematon';
+        statusLabel = 'Unknown';
         break;
     }
 
@@ -144,8 +143,7 @@ class HikePlanCard extends StatelessWidget {
                             color:
                                 theme.colorScheme.onSurface.withOpacity(0.7)),
                         iconSize: 22,
-                        tooltip:
-                            null, // <<< --- KORJATTU TÄHÄN: Tooltip asetettu nulliksi
+                        tooltip: null,
                         padding: EdgeInsets.zero,
                         itemBuilder: (BuildContext context) =>
                             <PopupMenuEntry<String>>[
@@ -155,7 +153,7 @@ class HikePlanCard extends StatelessWidget {
                               child: Row(children: [
                                 Icon(Icons.edit_outlined, size: 20),
                                 SizedBox(width: 10),
-                                Text('Muokkaa')
+                                Text('Edit')
                               ]),
                             ),
                           if (onDelete != null)
@@ -163,11 +161,10 @@ class HikePlanCard extends StatelessWidget {
                               value: 'delete',
                               child: Row(children: [
                                 Icon(Icons.delete_outline_rounded,
-                                    color: theme.colorScheme.error, size: 20),
+                                    color: Colors.red, size: 20),
                                 SizedBox(width: 10),
-                                Text('Poista',
-                                    style: TextStyle(
-                                        color: theme.colorScheme.error))
+                                Text('Delete',
+                                    style: TextStyle(color: Colors.red))
                               ]),
                             ),
                         ],
@@ -219,8 +216,8 @@ class HikePlanCard extends StatelessWidget {
                       ),
                       label: Text(
                         allPreparationsDone
-                            ? 'Tarkista'
-                            : '$completedItems/$totalItems tehty',
+                            ? 'Check'
+                            : '$completedItems/$totalItems done',
                         style: textTheme.labelMedium?.copyWith(
                             color: allPreparationsDone
                                 ? theme.colorScheme.primary
@@ -253,14 +250,6 @@ class HikePlanCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 6),
-                Text(
-                  allPreparationsDone
-                      ? "Kaikki valmista lähtöön!"
-                      : "${totalItems - completedItems} valmistelua jäljellä",
-                  style: textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withOpacity(0.75),
-                      fontStyle: FontStyle.italic),
-                )
               ]
             ],
           ),

@@ -1,4 +1,3 @@
-// lib/widgets/select_visibility_modal.dart
 import 'package:flutter/material.dart';
 import '../models/post_model.dart';
 
@@ -65,7 +64,7 @@ class SelectVisibilityModal extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(bottom: 8.0, left: 8.0),
               child: Text(
-                'Valitse postauksen näkyvyys',
+                'Select post visibility',
                 style: theme.textTheme.headlineSmall?.copyWith(fontSize: 22),
               ),
             ),
@@ -73,8 +72,8 @@ class SelectVisibilityModal extends StatelessWidget {
             _buildVisibilityOption(
               context,
               Icons.public,
-              'Julkinen',
-              'Näkyy kaikille käyttäjille.',
+              'Public',
+              'Visible to all users.',
               PostVisibility.public,
               theme.colorScheme.primary,
             ),
@@ -82,8 +81,8 @@ class SelectVisibilityModal extends StatelessWidget {
             _buildVisibilityOption(
               context,
               Icons.group_outlined,
-              'Ystävät',
-              'Näkyy vain ystävillesi.',
+              'Friends',
+              'Visible only to your friends.',
               PostVisibility.friends,
               theme.colorScheme.secondary,
             ),
@@ -91,8 +90,8 @@ class SelectVisibilityModal extends StatelessWidget {
             _buildVisibilityOption(
               context,
               Icons.lock_outline,
-              'Yksityinen',
-              'Näkyy vain sinulle itsellesi.',
+              'Private',
+              'Visible only to you.',
               PostVisibility.private,
               Colors.grey.shade500,
             ),
@@ -122,7 +121,7 @@ void showSelectVisibilityModal(BuildContext homePageContext,
       onVisibilitySelectedFromHomePage(selectedVisibilityReturnedFromModal);
     }
   }).catchError((error) {
-    // Voit halutessasi käsitellä virheen tässä, esim. näyttämällä SnackBarin
+    // Optionally handle the error here, e.g. by showing a SnackBar
     print('Error in showModalBottomSheet: $error');
   });
 }

@@ -1,9 +1,8 @@
-// lib/pages/hike_plan_hub_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter_staggered_animations/flutter_staggered_animations.dart'; // Pidetään animaatiot
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'dart:ui' as ui;
 
 import '../models/hike_plan_model.dart';
@@ -31,7 +30,7 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
     _currentPlan = widget.initialPlan;
     _staggerController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 300), // Nopeutetaan hieman
+      duration: const Duration(milliseconds: 300),
     );
     Future.delayed(const Duration(milliseconds: 100), () {
       if (mounted) _staggerController.forward();
@@ -57,7 +56,7 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
         await _hikePlanService.updateHikePlan(_currentPlan);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: const Text('Valmistautumisen tila päivitetty!'),
+            content: const Text('Preparation status updated!'),
             backgroundColor: Colors.green.shade700,
             behavior: SnackBarBehavior.floating,
             shape:
@@ -68,7 +67,7 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Virhe tilan päivityksessä: $e'),
+            content: Text('Error updating status: $e'),
             backgroundColor: Colors.redAccent,
             behavior: SnackBarBehavior.floating,
             shape:
@@ -86,8 +85,7 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
   Widget _buildAnimatedItem({required Widget child, required int index}) {
     return AnimationConfiguration.staggeredList(
       position: index,
-      duration:
-          Duration(milliseconds: 400 + (index * 25)), // Hienosäädetty kesto
+      duration: Duration(milliseconds: 400 + (index * 25)),
       child: SlideAnimation(
         verticalOffset: 30.0,
         curve: Curves.easeOutCubic,
@@ -103,22 +101,34 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
     bool isPreparationRelevant = _currentPlan.status == HikeStatus.planned ||
         _currentPlan.status == HikeStatus.upcoming;
 
+    // Set status bar style based on app bar background color
+    final appBarBackgroundColor = theme.colorScheme.surfaceContainer;
+    final appBarBrightness =
+        ThemeData.estimateBrightnessForColor(appBarBackgroundColor);
+    final statusBarIconBrightness = appBarBrightness == Brightness.dark
+        ? Brightness.light
+        : Brightness.dark;
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      // Varmistaa statusbarin tyylin koko sivulle
-      value: SystemUiOverlayStyle.light
-          .copyWith(statusBarColor: Colors.transparent),
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: statusBarIconBrightness,
+        statusBarBrightness: appBarBrightness == Brightness.dark
+            ? Brightness.light
+            : Brightness.dark,
+      ),
       child: Scaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
         body: AnimationLimiter(
           child: CustomScrollView(
             controller: _scrollController,
             slivers: <Widget>[
-              _buildHubSliverAppBar(theme, textTheme),
+              _buildHubSliverAppBar(theme, textTheme, statusBarIconBrightness),
               SliverPadding(
                 padding: const EdgeInsets.symmetric(
                     horizontal: 20.0, vertical: 24.0),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate.fixed(
-                      // Käytetään .fixed, koska lista on staattinen
                       _buildContentWidgetsList(
                           theme, textTheme, isPreparationRelevant)),
                 ),
@@ -143,11 +153,10 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
                       _currentPlan.status == HikeStatus.cancelled)
               ? 32
               : 0),
-
       if (isPreparationRelevant) ...[
         _buildAnimatedItem(
             child: _buildSectionTitle(
-                theme, "Valmistautuminen", Icons.fact_check_outlined),
+                theme, "Preparation", Icons.fact_check_outlined),
             index: animationIndex++),
         _buildAnimatedItem(
             child: _buildPreparationSection(theme, textTheme),
@@ -155,37 +164,31 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
         const SizedBox(height: 32),
       ] else if (_currentPlan.status == HikeStatus.completed) ...[
         _buildAnimatedItem(
-            child: _buildStatusHighlight(
-                theme,
-                "Vaellus suoritettu onnistuneesti!",
-                Icons.celebration_rounded,
-                Colors.green.shade600),
+            child: _buildStatusHighlight(theme, "Hike completed successfully!",
+                Icons.celebration_rounded, Colors.green.shade600),
             index: animationIndex++),
         const SizedBox(height: 32),
       ] else if (_currentPlan.status == HikeStatus.cancelled) ...[
         _buildAnimatedItem(
-            child: _buildStatusHighlight(theme, "Tämä vaellus on peruttu.",
+            child: _buildStatusHighlight(theme, "This hike has been cancelled.",
                 Icons.block_rounded, theme.colorScheme.error),
             index: animationIndex++),
         const SizedBox(height: 32),
       ],
-
       if (_currentPlan.notes != null && _currentPlan.notes!.isNotEmpty) ...[
         _buildAnimatedItem(
             child: _buildSectionTitle(
-                theme, "Muistiinpanot", Icons.sticky_note_2_outlined),
+                theme, "Notes", Icons.sticky_note_2_outlined),
             index: animationIndex++),
         _buildAnimatedItem(
             child: _buildNotesSection(theme, textTheme),
             index: animationIndex++),
         const SizedBox(height: 32),
       ],
-
       _buildAnimatedItem(
           child: _buildSectionTitle(
-              theme, "Suunnittelutyökalut", Icons.category_outlined),
+              theme, "Planning Tools", Icons.category_outlined),
           index: animationIndex++),
-      // Suunnittelutyökalut ruudukkona
       AnimationConfiguration.staggeredGrid(
         columnCount: 2,
         position: animationIndex,
@@ -201,48 +204,24 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
               physics: const NeverScrollableScrollPhysics(),
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
-              childAspectRatio: 1.3, // Säädä tätä tarpeen mukaan
+              childAspectRatio: 1.3,
               children: [
                 _buildPlannerGridItem(
-                  context,
-                  "Sääennuste",
-                  Icons.thermostat_rounded,
-                  () {
-                    /*TODO*/
-                  },
-                  Colors.orange.shade300,
-                  animationIndex++,
-                ),
+                    context, "Weather Forecast", Icons.thermostat_rounded, () {
+                  /*TODO*/
+                }, Colors.orange.shade300, animationIndex++),
                 _buildPlannerGridItem(
-                  context,
-                  "Pakkauslista",
-                  Icons.backpack_rounded,
-                  () {
-                    /*TODO*/
-                  },
-                  Colors.orange.shade300,
-                  animationIndex++,
-                ),
+                    context, "Packing List", Icons.backpack_rounded, () {
+                  /*TODO*/
+                }, Colors.orange.shade300, animationIndex++),
                 _buildPlannerGridItem(
-                  context,
-                  "Reittisuunnitelma",
-                  Icons.route_rounded,
-                  () {
-                    /*TODO*/
-                  },
-                  Colors.orange.shade300,
-                  animationIndex++,
-                ),
+                    context, "Route Plan", Icons.route_rounded, () {
+                  /*TODO*/
+                }, Colors.orange.shade300, animationIndex++),
                 _buildPlannerGridItem(
-                  context,
-                  "Ruokalista",
-                  Icons.restaurant_rounded,
-                  () {
-                    /*TODO*/
-                  },
-                  Colors.orange.shade300,
-                  animationIndex++,
-                ),
+                    context, "Meal Plan", Icons.restaurant_rounded, () {
+                  /*TODO*/
+                }, Colors.orange.shade300, animationIndex++),
               ],
             ),
           ),
@@ -252,117 +231,73 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
     ];
   }
 
-  Widget _buildHubSliverAppBar(ThemeData theme, TextTheme textTheme) {
-    String locationForImage = _currentPlan.location.split(',').first.trim();
-    locationForImage = locationForImage
-        .replaceAllMapped(
-            RegExp(r'(\w+) kansallispuisto', caseSensitive: false),
-            (match) => '${match.group(1)} national park')
-        .replaceAll(RegExp(r' national park', caseSensitive: false), '')
-        .trim();
-    if (locationForImage.isEmpty) locationForImage = "nature landscape";
+  Widget _buildHubSliverAppBar(ThemeData theme, TextTheme textTheme,
+      Brightness statusBarIconBrightnessForAppBar) {
+    final appBarBackgroundColor = theme.colorScheme.surfaceContainer;
+    final onAppBarColor = theme.colorScheme.onSurface;
 
     return SliverAppBar(
-      expandedHeight: 300.0, // Antaa enemmän tilaa kuvalle
+      expandedHeight: 160.0,
       floating: false,
       pinned: true,
-      stretch: true,
-      backgroundColor: theme.scaffoldBackgroundColor,
-      foregroundColor: theme.colorScheme.onSurface,
-      elevation: 0, // Ei varjoa, kun kutistunut, sulautuu paremmin
+      stretch: false,
+      backgroundColor: appBarBackgroundColor,
+      foregroundColor: onAppBarColor,
+      elevation: 0,
+      systemOverlayStyle: SystemUiOverlayStyle(
+        statusBarIconBrightness: statusBarIconBrightnessForAppBar,
+        statusBarBrightness:
+            ThemeData.estimateBrightnessForColor(appBarBackgroundColor) ==
+                    Brightness.dark
+                ? Brightness.light
+                : Brightness.dark,
+      ),
+      shape: Border(
+        bottom: BorderSide(
+          color: theme.colorScheme.outlineVariant,
+          width: 1.0,
+        ),
+      ),
       leading: Padding(
-        // Lisätään padding takaisin-nuolelle
         padding: const EdgeInsets.all(8.0),
         child: Material(
-          // Material-efekti napille
-          color: Colors.black.withOpacity(0.25),
+          color: Colors.transparent,
           shape: const CircleBorder(),
           clipBehavior: Clip.antiAlias,
           child: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                color: Colors.white, size: 20),
+            icon: Icon(Icons.arrow_back_ios_new_rounded,
+                color: onAppBarColor, size: 20),
             onPressed: () => Navigator.of(context).pop(),
-            tooltip: 'Takaisin',
+            tooltip: 'Back',
           ),
         ),
       ),
       flexibleSpace: FlexibleSpaceBar(
-        centerTitle: true, // Keskitetään otsikko paremmin
-        titlePadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16)
-            .copyWith(bottom: 20), // Lisää tilaa otsikolle
+        centerTitle: true,
+        titlePadding: const EdgeInsets.only(left: 24, right: 24, bottom: 16),
         title: Text(
           _currentPlan.hikeName,
-          style: textTheme.headlineSmall?.copyWith(
-              // Käytetään headlineSmall tai vastaavaa
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              shadows: [
-                const Shadow(
-                    blurRadius: 5.0,
-                    color: Colors.black87,
-                    offset: Offset(1.5, 1.5))
-              ]),
+          style: textTheme.titleLarge?.copyWith(
+            color: onAppBarColor,
+            fontWeight: FontWeight.w600,
+          ),
           textAlign: TextAlign.center,
-          maxLines: 2, // Salli kahden rivin otsikko
+          maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
-        background: Stack(
-          fit: StackFit.expand,
-          children: [
-            CachedNetworkImage(
-              imageUrl:
-                  'https://source.unsplash.com/1200x800/?${locationForImage.isNotEmpty ? locationForImage : 'hiking,mountain,forest'}',
-              fit: BoxFit.cover,
-              placeholder: (context, url) => Container(
-                  color: theme.colorScheme.primaryContainer.withOpacity(0.5)),
-              errorWidget: (context, url, error) => Container(
-                decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: [
-                  theme.colorScheme.surface,
-                  theme.colorScheme.surfaceContainerHighest
-                ], begin: Alignment.topCenter, end: Alignment.bottomCenter)),
-                child: Icon(Icons.terrain_rounded,
-                    size: 120,
-                    color: theme.colorScheme.onSurface.withOpacity(0.05)),
-              ),
-            ),
-            // Sumennus vain alareunaan, jotta otsikko erottuu
-            Positioned.fill(
-              child: BackdropFilter(
-                filter: ui.ImageFilter.blur(
-                    sigmaX: 0.5,
-                    sigmaY: 0.5), // Hyvin hienovarainen sumennus koko kuvalle
-                child: Container(color: Colors.black.withOpacity(0.1)),
-              ),
-            ),
-            Container(
-              // Tummentava gradientti alhaalta ylös
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  stops: const [0.3, 1.0], // Gradientti alkaa myöhemmin
-                ),
-              ),
-            ),
-          ],
+        background: Container(
+          color: appBarBackgroundColor,
         ),
-        stretchModes: const [
-          StretchMode.zoomBackground,
-          StretchMode.blurBackground
-        ],
       ),
     );
   }
 
   Widget _buildOverviewSection(ThemeData theme, TextTheme textTheme) {
-    final dateFormat =
-        DateFormat('d. MMMM yyyy', 'fi_FI'); // Selkeämpi päivämäärämuoto
+    final dateFormat = DateFormat('d.M.yyyy', 'en_US');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle(theme, "Yleiskatsaus", Icons.info_outline_rounded),
+        _buildSectionTitle(theme, "Overview", Icons.info_outline_rounded),
         const SizedBox(height: 8),
         _buildInfoRow(theme, Icons.fmd_good_outlined, _currentPlan.location),
         const SizedBox(height: 12),
@@ -374,7 +309,7 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
         if (_currentPlan.lengthKm != null && _currentPlan.lengthKm! > 0) ...[
           const SizedBox(height: 12),
           _buildInfoRow(theme, Icons.linear_scale_rounded,
-              'Pituus: ${_currentPlan.lengthKm?.toStringAsFixed(1)} km'),
+              'Length: ${_currentPlan.lengthKm?.toStringAsFixed(1)} km'),
         ],
       ],
     );
@@ -387,9 +322,7 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon,
-              size: 20,
-              color: theme.colorScheme.secondary), // Käytetään secondary-väriä
+          Icon(icon, size: 20, color: theme.colorScheme.secondary),
           const SizedBox(width: 12),
           Expanded(
               child: Text(text,
@@ -431,8 +364,7 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-          color:
-              theme.cardColor.withOpacity(0.1), // Erittäin hienovarainen tausta
+          color: theme.cardColor.withOpacity(0.1),
           borderRadius: BorderRadius.circular(14),
           border:
               Border.all(color: theme.colorScheme.outline.withOpacity(0.2))),
@@ -445,9 +377,7 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
             children: [
               Flexible(
                 child: Text(
-                  allDone
-                      ? 'Kaikki valmista!'
-                      : '$completed/$total kohdetta valmiina',
+                  allDone ? 'All done!' : '$completed/$total items ready',
                   style: textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: theme.colorScheme.onSurface,
@@ -455,7 +385,6 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
                 ),
               ),
               TextButton(
-                // Käytetään TextButtonia kevyempänä versiona
                 onPressed: _openAndUpdatePreparationModal,
                 style: TextButton.styleFrom(
                   foregroundColor: allDone
@@ -473,7 +402,7 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
                         allDone ? Icons.edit_off_outlined : Icons.edit_outlined,
                         size: 18),
                     const SizedBox(width: 6),
-                    Text(allDone ? 'Tarkastele' : 'Muokkaa'),
+                    Text(allDone ? 'View' : 'Edit'),
                   ],
                 ),
               ),
@@ -492,14 +421,14 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
                 valueColor: AlwaysStoppedAnimation<Color>(allDone
                     ? theme.colorScheme.primary
                     : theme.colorScheme.secondary),
-                minHeight: 10, // Selkeämpi palkki
+                minHeight: 10,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               allDone
-                  ? "Erinomaista, olet valmis lähtöön!"
-                  : "Viimeistele valmistelut.",
+                  ? "Excellent, you're ready to go!"
+                  : "Finish your preparations.",
               style: textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurface.withOpacity(0.8)),
             ),
@@ -507,7 +436,7 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
             Padding(
               padding: const EdgeInsets.only(top: 10.0),
               child: Text(
-                "Valmisteltavia kohteita ei määritelty.",
+                "No preparation items defined.",
                 style: textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurface.withOpacity(0.7),
                     fontStyle: FontStyle.italic),
@@ -526,7 +455,6 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            // Ikonille tyylitelty tausta
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
               color: (iconColor ?? theme.colorScheme.primary).withOpacity(0.12),
@@ -539,7 +467,6 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
           Text(
             title,
             style: theme.textTheme.titleLarge?.copyWith(
-              // Käytetään isompaa ja selkeämpää
               color: color ?? theme.colorScheme.onSurface,
               fontWeight: FontWeight.w600,
             ),
@@ -554,7 +481,7 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
       {Color? textColor}) {
     final theme = Theme.of(context);
     return Material(
-      color: itemColor.withOpacity(0.12), // Läpikuultava tausta
+      color: itemColor.withOpacity(0.12),
       borderRadius: BorderRadius.circular(16),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -601,32 +528,31 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
     );
   }
 
-  // Korvataan aiempi _buildPlannerActionItem-lista tällä ruudukolla
   Widget _buildPlannerActionsGrid(BuildContext context, ThemeData theme) {
     final actions = [
       {
-        'title': "Sääennuste",
+        'title': "Weather Forecast",
         'icon': Icons.thermostat_rounded,
         'onPressed': () {/*TODO*/},
         'color': theme.colorScheme.primary,
         'textColor': theme.colorScheme.onPrimaryContainer
       },
       {
-        'title': "Pakkauslista",
+        'title': "Packing List",
         'icon': Icons.backpack_rounded,
         'onPressed': () {/*TODO*/},
         'color': theme.colorScheme.secondary,
         'textColor': theme.colorScheme.onSecondaryContainer
       },
       {
-        'title': "Reittisuunnitelma",
+        'title': "Route Plan",
         'icon': Icons.route_rounded,
         'onPressed': () {/*TODO*/},
         'color': theme.colorScheme.tertiary,
         'textColor': theme.colorScheme.onTertiaryContainer
       },
       {
-        'title': "Ruokalista",
+        'title': "Meal Plan",
         'icon': Icons.restaurant_menu_rounded,
         'onPressed': () {/*TODO*/},
         'color': Colors.orange.shade300,
@@ -641,28 +567,25 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
         crossAxisCount: 2,
         crossAxisSpacing: 14,
         mainAxisSpacing: 14,
-        childAspectRatio: 1.25, // Säädä tätä, jos sisältö ei mahdu hyvin
+        childAspectRatio: 1.25,
       ),
       itemCount: actions.length,
       itemBuilder: (context, index) {
         final action = actions[index];
-        // Ei käytetä enää _buildAnimatedItem tässä, koska GridView hoitaa oman rakentamisensa.
-        // Animaatiot voitaisiin lisätä _buildPlannerGridItem-metodin sisälle tarvittaessa.
         return _buildPlannerGridItem(
             context,
             action['title'] as String,
             action['icon'] as IconData,
             action['onPressed'] as VoidCallback,
             action['color'] as Color,
-            index, // Välitetään indeksi, jos sitä tarvitaan animaatioon grid itemin sisällä
+            index,
             textColor: action['textColor'] as Color?);
       },
     );
   }
 }
 
-// ---- _CustomSliverAppBarDelegate pysyy samana kuin edellisessä vastauksessa ----
-// Sen rakenne on jo melko moderni ja dynaaminen. Varmista, että se on kopioitu oikein.
+// ---- _CustomSliverAppBarDelegate remains as in the previous answer ----
 class _CustomSliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   final double expandedHeight;
   final double minHeight;
@@ -698,55 +621,67 @@ class _CustomSliverAppBarDelegate extends SliverPersistentHeaderDelegate {
     final double currentOverlayOpacity =
         ui.lerpDouble(0.35, 0.0, normalizedShrink)!;
 
+    final Brightness delegateStatusBarIconBrightness = (imageUrl.isNotEmpty ||
+            ThemeData.estimateBrightnessForColor(theme.colorScheme.primary) ==
+                Brightness.dark)
+        ? Brightness.light
+        : Brightness.dark;
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light.copyWith(
+      value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,
-        statusBarBrightness: Brightness.dark,
+        statusBarIconBrightness: delegateStatusBarIconBrightness,
+        statusBarBrightness: delegateStatusBarIconBrightness == Brightness.light
+            ? Brightness.dark
+            : Brightness.light,
       ),
       child: Stack(
         fit: StackFit.expand,
         children: [
-          CachedNetworkImage(
-            imageUrl: imageUrl,
-            fit: BoxFit.cover,
-            placeholder: (context, url) =>
-                Container(color: theme.colorScheme.primaryContainer),
-            errorWidget: (context, url, error) => Container(
-              decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: [
-                theme.colorScheme.surface,
-                theme.colorScheme.surfaceContainerHighest
-              ], begin: Alignment.topCenter, end: Alignment.bottomCenter)),
-              child: Icon(Icons.terrain_rounded,
-                  size: 100,
-                  color: theme.colorScheme.onSurface.withOpacity(0.1)),
-            ),
-          ),
-          if (currentBlur > 0.05)
+          if (imageUrl.isNotEmpty)
+            CachedNetworkImage(
+              imageUrl: imageUrl,
+              fit: BoxFit.cover,
+              placeholder: (context, url) => Container(
+                  color: theme.colorScheme.primaryContainer.withOpacity(0.5)),
+              errorWidget: (context, url, error) => Container(
+                decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: [
+                  theme.colorScheme.surfaceVariant,
+                  theme.colorScheme.surfaceContainer,
+                ], begin: Alignment.topCenter, end: Alignment.bottomCenter)),
+                child: Icon(Icons.broken_image_outlined,
+                    size: 80,
+                    color: theme.colorScheme.onSurfaceVariant.withOpacity(0.3)),
+              ),
+            )
+          else
+            Container(color: theme.colorScheme.surfaceContainer),
+          if (currentBlur > 0.05 && imageUrl.isNotEmpty)
             Positioned.fill(
               child: BackdropFilter(
                 filter: ui.ImageFilter.blur(
                     sigmaX: currentBlur, sigmaY: currentBlur),
                 child: Container(
                     color:
-                        Colors.black.withOpacity(currentOverlayOpacity * 0.4)),
+                        Colors.black.withOpacity(currentOverlayOpacity * 0.3)),
               ),
             ),
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.black.withOpacity(0.40),
-                  Colors.transparent,
-                  Colors.black.withOpacity(0.60)
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                stops: const [0.0, 0.45, 1.0],
+          if (imageUrl.isNotEmpty)
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.black.withOpacity(0.30),
+                    Colors.transparent,
+                    Colors.black.withOpacity(0.50)
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: const [0.0, 0.5, 1.0],
+                ),
               ),
             ),
-          ),
           Positioned(
             top: MediaQuery.of(context).padding.top,
             left: 8,
@@ -755,18 +690,20 @@ class _CustomSliverAppBarDelegate extends SliverPersistentHeaderDelegate {
               shape: const CircleBorder(),
               clipBehavior: Clip.antiAlias,
               child: IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                    color: Colors.white),
-                iconSize: 22,
+                icon: Icon(Icons.arrow_back_ios_new_rounded,
+                    color: imageUrl.isNotEmpty
+                        ? Colors.white
+                        : theme.colorScheme.onSurface,
+                    size: 20),
                 onPressed: () => Navigator.of(context).pop(),
-                tooltip: 'Takaisin',
+                tooltip: 'Back',
               ),
             ),
           ),
           Positioned(
             bottom: 16,
-            left: 16,
-            right: 16,
+            left: 20,
+            right: 20,
             child: Opacity(
               opacity: titleOpacity,
               child: Column(
@@ -775,15 +712,19 @@ class _CustomSliverAppBarDelegate extends SliverPersistentHeaderDelegate {
                 children: [
                   Text(
                     planName,
-                    style: textTheme.headlineSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      shadows: [
-                        const Shadow(
-                            blurRadius: 2.0,
-                            color: Colors.black87,
-                            offset: Offset(1, 1))
-                      ],
+                    style: textTheme.titleLarge?.copyWith(
+                      color: imageUrl.isNotEmpty
+                          ? Colors.white
+                          : theme.colorScheme.onSurface,
+                      fontWeight: FontWeight.w600,
+                      shadows: imageUrl.isNotEmpty
+                          ? [
+                              const Shadow(
+                                  blurRadius: 4.0,
+                                  color: Colors.black54,
+                                  offset: Offset(1, 1))
+                            ]
+                          : null,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,

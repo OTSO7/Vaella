@@ -1,4 +1,3 @@
-// lib/pages/home_page.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -52,7 +51,7 @@ class _HomePageState extends State<HomePage> {
         setState(() {
           _posts = [];
           _isLoadingPosts = false;
-          _errorMessage = 'Kirjaudu sisään nähdäksesi postaukset.';
+          _errorMessage = 'Sign in to see posts.';
         });
       }
     }
@@ -99,8 +98,7 @@ class _HomePageState extends State<HomePage> {
       if (mounted) {
         setState(() {
           _isLoadingPosts = false;
-          _errorMessage =
-              'Virhe postausten lataamisessa.'; // Yksinkertaistettu virheilmoitus
+          _errorMessage = 'Error loading posts.';
         });
       }
     });
@@ -119,7 +117,7 @@ class _HomePageState extends State<HomePage> {
       if (mounted) {
         setState(() {
           _isLoadingPosts = false;
-          _errorMessage = 'Kirjaudu sisään päivittääksesi postaukset.';
+          _errorMessage = 'Sign in to refresh posts.';
         });
       }
     }
@@ -132,8 +130,7 @@ class _HomePageState extends State<HomePage> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Postaukset päivitetty.'),
-            duration: Duration(seconds: 1)),
+            content: Text('Posts refreshed.'), duration: Duration(seconds: 1)),
       );
     }
   }
@@ -147,7 +144,6 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.logout),
-          // tooltip: 'Kirjaudu ulos', // PIDÄ POIS, JOS TOOLTIP-VIRHEET JATKUVAT
           onPressed: () => authProvider.logout(),
         ),
         title: Hero(
@@ -159,11 +155,10 @@ class _HomePageState extends State<HomePage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
-            // tooltip: 'Hae postauksia', // PIDÄ POIS, JOS TOOLTIP-VIRHEET JATKUVAT
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                    content: Text('Hakuominaisuus ei ole vielä toteutettu.')),
+                    content: Text('Search feature is not implemented yet.')),
               );
             },
           ),
@@ -191,8 +186,8 @@ class _HomePageState extends State<HomePage> {
                           padding: const EdgeInsets.all(20.0),
                           child: Text(
                             authProvider.isLoggedIn
-                                ? 'Ei vaelluspostauksia vielä.\nLuo ensimmäinen omasi!'
-                                : 'Kirjaudu sisään nähdäksesi vaelluspostaukset.',
+                                ? 'No hiking posts yet.\nCreate your first one!'
+                                : 'Sign in to see hiking posts.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                                 color: theme.colorScheme.onSurface
@@ -221,7 +216,7 @@ class _HomePageState extends State<HomePage> {
               currentAuthProvider.userProfile == null) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: const Text('Kirjaudu sisään luodaksesi postauksen.'),
+                content: const Text('Sign in to create a post.'),
                 backgroundColor: theme.colorScheme.error,
               ),
             );
@@ -244,7 +239,7 @@ class _HomePageState extends State<HomePage> {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                        content: const Text('Sivun avaaminen epäonnistui.'),
+                        content: const Text('Failed to open the page.'),
                         backgroundColor: theme.colorScheme.error),
                   );
                 }
@@ -252,9 +247,8 @@ class _HomePageState extends State<HomePage> {
             }
           });
         },
-        // tooltip: 'Lisää postaus', // PIDÄ POIS, JOS TOOLTIP-VIRHEET JATKUVAT
         icon: const Icon(Icons.add_a_photo_outlined),
-        label: const Text("Uusi vaellus"),
+        label: const Text("New post"),
         backgroundColor: theme.colorScheme.secondary,
         foregroundColor: theme.colorScheme.onSecondary,
       ),

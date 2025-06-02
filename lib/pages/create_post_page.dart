@@ -1,4 +1,3 @@
-// lib/pages/create_post_page.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -10,7 +9,7 @@ import 'package:path/path.dart' as p;
 
 import '../providers/auth_provider.dart';
 import '../models/post_model.dart';
-import '../models/user_profile_model.dart'; // Varmista, että UserProfile-malli on tuotu
+import '../models/user_profile_model.dart';
 
 class CreatePostPage extends StatefulWidget {
   final PostVisibility initialVisibility;
@@ -73,7 +72,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Kuvan valinta epäonnistui: $e'),
+              content: Text('Failed to pick image: $e'),
               backgroundColor: Theme.of(context).colorScheme.error),
         );
       }
@@ -82,7 +81,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
   Future<void> _selectDate(BuildContext context,
       {required bool isStart}) async {
-    // ... (koodi ennallaan)
     if (_isLoading) return;
     final theme = Theme.of(context);
     final DateTime? picked = await showDatePicker(
@@ -125,7 +123,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
   }
 
   Future<String?> _uploadImageInternal(XFile imageFile) async {
-    // ... (koodi ennallaan)
     try {
       final String fileName =
           '${DateTime.now().millisecondsSinceEpoch}_${p.basename(imageFile.path)}';
@@ -135,12 +132,11 @@ class _CreatePostPageState extends State<CreatePostPage> {
       return await storageRef.getDownloadURL();
     } catch (e) {
       print('Error uploading image internally: $e');
-      throw Exception('Kuvan lataus epäonnistui: $e');
+      throw Exception('Failed to upload image: $e');
     }
   }
 
   Widget _buildAnimatedIcon(bool isSuccess) {
-    // ... (koodi ennallaan)
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 300),
       transitionBuilder: (Widget child, Animation<double> animation) {
@@ -168,7 +164,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
     required String message,
     required VoidCallback onDismissed,
   }) async {
-    // ... (koodi ennallaan)
     if (!mounted) return;
 
     return showDialog<void>(
@@ -213,8 +208,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
     if (!_formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content:
-                const Text('Täytä kaikki pakolliset kentät huolellisesti.'),
+            content: const Text('Please fill all required fields carefully.'),
             backgroundColor: Theme.of(context).colorScheme.error),
       );
       return;
@@ -223,7 +217,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: const Text(
-                'Valitse vaelluksen aloitus- ja päättymispäivämäärät.'),
+                'Please select the start and end dates for the hike.'),
             backgroundColor: Theme.of(context).colorScheme.error),
       );
       return;
@@ -239,8 +233,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
         setState(() => _isLoading = false);
         _showOutcomeDialog(
           isSuccess: false,
-          title: 'Virhe',
-          message: 'Käyttäjäprofiilia ei löytynyt. Kirjaudu sisään uudelleen.',
+          title: 'Error',
+          message: 'User profile not found. Please sign in again.',
           onDismissed: () {},
         );
       }
@@ -258,12 +252,9 @@ class _CreatePostPageState extends State<CreatePostPage> {
       final newPost = Post(
         id: newPostRef.id,
         userId: currentUserProfile.uid,
-        // --- KORJATTU KOHTA ---
         username: currentUserProfile.username.isNotEmpty
             ? currentUserProfile.username
-            : currentUserProfile
-                .displayName, // Käytä ensisijaisesti usernamea, fallback displayName
-        // --- KORJATTU KOHTA LOPPUU ---
+            : currentUserProfile.displayName,
         userAvatarUrl: currentUserProfile.photoURL ??
             'https://firebasestorage.googleapis.com/v0/b/vaellus-app.appspot.com/o/profile_images%2Fdefault_avatar.png?alt=media&token=0default1-0000-0000-0000-0default00000',
         postImageUrl: uploadedImageUrl,
@@ -293,8 +284,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
         setState(() => _isLoading = false);
         _showOutcomeDialog(
           isSuccess: true,
-          title: 'Onnistui!',
-          message: 'Uusi vaelluspostaus luotu.',
+          title: 'Success!',
+          message: 'New hike post created.',
           onDismissed: () {
             if (mounted) {
               Navigator.of(context).pop();
@@ -308,16 +299,15 @@ class _CreatePostPageState extends State<CreatePostPage> {
         setState(() => _isLoading = false);
         _showOutcomeDialog(
           isSuccess: false,
-          title: 'Virhe',
+          title: 'Error',
           message:
-              'Postauksen luominen epäonnistui:\n${e.toString().replaceFirst("Exception: ", "")}',
+              'Failed to create post:\n${e.toString().replaceFirst("Exception: ", "")}',
           onDismissed: () {},
         );
       }
     }
   }
 
-  // ... (_buildSectionTitle, _buildVisibilityIndicator, build, _buildShareOption ennallaan)
   Widget _buildSectionTitle(String title, IconData icon) {
     final theme = Theme.of(context);
     return Padding(
@@ -342,17 +332,17 @@ class _CreatePostPageState extends State<CreatePostPage> {
     switch (_selectedVisibility) {
       case PostVisibility.public:
         icon = Icons.public;
-        text = 'Julkinen';
+        text = 'Public';
         color = theme.colorScheme.primary;
         break;
       case PostVisibility.friends:
         icon = Icons.group_outlined;
-        text = 'Ystävät';
+        text = 'Friends';
         color = theme.colorScheme.secondary;
         break;
       case PostVisibility.private:
         icon = Icons.lock_outline;
-        text = 'Yksityinen';
+        text = 'Private';
         color = Colors.grey.shade500;
         break;
     }
@@ -381,7 +371,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Lisää uusi vaellus'),
+        title: const Text('Add new hike'),
         elevation: 0,
         backgroundColor: theme.scaffoldBackgroundColor,
       ),
@@ -425,8 +415,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                         color: theme.colorScheme.secondary
                                             .withOpacity(0.8)),
                                     const SizedBox(height: 12),
-                                    Text(
-                                        'Lisää kuva vaelluksesta (valinnainen)',
+                                    Text('Add a photo of the hike (optional)',
                                         style: theme.textTheme.titleMedium
                                             ?.copyWith(
                                                 color: theme
@@ -438,38 +427,38 @@ class _CreatePostPageState extends State<CreatePostPage> {
                             : null,
                       ),
                     ),
-                    _buildSectionTitle('Perustiedot', Icons.article_outlined),
+                    _buildSectionTitle(
+                        'Basic Information', Icons.article_outlined),
                     TextFormField(
                       controller: _titleController,
                       decoration: const InputDecoration(
-                          labelText: 'Otsikko',
-                          hintText: 'esim. Upea viikonloppu Kolilla',
+                          labelText: 'Title',
+                          hintText: 'e.g. Amazing weekend at Koli',
                           prefixIcon: Icon(Icons.title)),
                       validator: (value) => (value == null || value.isEmpty)
-                          ? 'Otsikko on pakollinen.'
+                          ? 'Title is required.'
                           : null,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _captionController,
                       decoration: const InputDecoration(
-                          labelText: 'Miten reissu meni?',
-                          hintText: 'Kerro tarinasi, fiilikset ja vinkit...',
+                          labelText: 'How did the trip go?',
+                          hintText: 'Share your story, feelings and tips...',
                           prefixIcon: Icon(Icons.description_outlined),
                           alignLabelWithHint: true),
                       maxLines: 5,
                       minLines: 3,
                       validator: (value) => (value == null || value.isEmpty)
-                          ? 'Kuvaus on pakollinen.'
+                          ? 'Description is required.'
                           : null,
                     ),
-                    _buildSectionTitle(
-                        'Vaelluksen Yksityiskohdat', Icons.hiking_outlined),
+                    _buildSectionTitle('Hike Details', Icons.hiking_outlined),
                     TextFormField(
                       controller: _locationController,
                       decoration: const InputDecoration(
-                          labelText: 'Sijainti',
-                          hintText: 'esim. Patvinsuon kansallispuisto',
+                          labelText: 'Location',
+                          hintText: 'e.g. Patvinsuo National Park',
                           prefixIcon: Icon(Icons.location_on_outlined)),
                     ),
                     const SizedBox(height: 16),
@@ -480,12 +469,12 @@ class _CreatePostPageState extends State<CreatePostPage> {
                             onTap: () => _selectDate(context, isStart: true),
                             child: InputDecorator(
                               decoration: const InputDecoration(
-                                  labelText: 'Aloituspäivä',
+                                  labelText: 'Start date',
                                   prefixIcon:
                                       Icon(Icons.calendar_today_outlined)),
                               child: Text(
                                   _startDate == null
-                                      ? 'Valitse'
+                                      ? 'Select'
                                       : DateFormat('d.M.yyyy')
                                           .format(_startDate!),
                                   style: theme.textTheme.bodyLarge?.copyWith(
@@ -502,12 +491,12 @@ class _CreatePostPageState extends State<CreatePostPage> {
                             onTap: () => _selectDate(context, isStart: false),
                             child: InputDecorator(
                               decoration: const InputDecoration(
-                                  labelText: 'Päättymispäivä',
+                                  labelText: 'End date',
                                   prefixIcon:
                                       Icon(Icons.event_available_outlined)),
                               child: Text(
                                   _endDate == null
-                                      ? 'Valitse'
+                                      ? 'Select'
                                       : DateFormat('d.M.yyyy')
                                           .format(_endDate!),
                                   style: theme.textTheme.bodyLarge?.copyWith(
@@ -529,14 +518,14 @@ class _CreatePostPageState extends State<CreatePostPage> {
                             keyboardType: const TextInputType.numberWithOptions(
                                 decimal: true),
                             decoration: const InputDecoration(
-                                labelText: 'Matka (km)',
+                                labelText: 'Distance (km)',
                                 prefixIcon:
                                     Icon(Icons.directions_walk_outlined)),
                             validator: (v) => (v != null &&
                                     v.isNotEmpty &&
                                     double.tryParse(v.replaceAll(',', '.')) ==
                                         null)
-                                ? 'Virheellinen numero'
+                                ? 'Invalid number'
                                 : null,
                             onChanged: (v) => _distanceController.text =
                                 v.replaceAll(',', '.'),
@@ -548,18 +537,18 @@ class _CreatePostPageState extends State<CreatePostPage> {
                             controller: _nightsController,
                             keyboardType: TextInputType.number,
                             decoration: const InputDecoration(
-                                labelText: 'Yöt (kpl)',
+                                labelText: 'Nights',
                                 prefixIcon: Icon(Icons.night_shelter_outlined)),
                             validator: (v) => (v != null &&
                                     v.isNotEmpty &&
                                     int.tryParse(v) == null)
-                                ? 'Virheellinen numero'
+                                ? 'Invalid number'
                                 : null,
                           ),
                         ),
                       ],
                     ),
-                    _buildSectionTitle('Lisätiedot (Valinnainen)',
+                    _buildSectionTitle('Additional Information (Optional)',
                         Icons.add_circle_outline_outlined),
                     Row(
                       children: [
@@ -569,13 +558,13 @@ class _CreatePostPageState extends State<CreatePostPage> {
                             keyboardType: const TextInputType.numberWithOptions(
                                 decimal: true),
                             decoration: const InputDecoration(
-                                labelText: 'Repun paino (kg)',
+                                labelText: 'Backpack weight (kg)',
                                 prefixIcon: Icon(Icons.backpack_outlined)),
                             validator: (v) => (v != null &&
                                     v.isNotEmpty &&
                                     double.tryParse(v.replaceAll(',', '.')) ==
                                         null)
-                                ? 'Virheellinen numero'
+                                ? 'Invalid number'
                                 : null,
                             onChanged: (v) =>
                                 _weightController.text = v.replaceAll(',', '.'),
@@ -587,35 +576,36 @@ class _CreatePostPageState extends State<CreatePostPage> {
                             controller: _caloriesController,
                             keyboardType: TextInputType.number,
                             decoration: const InputDecoration(
-                                labelText: 'Kalorit/pv',
+                                labelText: 'Calories/day',
                                 prefixIcon:
                                     Icon(Icons.local_fire_department_outlined)),
                             validator: (v) => (v != null &&
                                     v.isNotEmpty &&
                                     int.tryParse(v) == null)
-                                ? 'Virheellinen numero'
+                                ? 'Invalid number'
                                 : null,
                           ),
                         ),
                       ],
                     ),
                     _buildSectionTitle(
-                        'Postauksen Asetukset', Icons.settings_outlined),
+                        'Post Settings', Icons.settings_outlined),
                     Row(
                       children: [
-                        Text("Näkyvyys: ", style: theme.textTheme.titleMedium),
+                        Text("Visibility: ",
+                            style: theme.textTheme.titleMedium),
                         const SizedBox(width: 8),
                         _buildVisibilityIndicator(),
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Text('Mitä tietoja jaetaan postauksessa?',
+                    Text('What information will be shared in the post?',
                         style: theme.textTheme.titleMedium),
-                    _buildShareOption('Reittikartta (paikkamerkki)', 'route',
+                    _buildShareOption('Route map (location marker)', 'route',
                         Icons.map_outlined),
-                    _buildShareOption('Pakkauslista (repun paino)', 'packing',
-                        Icons.inventory_2_outlined),
-                    _buildShareOption('Ruokasuunnitelma (kalorit/pv)', 'food',
+                    _buildShareOption('Packing list (backpack weight)',
+                        'packing', Icons.inventory_2_outlined),
+                    _buildShareOption('Meal plan (calories/day)', 'food',
                         Icons.restaurant_menu_outlined),
                     const SizedBox(height: 32),
                   ],
@@ -634,7 +624,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                         valueColor: AlwaysStoppedAnimation<Color>(
                             theme.colorScheme.secondary)),
                     const SizedBox(height: 20),
-                    Text("Tallennetaan vaellusta...",
+                    Text("Saving hike...",
                         style: theme.textTheme.titleMedium
                             ?.copyWith(color: Colors.white70))
                   ],
@@ -652,7 +642,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
         child: ElevatedButton.icon(
           onPressed: _isLoading ? null : _createPost,
           icon: const Icon(Icons.send_outlined, size: 20),
-          label: const Text('Julkaise vaellus'),
+          label: const Text('Publish hike'),
           style: ElevatedButton.styleFrom(
             backgroundColor: theme.colorScheme.primary,
             foregroundColor: theme.colorScheme.onPrimary,

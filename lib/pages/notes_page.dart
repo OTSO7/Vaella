@@ -1,4 +1,3 @@
-// lib/pages/notes_page.dart
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
@@ -21,12 +20,11 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
   final HikePlanService _hikePlanService = HikePlanService();
   late AnimationController _slideAnimationController;
   late Animation<Offset> _slideAnimation;
-  // KORJATTU: Käytetään nullable tyyppiä ja alustetaan initState:ssa
   TabController? _tabController;
 
   final List<Tab> _tabs = <Tab>[
-    const Tab(text: 'Suunnitelmat'),
-    const Tab(text: 'Suoritetut'),
+    const Tab(text: 'Plans'),
+    const Tab(text: 'Completed'),
   ];
 
   Stream<List<HikePlan>>? _activePlansStream;
@@ -34,7 +32,7 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
 
   @override
   void initState() {
-    super.initState(); // KRIITTINEN: super.initState() ensin!
+    super.initState();
     _slideAnimationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
@@ -45,23 +43,14 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
     ).animate(CurvedAnimation(
         parent: _slideAnimationController, curve: Curves.easeOutQuart));
 
-    // Alustetaan TabController vasta, kun tiedetään käyttäjän tila
-    // tai siirretään alustus kohtaan, jossa userId on varmasti saatavilla.
-    // Parempi: Alusta se tässä ja päivitä streamit _onAuthChanged-metodissa.
     _tabController = TabController(length: _tabs.length, vsync: this);
 
-    // Kuunnellaan AuthProviderin muutoksia streamien päivittämiseksi
-    // Tämä on jo HomePage:ssa, mutta NotesPage on erillinen, joten tarvitsee oman logiikan
-    // tai parempi tapa olisi välittää userId Providerista suoraan build-metodiin.
-    // Tässä oletetaan, että AuthProvider on jo alustettu.
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     if (authProvider.isLoggedIn) {
       _loadStreams();
     }
-    // Lisätään listener auth-tilan muutoksille, jos se voi muuttua tämän sivun ollessa auki
     authProvider.addListener(_authListener);
 
-    // Ajetaan animaatio vasta, kun widget on rakennettu kerran
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _slideAnimationController.forward();
     });
@@ -73,7 +62,6 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
     if (authProvider.isLoggedIn) {
       _loadStreams();
     } else {
-      // Tyhjennä streamit, jos käyttäjä kirjautuu ulos
       setState(() {
         _activePlansStream = Stream.value([]);
         _completedPlansStream = Stream.value([]);
@@ -82,9 +70,6 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
   }
 
   void _loadStreams() {
-    // Varmista, että _hikePlanService on alustettu ja userId on saatavilla
-    // Tämä voidaan tehdä turvallisemmin, jos getUserId ei ole riippuvainen _auth.currentUser suoraan
-    // vaan AuthProviderin tilasta. Oletetaan, että AuthProvider on jo päivittynyt.
     if (mounted) {
       setState(() {
         _activePlansStream = _hikePlanService.getActiveHikePlans();
@@ -96,9 +81,9 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
   @override
   void dispose() {
     _slideAnimationController.dispose();
-    _tabController?.dispose(); // KORJATTU: Lisätty null-tarkistus
+    _tabController?.dispose();
     Provider.of<AuthProvider>(context, listen: false)
-        .removeListener(_authListener); // Poista listener
+        .removeListener(_authListener);
     super.dispose();
   }
 
@@ -108,9 +93,7 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (BuildContext modalContext) {
-        // Käytä modalContextia modaalin sisällä
         return Padding(
-          // Lisätty Padding näppäimistön varalle
           padding: EdgeInsets.only(
               bottom: MediaQuery.of(modalContext).viewInsets.bottom),
           child: DraggableScrollableSheet(
@@ -150,8 +133,8 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text(
-                    'Uusi suunnitelma "${newOrUpdatedPlanData.hikeName}" lisätty!'),
+                content:
+                    Text('New plan "${newOrUpdatedPlanData.hikeName}" added!'),
                 backgroundColor: Colors.green[700]),
           );
         } else {
@@ -159,8 +142,8 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text(
-                    'Suunnitelma "${newOrUpdatedPlanData.hikeName}" päivitetty!'),
+                content:
+                    Text('Plan "${newOrUpdatedPlanData.hikeName}" updated!'),
                 backgroundColor: Colors.blue[700]),
           );
         }
@@ -168,7 +151,7 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text('Virhe tallennuksessa: $e'),
+                content: Text('Error saving: $e'),
                 backgroundColor: Colors.redAccent),
           );
         }
@@ -181,18 +164,18 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (BuildContext dialogContext) {
-        // Käytä dialogContextia
         return AlertDialog(
-          title: const Text('Poista suunnitelma?'),
-          content: Text('Haluatko varmasti poistaa suunnitelman "$hikeName"?'),
+          title: const Text('Delete plan?'),
+          content:
+              Text('Are you sure you want to delete the plan "$hikeName"?'),
           actions: <Widget>[
             TextButton(
                 onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('Peruuta')),
+                child: const Text('Cancel')),
             TextButton(
                 onPressed: () => Navigator.of(dialogContext).pop(true),
                 child:
-                    const Text('Poista', style: TextStyle(color: Colors.red))),
+                    const Text('Delete', style: TextStyle(color: Colors.red))),
           ],
         );
       },
@@ -204,14 +187,14 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Suunnitelma "$hikeName" poistettu!'),
+              content: Text('Plan "$hikeName" deleted!'),
               backgroundColor: Colors.red[700]),
         );
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text('Virhe poistossa: $e'),
+                content: Text('Error deleting: $e'),
                 backgroundColor: Colors.redAccent),
           );
         }
@@ -232,8 +215,8 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-                'Suunnitelman "${updatedPlan.hikeName}" valmistelut päivitetty!'),
+            content:
+                Text('Preparations for "${updatedPlan.hikeName}" updated!'),
             backgroundColor: Colors.teal.shade700,
           ),
         );
@@ -241,7 +224,7 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text('Virhe valmistelujen päivityksessä: $e'),
+                content: Text('Error updating preparations: $e'),
                 backgroundColor: Colors.redAccent),
           );
         }
@@ -255,20 +238,16 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
     final authProvider = Provider.of<AuthProvider>(context);
     final userId = authProvider.user?.uid;
 
-    // Varmista, että _tabController on alustettu ennen kuin sitä käytetään
     if (_tabController == null && userId != null) {
-      // Tämä on hätävara, _tabController pitäisi alustaa initStatessa
-      // tai _loadStreams-metodissa sen jälkeen, kun userId on varmistettu.
-      // Parempi tapa on, että build-metodi ei yritä käyttää _tabControlleria, jos userId on null.
       _tabController = TabController(length: _tabs.length, vsync: this);
-      _loadStreams(); // Ladataan streamit, jos ne eivät ole vielä latautuneet
+      _loadStreams();
     }
 
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.logout),
-          tooltip: 'Kirjaudu ulos',
+          tooltip: 'Log out',
           onPressed: () => authProvider.logout(),
         ),
         title: Hero(
@@ -280,18 +259,16 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
-            tooltip: 'Hae suunnitelmia',
+            tooltip: 'Search plans',
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                    content: Text('Hakuominaisuus ei ole vielä toteutettu.')),
+                    content: Text('Search feature is not implemented yet.')),
               );
             },
           ),
         ],
-        bottom: userId == null ||
-                _tabController ==
-                    null // Näytä TabBar vain jos käyttäjä kirjautunut JA controller alustettu
+        bottom: userId == null || _tabController == null
             ? null
             : TabBar(
                 controller: _tabController,
@@ -302,33 +279,27 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
                     theme.colorScheme.onSurface.withOpacity(0.7),
               ),
       ),
-      body: userId == null ||
-              _tabController ==
-                  null // KORJATTU: Näytä login-prompt, jos ei käyttäjää TAI _tabController on null
+      body: userId == null || _tabController == null
           ? _buildLoginPromptState(context, theme)
           : TabBarView(
               controller: _tabController,
               children: [
-                // Streamit alustetaan _loadStreams-metodissa
-                _buildPlansList(
-                    context,
-                    theme,
-                    _activePlansStream ?? Stream.value([]),
-                    "Ei aktiivisia suunnitelmia."),
+                _buildPlansList(context, theme,
+                    _activePlansStream ?? Stream.value([]), "No active plans."),
                 _buildPlansList(
                     context,
                     theme,
                     _completedPlansStream ?? Stream.value([]),
-                    "Ei suoritettuja vaelluksia vielä."),
+                    "No completed hikes yet."),
               ],
             ),
       floatingActionButton: userId == null
           ? null
           : FloatingActionButton.extended(
               onPressed: () => _openAddHikePlanModal(),
-              tooltip: 'Luo uusi vaellussuunnitelma',
+              tooltip: 'Create new hike plan',
               icon: const Icon(Icons.add_location_alt_outlined),
-              label: const Text('Uusi Suunnitelma'),
+              label: const Text('New Plan'),
               heroTag: 'addHikePlanFab_NotesPage',
               backgroundColor: theme.colorScheme.secondary,
               foregroundColor: theme.colorScheme.onSecondary,
@@ -342,12 +313,11 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
     return SlideTransition(
       position: _slideAnimation,
       child: StreamBuilder<List<HikePlan>>(
-        stream: stream, // Stream tulee nyt parametrina
+        stream: stream,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting &&
               !snapshot.hasData &&
               !snapshot.hasError) {
-            // Parannettu lataustilan tarkistus
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
@@ -355,12 +325,11 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
                 "Error in _buildPlansList StreamBuilder for '$emptyListMessage': ${snapshot.error}");
             return Center(
                 child: Text(
-              'Virhe suunnitelmien latauksessa.\n${snapshot.error}',
+              'Error loading plans.\n${snapshot.error}',
               textAlign: TextAlign.center,
             ));
           }
-          final List<HikePlan> hikePlans =
-              snapshot.data ?? []; // Oletus tyhjä lista, jos data on null
+          final List<HikePlan> hikePlans = snapshot.data ?? [];
 
           if (hikePlans.isEmpty) {
             return _buildEmptyState(context, theme,
@@ -376,28 +345,16 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
                 key: ValueKey(plan.id),
                 plan: plan,
                 onTap: () async {
-                  // Muutettu asynciksi, jotta voidaan odottaa paluuta
                   if (!mounted) return;
-                  // Navigoidaan ja odotetaan mahdollista palautettua arvoa (päivitetty suunnitelma)
                   final result = await Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => HikePlanHubPage(initialPlan: plan),
                     ),
                   );
-                  // Jos HikePlanHubPage palauttaa päivitetyn suunnitelman,
-                  // tai jos halutaan vain "päivittää näkymä" palatessa:
                   if (mounted && result != null) {
-                    // result voi olla päivitetty HikePlan tai vain signaali
-                    // StreamBuilderin pitäisi päivittyä automaattisesti, jos data Firebasessa muuttui.
-                    // Manuaalinen setState voi olla tarpeen, jos paikallista tilaa muutetaan.
-                    // Koska streamit ladataan uudelleen _loadStreams-kutsulla, se voi riittää.
-                    // _loadStreams(); // Tämä lataa streamit uudelleen, mikä voi olla raskasta.
-                    // Parempi, jos HubPage ilmoittaa muutoksesta ja tämä sivu reagoi siihen
-                    // esim. Providerin kautta tai palauttamalla päivitetyn objektin.
                     print(
                         "Returned from HikePlanHubPage, potential update needed.");
-                    // setState(() {}); // Yksinkertainen uudelleenrakennus, jos tarpeen
                   }
                 },
                 onEdit: () => _openAddHikePlanModal(existingPlan: plan),
@@ -411,7 +368,6 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
     );
   }
 
-  // _buildLoginPromptState ja _buildEmptyState pysyvät ennallaan
   Widget _buildLoginPromptState(BuildContext context, ThemeData theme) {
     final textTheme = theme.textTheme;
     return Center(
@@ -429,7 +385,7 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
             ),
             const SizedBox(height: 24),
             Text(
-              'Kirjaudu nähdäksesi suunnitelmasi!',
+              'Sign in to see your plans!',
               textAlign: TextAlign.center,
               style: textTheme.headlineMedium?.copyWith(
                 color: theme.colorScheme.onSurface.withOpacity(0.9),
@@ -439,7 +395,7 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
             ),
             const SizedBox(height: 12),
             Text(
-              'Sinun tulee olla kirjautuneena sisään nähdäksesi ja hallitaksesi vaellussuunnitelmiasi.',
+              'You need to be signed in to view and manage your hiking plans.',
               textAlign: TextAlign.center,
               style: textTheme.bodyLarge?.copyWith(
                 color: theme.colorScheme.onSurface.withOpacity(0.7),
@@ -450,10 +406,9 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
             ElevatedButton.icon(
               onPressed: () {
                 Provider.of<AuthProvider>(context, listen: false).logout();
-                // GoRouter pitäisi hoitaa uudelleenohjaus LoginSivulle
               },
               icon: const Icon(Icons.login),
-              label: const Text('Kirjaudu sisään'),
+              label: const Text('Sign in'),
               style: ElevatedButton.styleFrom(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -482,7 +437,7 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
             ),
             const SizedBox(height: 24),
             Text(
-              customMessage ?? 'Seikkailusi odottaa!',
+              customMessage ?? 'Your adventure awaits!',
               textAlign: TextAlign.center,
               style: textTheme.headlineSmall?.copyWith(
                 color: theme.colorScheme.onSurface.withOpacity(0.85),
@@ -491,12 +446,11 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
             ),
             const SizedBox(height: 12),
             Text(
-              customMessage == null ||
-                      customMessage == "Ei aktiivisia suunnitelmia."
-                  ? 'Kun luot ensimmäisen vaellussuunnitelmasi, se ilmestyy tänne.'
-                  : (customMessage == "Ei suoritettuja vaelluksia vielä."
-                      ? "Kun merkitset suunnitelmia suoritetuiksi, ne näkyvät täällä."
-                      : 'Aloita luomalla uusi suunnitelma!'),
+              customMessage == null || customMessage == "No active plans."
+                  ? 'When you create your first hiking plan, it will appear here.'
+                  : (customMessage == "No completed hikes yet."
+                      ? "When you mark plans as completed, they will show up here."
+                      : 'Start by creating a new plan!'),
               textAlign: TextAlign.center,
               style: textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurface.withOpacity(0.65),
@@ -504,12 +458,12 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
               ),
             ),
             if (customMessage == null ||
-                customMessage == "Ei aktiivisia suunnitelmia.") ...[
+                customMessage == "No active plans.") ...[
               const SizedBox(height: 32),
               ElevatedButton.icon(
                 onPressed: () => _openAddHikePlanModal(),
                 icon: const Icon(Icons.add_circle_outline),
-                label: const Text('Luo uusi suunnitelma'),
+                label: const Text('Create new plan'),
                 style: ElevatedButton.styleFrom(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
