@@ -79,15 +79,10 @@ class HikePlanCard extends StatelessWidget {
         break;
       case HikeStatus.planned:
         if (allPreparationsDone) {
-          // KORJATTU LOGIIKKA TÄSSÄ
-          statusColor =
-              theme.colorScheme.primary; // Esim. teeman pääväri (teal)
-          statusIcon =
-              Icons.task_alt_rounded; // Ikoni, joka viestii valmiudesta
-          statusLabel = 'Valmiina lähtöön!'; // Uusi teksti
+          statusColor = theme.colorScheme.primary;
+          statusIcon = Icons.task_alt_rounded;
+          statusLabel = 'Valmiina lähtöön!';
         } else {
-          statusColor = theme.colorScheme.tertiaryContainer
-              .withOpacity(0.8); // Hieman himmeämpi
           if (theme.brightness == Brightness.dark) {
             statusColor = theme.colorScheme.onSurface.withOpacity(0.5);
           } else {
@@ -149,7 +144,8 @@ class HikePlanCard extends StatelessWidget {
                             color:
                                 theme.colorScheme.onSurface.withOpacity(0.7)),
                         iconSize: 22,
-                        tooltip: 'Lisävalinnat',
+                        tooltip:
+                            null, // <<< --- KORJATTU TÄHÄN: Tooltip asetettu nulliksi
                         padding: EdgeInsets.zero,
                         itemBuilder: (BuildContext context) =>
                             <PopupMenuEntry<String>>[
@@ -168,7 +164,7 @@ class HikePlanCard extends StatelessWidget {
                               child: Row(children: [
                                 Icon(Icons.delete_outline_rounded,
                                     color: theme.colorScheme.error, size: 20),
-                                const SizedBox(width: 10),
+                                SizedBox(width: 10),
                                 Text('Poista',
                                     style: TextStyle(
                                         color: theme.colorScheme.error))
@@ -178,8 +174,9 @@ class HikePlanCard extends StatelessWidget {
                         onSelected: (value) {
                           if (value == 'edit' && onEdit != null) {
                             onEdit!();
-                          } else if (value == 'delete' && onDelete != null)
+                          } else if (value == 'delete' && onDelete != null) {
                             onDelete!();
+                          }
                         },
                       ),
                     )
@@ -209,7 +206,6 @@ class HikePlanCard extends StatelessWidget {
                   Flexible(
                       child: _buildStatusBadge(
                           theme, statusColor, statusIcon, statusLabel)),
-                  // Näytä päivitysnappi vain, jos valmistelu on relevanttia (ei suoritettu/peruttu)
                   if (onUpdatePreparation != null && isPreparationRelevant)
                     TextButton.icon(
                       icon: Icon(
@@ -251,13 +247,20 @@ class HikePlanCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(5),
                   child: LinearProgressIndicator(
                     value: progress,
-                    // Käytetään statusColoria progress barin taustalle ja arvolle, jotta se vastaa badgea
                     backgroundColor: statusColor.withOpacity(0.2),
                     valueColor: AlwaysStoppedAnimation<Color>(statusColor),
                     minHeight: 7,
                   ),
                 ),
                 const SizedBox(height: 6),
+                Text(
+                  allPreparationsDone
+                      ? "Kaikki valmista lähtöön!"
+                      : "${totalItems - completedItems} valmistelua jäljellä",
+                  style: textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withOpacity(0.75),
+                      fontStyle: FontStyle.italic),
+                )
               ]
             ],
           ),
