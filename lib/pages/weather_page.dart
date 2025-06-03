@@ -204,7 +204,7 @@ class _WeatherPageState extends State<WeatherPage> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  Icon(
+                  FaIcon(
                     _getWeatherIcon(symbolCode),
                     size: 64,
                     color: _getTempColor(temp),
@@ -238,13 +238,12 @@ class _WeatherPageState extends State<WeatherPage> {
                   const SizedBox(height: 10),
                   _buildDetailRow(
                       Icons.thermostat, 'Lämpötila', '${temp.round()}°C'),
-                  _buildDetailRow(FontAwesomeIcons.wind, 'Tuuli',
+                  _buildDetailRow(Icons.wind_power, 'Tuuli',
                       '${windSpeed.toStringAsFixed(1)} m/s',
                       icon2: _getWindDirectionIcon(windDeg)),
+                  _buildDetailRow(Icons.water_drop, 'Kosteus', '$humidity%'),
                   _buildDetailRow(
-                      FontAwesomeIcons.droplet, 'Kosteus', '$humidity%'),
-                  _buildDetailRow(FontAwesomeIcons.gaugeHigh, 'Ilmanpaine',
-                      '${pressure.round()} hPa'),
+                      Icons.speed, 'Ilmanpaine', '${pressure.round()} hPa'),
                 ],
               ),
             ),
@@ -268,15 +267,15 @@ class _WeatherPageState extends State<WeatherPage> {
   }
 
   IconData _getWindDirectionIcon(double deg) {
-    if (deg >= 337.5 || deg < 22.5) return FontAwesomeIcons.arrowUp; // N
+    if (deg >= 337.5 || deg < 22.5) return Icons.arrow_upward; // N
     if (deg >= 22.5 && deg < 67.5) return Icons.north_east; // NE
-    if (deg >= 67.5 && deg < 112.5) return FontAwesomeIcons.arrowRight; // E
+    if (deg >= 67.5 && deg < 112.5) return Icons.arrow_forward; // E
     if (deg >= 112.5 && deg < 157.5) return Icons.south_east; // SE
-    if (deg >= 157.5 && deg < 202.5) return FontAwesomeIcons.arrowDown; // S
+    if (deg >= 157.5 && deg < 202.5) return Icons.arrow_downward; // S
     if (deg >= 202.5 && deg < 247.5) return Icons.south_west; // SW
-    if (deg >= 247.5 && deg < 292.5) return FontAwesomeIcons.arrowLeft; // W
+    if (deg >= 247.5 && deg < 292.5) return Icons.arrow_back; // W
     if (deg >= 292.5 && deg < 337.5) return Icons.north_west; // NW
-    return FontAwesomeIcons.question;
+    return Icons.help_outline;
   }
 
   Widget _buildDetailRow(IconData icon, String label, String value,
@@ -313,7 +312,7 @@ class _WeatherPageState extends State<WeatherPage> {
                 ),
               ),
               if (icon2 != null &&
-                  icon2.codePoint != FontAwesomeIcons.question.codePoint)
+                  icon2.codePoint != Icons.help_outline.codePoint)
                 Padding(
                   padding: const EdgeInsets.only(left: 8.0),
                   child:
