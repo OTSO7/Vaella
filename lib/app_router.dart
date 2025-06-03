@@ -6,24 +6,23 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'providers/auth_provider.dart';
-import 'models/post_model.dart'; // Lisätty PostVisibility-enumia varten
-import 'models/user_profile_model.dart'; // UserProfile-mallia varten EditProfilePagessa
+import 'models/post_model.dart'; // For PostVisibility enum
+import 'models/user_profile_model.dart'; // For UserProfile in EditProfilePage
 
-// Sivut
+// Pages
 import 'pages/login_page.dart';
 import 'pages/home_page.dart';
-import 'pages/notes_page.dart'; // Oletetaan, että sinulla on NotesPage
+import 'pages/notes_page.dart';
 import 'pages/profile_page.dart';
 import 'pages/edit_profile_page.dart';
 import 'pages/register_page.dart';
-import 'pages/create_post_page.dart'; // Lisätty CreatePostPage
-import 'pages/user_posts_list_page.dart'; // UUSI: Käyttäjän julkaisulistaussivu
+import 'pages/create_post_page.dart';
+import 'pages/user_posts_list_page.dart';
 
-// Widgetit
-import 'widgets/main_scaffold.dart'; // Oletetaan, että MainScaffoldWithBottomNav on tässä
+// Widgets
+import 'widgets/main_scaffold.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
-// GlobalKey<NavigatorState> _shellNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shell'); // Voit lisätä shellNavigatorKeyn tarvittaessa
 
 class AppRouter extends StatelessWidget {
   const AppRouter({super.key});
@@ -34,13 +33,13 @@ class AppRouter extends StatelessWidget {
 
     final router = GoRouter(
       navigatorKey: _rootNavigatorKey,
-      initialLocation: '/home', // Tai '/login' jos halutaan aloittaa sieltä
-      debugLogDiagnostics: true, // Hyödyllinen debuggaukseen
+      initialLocation: '/home',
+      debugLogDiagnostics: true,
       refreshListenable: authProvider,
       routes: [
         GoRoute(
           path: '/login',
-          name: 'login', // Nimeä reitit selkeyden vuoksi
+          name: 'login',
           parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) => const LoginPage(),
         ),
@@ -53,28 +52,21 @@ class AppRouter extends StatelessWidget {
         GoRoute(
           path: '/create-post',
           name: 'createPost',
-          parentNavigatorKey:
-              _rootNavigatorKey, // Avautuu koko näytölle ilman shelliä
+          parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) {
-            // Oletetaan, että initialVisibility välitetään extrana
             final initialVisibility = state.extra as PostVisibility?;
             return CreatePostPage(
-                initialVisibility: initialVisibility ??
-                    PostVisibility.public); // Oletusarvo, jos extra on null
+                initialVisibility: initialVisibility ?? PostVisibility.public);
           },
         ),
-        // UUSI REITTI: Käyttäjän julkaisulistaussivu
         GoRoute(
-          path: '/users/:userId/posts', // Polku sisältää käyttäjän ID:n
+          path: '/users/:userId/posts',
           name: 'userPostsList',
-          parentNavigatorKey: _rootNavigatorKey, // Avautuu koko näytölle
+          parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) {
             final userId = state.pathParameters['userId'];
-            final username =
-                state.extra as String?; // Välitetään username extrana
-
+            final username = state.extra as String?;
             if (userId == null) {
-              // Virhetilanne, jos userId puuttuu polusta
               return Scaffold(
                 appBar: AppBar(title: const Text('Error')),
                 body: const Center(child: Text('User ID is missing.')),
@@ -83,40 +75,32 @@ class AppRouter extends StatelessWidget {
             return UserPostsListPage(userId: userId, username: username);
           },
         ),
-        // StatefulShellRoute päänavigaatiota varten (alapalkki)
         StatefulShellRoute.indexedStack(
           builder: (BuildContext context, GoRouterState state,
               StatefulNavigationShell navigationShell) {
-            // MainScaffoldWithBottomNav hoitaa alapalkin ja sisällön vaihdon
             return MainScaffoldWithBottomNav(navigationShell: navigationShell);
           },
           branches: <StatefulShellBranch>[
-            // Home-välilehti
             StatefulShellBranch(
-              // navigatorKey: _shellNavigatorKey, // Voit käyttää erillistä avainta shellin navigaatiolle
               routes: <RouteBase>[
                 GoRoute(
                   path: '/home',
                   name: 'home',
                   builder: (BuildContext context, GoRouterState state) =>
                       const HomePage(),
-                  // Tähän voi lisätä alireittejä, jotka avautuvat Home-shellin sisällä
-                  // Esim. /home/details/:id
                 ),
               ],
             ),
-            // Notes-välilehti (tai mikä tahansa toinen välilehti)
             StatefulShellBranch(
               routes: <RouteBase>[
                 GoRoute(
-                  path: '/notes', // Muuta polku sopivaksi
+                  path: '/notes',
                   name: 'notes',
                   builder: (BuildContext context, GoRouterState state) =>
-                      const NotesPage(), // Varmista, että NotesPage on olemassa
+                      const NotesPage(),
                 ),
               ],
             ),
-            // Profile-välilehti
             StatefulShellBranch(
               routes: <RouteBase>[
                 GoRoute(
@@ -126,14 +110,11 @@ class AppRouter extends StatelessWidget {
                         const ProfilePage(),
                     routes: [
                       GoRoute(
-                        path: 'edit', // Alireitti: /profile/edit
+                        path: 'edit',
                         name: 'editProfile',
-                        // Jos haluat tämän avautuvan koko näytölle shellin ulkopuolelle:
-                        // parentNavigatorKey: _rootNavigatorKey,
                         builder: (BuildContext context, GoRouterState state) {
                           final userProfile = state.extra as UserProfile?;
                           if (userProfile == null) {
-                            // Näytä virhesivu tai ohjaa takaisin, jos profiilidata puuttuu
                             return Scaffold(
                               appBar: AppBar(title: const Text('Error')),
                               body: const Center(
@@ -145,10 +126,6 @@ class AppRouter extends StatelessWidget {
                           return EditProfilePage(initialProfile: userProfile);
                         },
                       ),
-                      // Huom: '/profile/:userId/posts' reitti on nyt ylätason reitti,
-                      // koska se voi näyttää kenen tahansa käyttäjän postaukset.
-                      // Jos haluaisit reitin VAIN nykyisen käyttäjän postauksille alapalkin sisällä,
-                      // se voisi olla '/profile/myposts' ilman :userId parametria.
                     ]),
               ],
             ),
@@ -157,50 +134,44 @@ class AppRouter extends StatelessWidget {
       ],
       redirect: (BuildContext context, GoRouterState state) {
         final isLoggedIn = authProvider.isLoggedIn;
-        // state.matchedLocation antaa reitin ilman query parametreja
         final String location = state.matchedLocation;
 
         final isLoggingIn = location == '/login';
         final isRegistering = location == '/register';
 
-        // Jos käyttäjä ei ole kirjautunut EIKÄ ole kirjautumis- tai rekisteröitymissivulla -> ohjaa login-sivulle
         if (!isLoggedIn && !isLoggingIn && !isRegistering) {
           return '/login';
         }
-        // Jos käyttäjä ON kirjautunut JA on kirjautumis- tai rekisteröitymissivulla -> ohjaa home-sivulle
         if (isLoggedIn && (isLoggingIn || isRegistering)) {
           return '/home';
         }
-        // Ei uudelleenohjausta muissa tapauksissa
         return null;
       },
     );
 
-    // ThemeData pysyy samana kuin annoit, lisäsin vain kommentteja
     final themeData = ThemeData(
         brightness: Brightness.dark,
-        // primaryColor: Colors.teal, // Vanhempi tapa, käytä colorScheme.primary
-        scaffoldBackgroundColor:
-            const Color(0xFF1A1A1A), // Sovelluksen päätausta
-        cardColor: const Color(0xFF2C2C2C), // Korttien taustaväri
+        scaffoldBackgroundColor: const Color(0xFF1A1A1A),
+        cardColor: const Color(0xFF2C2C2C),
         colorScheme: ColorScheme.dark(
-          primary: Colors.teal.shade400, // Pääväri (esim. sinivihreä)
-          onPrimary: Colors.black, // Teksti/ikonit päävärin päällä
-          secondary:
-              Colors.orange.shade400, // Toissijainen väri (esim. oranssi)
-          onSecondary: Colors.black, // Teksti/ikonit toissijaisen värin päällä
-          surface: const Color(
-              0xFF222222), // Pintojen väri (hieman eri kuin scaffoldBg)
-          onSurface: Colors.white.withOpacity(0.9), // Teksti pintojen päällä
-          surfaceContainerLowest:
-              const Color(0xFF1F1F1F), // Lisätty uusi väri shimmerille
-          surfaceContainerHighest: const Color(0xFF3A3A3A), // Lisätty uusi väri
-          error: Colors.redAccent.shade200, // Virheväri
-          onError: Colors.black, // Teksti virhevärin päällä
-          outline: Colors.grey.shade700, // Reunaviivojen väri
+          primary: Colors.teal.shade400,
+          onPrimary: Colors.black,
+          secondary: Colors.orange.shade400,
+          onSecondary: Colors.black,
+          surface: const Color(0xFF222222),
+          onSurface: Colors.white.withOpacity(0.9),
+          surfaceContainerLowest: const Color(0xFF1F1F1F),
+          surfaceContainerHighest: const Color(0xFF3A3A3A),
+          error: Colors.redAccent.shade200,
+          onError: Colors.black,
+          outline: Colors.grey.shade700,
+          // Accent colors
+          tertiary: Colors.deepPurpleAccent.shade200, // Accent color 1
+          onTertiary: Colors.black,
+          secondaryContainer: Colors.amberAccent.shade200, // Accent color 2
+          onSecondaryContainer: Colors.black,
         ),
         textTheme: TextTheme(
-          // Voit käyttää GoogleFonts suoraan widgeteissä tai määritellä ne teemassa
           headlineLarge: GoogleFonts.poppins(
               fontWeight: FontWeight.w800,
               color: Colors.white,
@@ -318,7 +289,6 @@ class AppRouter extends StatelessWidget {
               fontWeight: FontWeight.bold),
         ),
         datePickerTheme: DatePickerThemeData(
-          // Esimerkki DatePicker-teemasta
           backgroundColor: const Color(0xFF2C2C2C),
           headerBackgroundColor: Colors.teal.shade700,
           headerForegroundColor: Colors.white,
@@ -366,19 +336,19 @@ class AppRouter extends StatelessWidget {
         ));
 
     return MaterialApp.router(
-      title: 'Vaella', // Sovelluksen nimi
+      title: 'Vaella',
       debugShowCheckedModeBanner: false,
-      theme: themeData, // Käytä määriteltyä teemaa
+      theme: themeData,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: const [
-        Locale('fi', 'FI'), // Suomi
-        Locale('en', ''), // Englanti (oletus)
+        Locale('fi', 'FI'),
+        Locale('en', ''),
       ],
-      locale: const Locale('fi', 'FI'), // Aseta oletuskieli sovellukselle
+      locale: const Locale('fi', 'FI'),
       routerConfig: router,
     );
   }

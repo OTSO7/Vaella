@@ -95,7 +95,9 @@ class UserProfile {
   List<Sticker> stickers;
   List<String> followingIds;
   List<String> followerIds;
-  int postsCount; // UUSI: Denormalisoitu julkaisujen määrä
+  int postsCount;
+  int level; // LISÄTTY
+  int experience; // LISÄTTY
 
   UserProfile({
     required this.uid,
@@ -110,7 +112,9 @@ class UserProfile {
     this.stickers = const [],
     this.followingIds = const [],
     this.followerIds = const [],
-    this.postsCount = 0, // UUSI: Oletusarvo 0
+    this.postsCount = 0,
+    this.level = 1, // ALUSTUSARVO
+    this.experience = 0, // ALUSTUSARVO
   });
 
   factory UserProfile.fromFirestore(Map<String, dynamic> data, String uid) {
@@ -161,7 +165,10 @@ class UserProfile {
       stickers: parsedStickers,
       followingIds: parseStringList(data['followingIds'] ?? data['friends']),
       followerIds: parseStringList(data['followerIds']),
-      postsCount: (data['postsCount'] as num?)?.toInt() ?? 0, // UUSI
+      postsCount: (data['postsCount'] as num?)?.toInt() ?? 0,
+      level: (data['level'] as num?)?.toInt() ?? 1, // Varmista lukeminen
+      experience:
+          (data['experience'] as num?)?.toInt() ?? 0, // Varmista lukeminen
     );
   }
 
@@ -178,7 +185,9 @@ class UserProfile {
       'stickers': stickers.map((s) => s.toFirestore()).toList(),
       'followingIds': followingIds,
       'followerIds': followerIds,
-      'postsCount': postsCount, // UUSI
+      'postsCount': postsCount,
+      'level': level, // Varmista tallennus
+      'experience': experience, // Varmista tallennus
     };
   }
 
@@ -195,7 +204,9 @@ class UserProfile {
     List<Sticker>? stickers,
     List<String>? followingIds,
     List<String>? followerIds,
-    int? postsCount, // UUSI
+    int? postsCount,
+    int? level,
+    int? experience,
   }) {
     return UserProfile(
       uid: uid ?? this.uid,
@@ -210,7 +221,9 @@ class UserProfile {
       stickers: stickers ?? this.stickers,
       followingIds: followingIds ?? this.followingIds,
       followerIds: followerIds ?? this.followerIds,
-      postsCount: postsCount ?? this.postsCount, // UUSI
+      postsCount: postsCount ?? this.postsCount,
+      level: level ?? this.level,
+      experience: experience ?? this.experience,
     );
   }
 }

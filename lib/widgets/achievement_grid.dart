@@ -80,8 +80,11 @@ class AchievementGrid extends StatelessWidget {
           crossAxisCount: isStickerGrid ? 4 : 3,
           crossAxisSpacing: isStickerGrid ? 10.0 : 12.0,
           mainAxisSpacing: isStickerGrid ? 10.0 : 12.0,
+          // FIX: Significantly increased childAspectRatio for both types.
+          // A higher aspect ratio means a shorter height for a given width.
+          // This is crucial to prevent overflow.
           childAspectRatio:
-              isStickerGrid ? 1.0 : 0.9, // Adjust for better text fit
+              isStickerGrid ? 1.05 : 1.2, // Adjusted from 1.0 / 0.9
         ),
         itemCount: achievements.length,
         itemBuilder: (context, index) {
@@ -151,7 +154,7 @@ class AchievementGrid extends StatelessWidget {
                       if (item.dateAchieved != null) ...[
                         const SizedBox(height: 12),
                         Text(
-                          'Achieved: ${DateFormat('d MMM yyyy', Localizations.localeOf(context).languageCode).format(item.dateAchieved!)}',
+                          'Achieved: ${DateFormat('d MMM', Localizations.localeOf(context).languageCode).format(item.dateAchieved!)}',
                           style: GoogleFonts.lato(
                               fontSize: 12,
                               color: theme.colorScheme.onSurfaceVariant
@@ -184,16 +187,17 @@ class AchievementGrid extends StatelessWidget {
                   ),
                 ],
               ),
-              padding: const EdgeInsets.all(10), // Adjusted padding
+              padding: const EdgeInsets.all(8), // FIX: Slightly reduced padding
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
+                    // FIX: Use Expanded for image/icon to ensure it takes available space
                     flex: 3,
                     child: Padding(
                       padding: const EdgeInsets.all(
-                          4.0), // Padding around icon/image
+                          2.0), // FIX: Further reduced padding around icon/image
                       child: (item.imageUrl != null &&
                               item.imageUrl!.isNotEmpty)
                           ? ClipRRect(
@@ -201,30 +205,36 @@ class AchievementGrid extends StatelessWidget {
                                   BorderRadius.circular(8), // Rounded images
                               child: Image.network(
                                 item.imageUrl!,
-                                fit: BoxFit.contain,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    Icon(Icons.broken_image_outlined,
-                                        size: isStickerGrid ? 40 : 32,
-                                        color:
-                                            theme.hintColor.withOpacity(0.6)),
+                                fit: BoxFit.contain, // Ensure image fits
+                                errorBuilder: (context, error, stackTrace) => Icon(
+                                    Icons.broken_image_outlined,
+                                    size: isStickerGrid
+                                        ? 36
+                                        : 30, // FIX: Slightly smaller icon sizes
+                                    color: theme.hintColor.withOpacity(0.6)),
                               ),
                             )
                           : Icon(
                               item.icon ?? Icons.emoji_events_outlined,
-                              size: isStickerGrid ? 36 : 30,
+                              size: isStickerGrid
+                                  ? 32
+                                  : 28, // FIX: Slightly smaller icon sizes
                               color: item.iconColor ??
                                   theme.colorScheme.secondary.withOpacity(0.8),
                             ),
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4), // FIX: Reduced spacing
                   Expanded(
+                    // FIX: Use Expanded for text to ensure it takes available space
                     flex: 2,
                     child: Text(
                       item.title,
                       textAlign: TextAlign.center,
                       style: GoogleFonts.lato(
-                          fontSize: isStickerGrid ? 10 : 11.5,
+                          fontSize: isStickerGrid
+                              ? 9
+                              : 10.5, // FIX: Slightly smaller font sizes
                           fontWeight: FontWeight.w500, // Slightly bolder title
                           color: theme.colorScheme.onSurface.withOpacity(0.85),
                           height: 1.2),

@@ -1,13 +1,11 @@
-// lib/pages/profile_page.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers/auth_provider.dart';
 import '../models/user_profile_model.dart'
-    as user_model; // Pidä alias selkeyden vuoksi
+    as user_model; // Alias to avoid confusion with FirebaseAuth.User
 import '../widgets/profile_header.dart';
-import '../widgets/profile_stats_grid.dart';
 import '../widgets/achievement_grid.dart' as achievement_widget;
 import '../widgets/profile_counts_bar.dart';
 
@@ -19,18 +17,19 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  // _postsCount ja _updatePostsCount on poistettu, koska postsCount tulee userProfile-objektista
-
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final theme = Theme.of(context);
 
+    // --- Loading/Login State Handling ---
     if (!authProvider.isLoggedIn || authProvider.userProfile == null) {
       return Scaffold(
         appBar: AppBar(
-          title: Text('Profile',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+          title: Text(
+            'Profile',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+          ),
           backgroundColor: theme.colorScheme.surface,
           elevation: 0,
         ),
@@ -40,8 +39,10 @@ class _ProfilePageState extends State<ProfilePage> {
             children: [
               authProvider.isLoading
                   ? CircularProgressIndicator(color: theme.colorScheme.primary)
-                  : Text('Loading profile...',
-                      style: GoogleFonts.lato(fontSize: 16)),
+                  : Text(
+                      'Loading profile...',
+                      style: GoogleFonts.lato(fontSize: 16),
+                    ),
               const SizedBox(height: 20),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
@@ -60,8 +61,10 @@ class _ProfilePageState extends State<ProfilePage> {
       );
     }
 
+    // --- User Profile Data ---
     final user_model.UserProfile userProfile = authProvider.userProfile!;
 
+    // --- Navigation and SnackBar Logic ---
     void navigateToEditProfile() async {
       final updatedProfile = await context.push<user_model.UserProfile>(
         '/profile/edit',
@@ -85,6 +88,30 @@ class _ProfilePageState extends State<ProfilePage> {
       }
     }
 
+    // --- Experience & Level Calculation ---
+    final int currentLevel = userProfile.level;
+    final int currentTotalExperience = userProfile.experience;
+
+    int totalExperienceToReachCurrentLevel = 0;
+    for (int i = 1; i < currentLevel; i++) {
+      totalExperienceToReachCurrentLevel +=
+          authProvider.getExperienceRequiredForLevel(i);
+    }
+
+    final int experienceRequiredForNextLevel =
+        authProvider.getExperienceRequiredForLevel(currentLevel);
+
+    final int currentExperienceInCurrentLevel =
+        (currentTotalExperience >= totalExperienceToReachCurrentLevel)
+            ? currentTotalExperience - totalExperienceToReachCurrentLevel
+            : 0;
+
+    final double experienceProgress = (experienceRequiredForNextLevel > 0)
+        ? (currentExperienceInCurrentLevel / experienceRequiredForNextLevel)
+            .clamp(0.0, 1.0)
+        : 0.0;
+
+    // --- Main Scaffold with CustomScrollView ---
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: CustomScrollView(
@@ -93,6 +120,8 @@ class _ProfilePageState extends State<ProfilePage> {
             expandedHeight: 380.0,
             floating: false,
             pinned: true,
+            snap: false,
+            stretch: false,
             elevation: 0.5,
             backgroundColor: theme.colorScheme.surface,
             leading: IconButton(
@@ -110,9 +139,9 @@ class _ProfilePageState extends State<ProfilePage> {
                 bio: userProfile.bio,
                 bannerImageUrl: userProfile.bannerImageUrl,
                 onEditProfile: navigateToEditProfile,
-                level: (userProfile.stats['Vaelluksia'] ?? 0) ~/ 5 + 1,
-                experienceProgress:
-                    ((userProfile.stats['Vaelluksia'] ?? 0) % 5) / 5.0,
+                level: currentLevel,
+                currentExperience: currentExperienceInCurrentLevel,
+                experienceToNextLevel: experienceRequiredForNextLevel,
               ),
             ),
           ),
@@ -122,28 +151,24 @@ class _ProfilePageState extends State<ProfilePage> {
               followersCount: userProfile.followerIds.length,
               followingCount: userProfile.followingIds.length,
               onPostsTap: () {
-                // KORJATTU NAVIGOINTIKUTSU:
-                // Käytetään /users/:userId/posts -reittiä, joka on määritelty app_router.dart-tiedostossa
                 context.push('/users/${userProfile.uid}/posts',
                     extra: userProfile.username);
               },
               onFollowersTap: () {
-                // TODO: Navigoi seuraajien listaan (esim. context.push('/users/${userProfile.uid}/followers');)
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                     content: Text("Followers list coming soon!")));
               },
               onFollowingTap: () {
-                // TODO: Navigoi seurattujen listaan (esim. context.push('/users/${userProfile.uid}/following');)
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                     content: Text("Following list coming soon!")));
               },
             ),
           ),
-          // Statistics, Achievements, Badges osiot pysyvät ennallaan
-          _buildSectionHeader(context, 'Statistics', Icons.bar_chart_rounded),
-          SliverToBoxAdapter(
-            child: ProfileStatsGrid(stats: userProfile.stats),
-          ),
+          // --- Stats section removed ---
+          // _buildSectionHeader(context, 'Stats', Icons.bar_chart_rounded),
+          // SliverToBoxAdapter(
+          //   child: ProfileStatsGrid(stats: userProfile.stats),
+          // ),
           _buildSectionHeader(
               context, 'Achievements', Icons.emoji_events_rounded),
           userProfile.achievements.isEmpty
@@ -183,20 +208,25 @@ class _ProfilePageState extends State<ProfilePage> {
                               title: s.name,
                               description: s.name,
                               imageUrl: s.imageUrl,
-                              dateAchieved: null,
+                              dateAchieved: DateTime.now(),
                               icon: Icons.shield_moon_outlined,
                             ))
                         .toList(),
                     isStickerGrid: true,
                   ),
                 ),
+          // --- FIX: Ensure enough padding at the bottom ---
           SliverToBoxAdapter(
-              child: SizedBox(height: kBottomNavigationBarHeight + 32.0)),
+              child: SizedBox(
+                  height: MediaQuery.of(context).padding.bottom +
+                      kBottomNavigationBarHeight +
+                      32.0)),
         ],
       ),
     );
   }
 
+  // --- Helper Widgets ---
   Widget _buildSectionHeader(
       BuildContext context, String title, IconData icon) {
     final theme = Theme.of(context);
