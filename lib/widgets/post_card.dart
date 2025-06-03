@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart'; // Lisätty Provider-tuonti
-import 'package:cloud_firestore/cloud_firestore.dart'; // Lisätty Firestore-tuonti
+import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/post_model.dart';
-import '../providers/auth_provider.dart'; // Lisätty AuthProvider-tuonti
+import '../providers/auth_provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
@@ -69,8 +69,8 @@ class _PostCardState extends State<PostCard> {
     // final authProvider = Provider.of<AuthProvider>(context, listen: false);
     // final String? actualCurrentUserId = authProvider.user?.uid;
     // if (actualCurrentUserId == null) {
-    //   _showErrorSnackBar("You must be logged in to like posts.");
-    //   return;
+    //   _showErrorSnackBar("You must be logged in to like posts.");
+    //   return;
     // }
 
     setState(() {
@@ -202,7 +202,7 @@ class _PostCardState extends State<PostCard> {
           margin: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.0)),
-          color: theme.colorScheme.surface,
+          color: theme.cardColor, // <--- TÄMÄ ON MUUTETTU RIVI
           clipBehavior: Clip.antiAlias,
           child: Stack(
             // Lisätty Stack latausindikaattoria varten
@@ -230,8 +230,8 @@ class _PostCardState extends State<PostCard> {
                 Positioned.fill(
                   child: Container(
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.surface
-                          .withOpacity(0.3), // Hieman tummennusta
+                      color: theme.cardColor
+                          .withOpacity(0.5), // Hieman tummennusta
                       borderRadius: BorderRadius.circular(16.0),
                     ),
                     child: Center(
@@ -347,14 +347,14 @@ class _PostCardState extends State<PostCard> {
                 ),
               // Voit lisätä "Edit" -vaihtoehdon omille postauksille myöhemmin
               // if (isOwnPost)
-              //   PopupMenuItem<String>(
-              //     value: 'edit',
-              //     child: Row(children: [
-              //       Icon(Icons.edit_outlined, size: 20, color: theme.colorScheme.onSurfaceVariant),
-              //       const SizedBox(width: 8),
-              //       Text('Edit Post', style: GoogleFonts.lato(color: theme.colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
-              //     ]),
-              //   ),
+              //   PopupMenuItem<String>(
+              //     value: 'edit',
+              //     child: Row(children: [
+              //       Icon(Icons.edit_outlined, size: 20, color: theme.colorScheme.onSurfaceVariant),
+              //       const SizedBox(width: 8),
+              //       Text('Edit Post', style: GoogleFonts.lato(color: theme.colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
+              //     ]),
+              //   ),
               if (!isOwnPost) // Näytä "Details" (tai "Report") muiden postauksille
                 PopupMenuItem<String>(
                   value: 'details',
@@ -372,7 +372,7 @@ class _PostCardState extends State<PostCard> {
                 PopupMenuItem<String>(
                   value: 'report',
                   child: Row(children: [
-                    Icon(Icons.report_gmailerrorred_outlined,
+                    Icon(Icons.report_outlined,
                         size: 20,
                         color: theme.colorScheme.error.withOpacity(0.8)),
                     const SizedBox(width: 8),
@@ -445,7 +445,9 @@ class _PostCardState extends State<PostCard> {
 
   Widget _buildContent(
       BuildContext context, ThemeData theme, TextTheme textTheme) {
-    final DateFormat postDateFormat = DateFormat('d.M.yy', _currentLocale);
+    final String dateRange =
+        _formatDateRange(widget.post.startDate, widget.post.endDate);
+
     final String hikeDuration =
         '${widget.post.nights} ${widget.post.nights != 1 ? 'nights' : 'night'}';
 
@@ -474,8 +476,7 @@ class _PostCardState extends State<PostCard> {
         ],
         if (widget.post.caption.isEmpty) const SizedBox(height: 6.0),
         Wrap(spacing: 8.0, runSpacing: 8.0, children: [
-          _buildSmallInfoPill(theme, Icons.calendar_today_outlined,
-              '${postDateFormat.format(widget.post.startDate)} - ${postDateFormat.format(widget.post.endDate)}'),
+          _buildSmallInfoPill(theme, Icons.calendar_today_outlined, dateRange),
           _buildSmallInfoPill(theme, Icons.hiking_rounded,
               '${widget.post.distanceKm.toStringAsFixed(widget.post.distanceKm.truncateToDouble() == widget.post.distanceKm ? 0 : 1)} km'),
           _buildSmallInfoPill(theme, Icons.bedtime_outlined, hikeDuration),
@@ -492,6 +493,18 @@ class _PostCardState extends State<PostCard> {
         ]),
       ]),
     );
+  }
+
+  String _formatDateRange(DateTime start, DateTime end) {
+    if (start.year == end.year) {
+      if (start.month == end.month) {
+        return '${start.day}.${start.month}.–${end.day}.${end.month}.';
+      } else {
+        return '${start.day}.${start.month}.–${end.day}.${end.month}.';
+      }
+    } else {
+      return '${start.day}.${start.month}.${start.year} – ${end.day}.${end.month}.${end.year}';
+    }
   }
 
   Widget _buildSmallInfoPill(ThemeData theme, IconData icon, String text,

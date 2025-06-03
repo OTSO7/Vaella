@@ -333,7 +333,7 @@ class _ProfileHeaderState extends State<ProfileHeader>
                       textBaseline: TextBaseline.alphabetic,
                       children: [
                         Text(
-                          'Taso ${widget.level}',
+                          'Level ${widget.level}',
                           style: GoogleFonts.poppins(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
@@ -341,7 +341,7 @@ class _ProfileHeaderState extends State<ProfileHeader>
                         ),
                         if (widget.level < 100)
                           Text(
-                            '$displayXpNeeded XP tasolle ${widget.level + 1}',
+                            '$displayXpNeeded XP to level ${widget.level + 1}',
                             style: GoogleFonts.lato(
                                 fontSize: 12.5,
                                 fontWeight: FontWeight.w500,
