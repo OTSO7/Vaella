@@ -112,8 +112,8 @@ class _ProfileHeaderState extends State<ProfileHeader>
     if (currentLevel >= 30) return "Peak Seeker";
     if (currentLevel >= 20) return "Highland Strider";
     if (currentLevel >= 15) return "Pathfinder";
-    if (currentLevel >= 10) return "Trail Explorer";
-    if (currentLevel >= 5) return "Novice Wanderer";
+    if (currentLevel >= 10) return "Explorer";
+    if (currentLevel >= 5) return "Novice";
     return "Newbie";
   }
 
@@ -121,33 +121,92 @@ class _ProfileHeaderState extends State<ProfileHeader>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final String levelTitle = _getLevelTitle(widget.level);
-    final bool isLegendaryHiker = levelTitle == "Legendary Hiker";
+    final bool isLegendaryHiker = widget.level == 100;
+    final bool isPurple = widget.level >= 50 && widget.level < 100;
+    final bool isGrey = widget.level < 50;
 
-    final Color titleColor = isLegendaryHiker
-        ? Colors.amberAccent.shade200
-        : Colors.white.withOpacity(0.95);
+    // Värit ja efektit tason mukaan
+    Color outlineColor;
+    List<Color> bgGradient;
+    List<BoxShadow> boxShadows;
+    Color titleColor = Colors.white.withOpacity(0.95);
+
+    if (isLegendaryHiker) {
+      // Subtle, elegant gold with dark background for contrast
+      outlineColor = Colors.amber.shade700.withOpacity(0.85);
+      bgGradient = [
+        Colors.grey.shade900.withOpacity(0.92),
+        Colors.amber.shade100.withOpacity(0.18),
+      ];
+      boxShadows = [
+        BoxShadow(
+          color: Colors.amber.shade200.withOpacity(0.18),
+          blurRadius: 36,
+          spreadRadius: 8,
+          offset: const Offset(0, 10),
+        ),
+        BoxShadow(
+          color: Colors.amber.shade100.withOpacity(0.10),
+          blurRadius: 80,
+          spreadRadius: 16,
+          offset: const Offset(0, 0),
+        ),
+      ];
+      // Tekstin väri: tumma, lähes musta, jossa kultainen gradienttishine ja glow
+      titleColor = Colors.grey.shade50.withOpacity(0.97);
+    } else if (isPurple) {
+      // Elegantti, tumma liila, joka sopii tummaan teemaan
+      outlineColor = Colors.deepPurple.shade400.withOpacity(0.85);
+      bgGradient = [
+        Colors.deepPurple.shade800.withOpacity(0.85),
+        Colors.deepPurple.shade200.withOpacity(0.18),
+      ];
+      boxShadows = [
+        BoxShadow(
+          color: Colors.deepPurpleAccent.withOpacity(0.13),
+          blurRadius: 18,
+          spreadRadius: 2,
+          offset: const Offset(0, 6),
+        ),
+      ];
+      titleColor = Colors.deepPurple.shade100.withOpacity(0.97);
+    } else {
+      // Harmaa
+      outlineColor = Colors.grey.shade400.withOpacity(0.85);
+      bgGradient = [
+        Colors.grey.shade800.withOpacity(0.55),
+        Colors.grey.shade600.withOpacity(0.13),
+      ];
+      boxShadows = [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.10),
+          blurRadius: 18,
+          spreadRadius: 2,
+          offset: const Offset(0, 6),
+        ),
+      ];
+      titleColor = Colors.white.withOpacity(0.95);
+    }
 
     List<Shadow> textShadows = [
       Shadow(
         blurRadius: 1.0,
-        color: Colors.black.withOpacity(0.3),
+        color: Colors.black.withOpacity(0.4),
         offset: const Offset(0.5, 0.5),
       ),
     ];
 
+    // Glow vain Legendary Hikerille
     if (isLegendaryHiker) {
       textShadows.addAll([
         Shadow(
-          blurRadius: 15.0 * _textGlowStrengthAnimation.value,
-          color: _glowColorAnimation.value ??
-              Colors.amberAccent.shade200.withOpacity(0.9),
+          blurRadius: 28.0 * _textGlowStrengthAnimation.value,
+          color: Colors.amberAccent.shade100.withOpacity(0.7),
           offset: const Offset(0, 0),
         ),
         Shadow(
-          blurRadius: 30.0 * _textGlowStrengthAnimation.value,
-          color: (_glowColorAnimation.value ??
-                  Colors.amberAccent.shade200.withOpacity(0.9))
-              .withOpacity(0.5 * _textGlowStrengthAnimation.value),
+          blurRadius: 60.0 * _textGlowStrengthAnimation.value,
+          color: Colors.amber.shade700.withOpacity(0.35),
           offset: const Offset(0, 0),
         ),
       ]);
@@ -249,7 +308,7 @@ class _ProfileHeaderState extends State<ProfileHeader>
                 const SizedBox(height: 2),
                 Text('@${widget.username}',
                     style: GoogleFonts.lato(
-                        fontSize: 15,
+                        fontSize: 14,
                         color: theme.colorScheme.secondary,
                         shadows: [
                           Shadow(
@@ -286,22 +345,12 @@ class _ProfileHeaderState extends State<ProfileHeader>
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(22),
                     border: Border.all(
-                      color: theme.colorScheme.secondary.withOpacity(0.85),
+                      color: outlineColor,
                       width: 2.2,
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: theme.colorScheme.secondary.withOpacity(0.18),
-                        blurRadius: 18,
-                        spreadRadius: 2,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
+                    boxShadow: boxShadows,
                     gradient: LinearGradient(
-                      colors: [
-                        theme.colorScheme.surface.withOpacity(0.55),
-                        theme.colorScheme.secondary.withOpacity(0.13),
-                      ],
+                      colors: bgGradient,
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
@@ -346,36 +395,136 @@ class _ProfileHeaderState extends State<ProfileHeader>
                       AnimatedBuilder(
                         animation: _controller,
                         builder: (context, child) {
-                          return ShaderMask(
-                            shaderCallback: (bounds) {
-                              return LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: const [
-                                  Colors.transparent,
-                                  Colors.white30,
-                                  Colors.transparent,
-                                ],
-                                stops: [
-                                  _shineAnimation.value - 0.5,
-                                  _shineAnimation.value,
-                                  _shineAnimation.value + 0.5,
-                                ],
-                              ).createShader(bounds);
-                            },
-                            blendMode: BlendMode.srcATop,
-                            child: Text(
+                          // Legendary Hiker: shine + glow + kontrasti
+                          if (isLegendaryHiker) {
+                            return Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Opacity(
+                                  opacity: 0.8 +
+                                      0.2 * _textGlowStrengthAnimation.value,
+                                  child: Container(
+                                    height: 38,
+                                    width: 240,
+                                    decoration: BoxDecoration(
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.amber.shade200
+                                              .withOpacity(0.35 +
+                                                  0.25 *
+                                                      _textGlowStrengthAnimation
+                                                          .value),
+                                          blurRadius: 44 *
+                                              _textGlowStrengthAnimation.value,
+                                          spreadRadius: 2,
+                                        ),
+                                        BoxShadow(
+                                          color: Colors.amber.shade700
+                                              .withOpacity(0.10 +
+                                                  0.10 *
+                                                      _textGlowStrengthAnimation
+                                                          .value),
+                                          blurRadius: 90 *
+                                              _textGlowStrengthAnimation.value,
+                                          spreadRadius: 2,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                ShaderMask(
+                                  shaderCallback: (bounds) {
+                                    return LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        Colors.transparent,
+                                        Colors.amber.shade200.withOpacity(0.85),
+                                        Colors.transparent,
+                                      ],
+                                      stops: [
+                                        _shineAnimation.value - 0.18,
+                                        _shineAnimation.value,
+                                        _shineAnimation.value + 0.18,
+                                      ],
+                                    ).createShader(bounds);
+                                  },
+                                  blendMode: BlendMode.srcATop,
+                                  child: Text(
+                                    levelTitle,
+                                    style: GoogleFonts.poppins(
+                                      fontSize:
+                                          18, // korjattu koko, vähän isompi kuin muut
+                                      fontWeight: FontWeight.w800,
+                                      color: titleColor,
+                                      letterSpacing: 0.7,
+                                      shadows: textShadows,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ],
+                            );
+                          }
+                          // Purple: shine, ei glow
+                          else if (isPurple) {
+                            return ShaderMask(
+                              shaderCallback: (bounds) {
+                                return LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: const [
+                                    Colors.transparent,
+                                    Colors.white30,
+                                    Colors.transparent,
+                                  ],
+                                  stops: [
+                                    _shineAnimation.value - 0.5,
+                                    _shineAnimation.value,
+                                    _shineAnimation.value + 0.5,
+                                  ],
+                                ).createShader(bounds);
+                              },
+                              blendMode: BlendMode.srcATop,
+                              child: Text(
+                                levelTitle,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w600,
+                                  color: titleColor,
+                                  letterSpacing: 0.4,
+                                  shadows: [
+                                    Shadow(
+                                      blurRadius: 2.0,
+                                      color: Colors.black.withOpacity(0.25),
+                                      offset: const Offset(0.5, 0.5),
+                                    ),
+                                  ],
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            );
+                          }
+                          // Grey: ei shine, ei glow
+                          else {
+                            return Text(
                               levelTitle,
                               style: GoogleFonts.poppins(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w500,
                                 color: titleColor,
                                 letterSpacing: 0.3,
-                                shadows: textShadows,
+                                shadows: [
+                                  Shadow(
+                                    blurRadius: 1.0,
+                                    color: Colors.black.withOpacity(0.25),
+                                    offset: const Offset(0.5, 0.5),
+                                  ),
+                                ],
                               ),
                               textAlign: TextAlign.center,
-                            ),
-                          );
+                            );
+                          }
                         },
                       ),
                     ],
