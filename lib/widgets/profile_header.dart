@@ -34,8 +34,7 @@ class _ProfileHeaderState extends State<ProfileHeader>
   late AnimationController _controller;
   late Animation<double> _shineAnimation;
   late Animation<Color?> _glowColorAnimation;
-  late Animation<double>
-      _textGlowStrengthAnimation; // Tekstin hehkun voimakkuus
+  late Animation<double> _textGlowStrengthAnimation;
   int _previousLevel = -1;
 
   @override
@@ -63,12 +62,10 @@ class _ProfileHeaderState extends State<ProfileHeader>
       ),
     );
 
-    // Tekstin hehkun voimakkuuden animaatio Legendary Hikerille
     _textGlowStrengthAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.0, 1.0,
-            curve: Curves.easeInOut), // Pulssittava voimakkuus
+        curve: const Interval(0.0, 1.0, curve: Curves.easeInOut),
       ),
     );
 
@@ -88,12 +85,10 @@ class _ProfileHeaderState extends State<ProfileHeader>
   void _updateGlowAnimation() {
     final bool isLegendary = _getLevelTitle(widget.level) == "Legendary Hiker";
     if (isLegendary) {
-      _controller.duration =
-          const Duration(seconds: 4); // Hieman pidempi animaatio hehkulle
+      _controller.duration = const Duration(seconds: 4);
       _controller.repeat(reverse: true);
     } else {
-      _controller.duration =
-          const Duration(seconds: 3); // Takaisin oletuskestoon
+      _controller.duration = const Duration(seconds: 3);
       if (!_controller.isAnimating) {
         _controller.repeat(reverse: true);
       }
@@ -143,20 +138,16 @@ class _ProfileHeaderState extends State<ProfileHeader>
     if (isLegendaryHiker) {
       textShadows.addAll([
         Shadow(
-          blurRadius:
-              15.0 * _textGlowStrengthAnimation.value, // Animoitu hehkun blur
+          blurRadius: 15.0 * _textGlowStrengthAnimation.value,
           color: _glowColorAnimation.value ??
-              Colors.amberAccent.shade200
-                  .withOpacity(0.9), // Intensiivisempi hehku
+              Colors.amberAccent.shade200.withOpacity(0.9),
           offset: const Offset(0, 0),
         ),
         Shadow(
-          blurRadius:
-              30.0 * _textGlowStrengthAnimation.value, // Animoitu hehkun blur
+          blurRadius: 30.0 * _textGlowStrengthAnimation.value,
           color: (_glowColorAnimation.value ??
                   Colors.amberAccent.shade200.withOpacity(0.9))
-              .withOpacity(0.5 *
-                  _textGlowStrengthAnimation.value), // Pehmeämpi ulompi hehku
+              .withOpacity(0.5 * _textGlowStrengthAnimation.value),
           offset: const Offset(0, 0),
         ),
       ]);
@@ -206,162 +197,192 @@ class _ProfileHeaderState extends State<ProfileHeader>
             onPressed: widget.onEditProfile,
           ),
         ),
-        Positioned(
-          bottom: 20,
-          left: 0,
-          right: 0,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Avatar ilman Legendary Hiker -efektiä
-              Container(
-                decoration: BoxDecoration(
-                    shape: BoxShape.circle,
+        Align(
+          alignment: Alignment.bottomCenter,
+          child: Padding(
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).size.height * 0.1,
+              bottom: 40,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                          color: theme.scaffoldBackgroundColor.withOpacity(0.8),
+                          width: 4.5),
+                      boxShadow: [
+                        BoxShadow(
+                            color: Colors.black.withOpacity(0.15),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2))
+                      ]),
+                  child: CircleAvatar(
+                    radius: 65,
+                    backgroundColor: theme.colorScheme.surface,
+                    backgroundImage: (widget.photoURL != null &&
+                            widget.photoURL!.isNotEmpty)
+                        ? NetworkImage(widget.photoURL!)
+                        : const AssetImage('assets/images/default_avatar.png')
+                            as ImageProvider,
+                    child: (widget.photoURL == null || widget.photoURL!.isEmpty)
+                        ? Icon(Icons.person_outline_rounded,
+                            size: 70, color: Colors.grey[400])
+                        : null,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(widget.displayName,
+                    style: GoogleFonts.poppins(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        shadows: [
+                          Shadow(
+                              blurRadius: 1.0,
+                              color: Colors.black.withOpacity(0.5),
+                              offset: const Offset(0.5, 0.5))
+                        ]),
+                    textAlign: TextAlign.center),
+                const SizedBox(height: 2),
+                Text('@${widget.username}',
+                    style: GoogleFonts.lato(
+                        fontSize: 15,
+                        color: theme.colorScheme.secondary,
+                        shadows: [
+                          Shadow(
+                              blurRadius: 1.0,
+                              color: Colors.black.withOpacity(0.5),
+                              offset: const Offset(0.5, 0.5))
+                        ]),
+                    textAlign: TextAlign.center),
+                if (widget.bio != null && widget.bio!.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 40.0),
+                    child: Text(widget.bio!,
+                        style: GoogleFonts.lato(
+                            fontSize: 14,
+                            color: Colors.white.withOpacity(0.9),
+                            height: 1.45,
+                            shadows: [
+                              Shadow(
+                                  blurRadius: 1.0,
+                                  color: Colors.black.withOpacity(0.3),
+                                  offset: const Offset(0.5, 0.5))
+                            ]),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                ],
+                const SizedBox(height: 20),
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 30),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 18, horizontal: 18),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(22),
                     border: Border.all(
-                        color: theme.scaffoldBackgroundColor.withOpacity(0.8),
-                        width: 4.5),
+                      color: theme.colorScheme.secondary.withOpacity(0.85),
+                      width: 2.2,
+                    ),
                     boxShadow: [
                       BoxShadow(
-                          color: Colors.black.withOpacity(0.15),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2))
-                    ]),
-                child: CircleAvatar(
-                  radius: 65,
-                  backgroundColor: theme.colorScheme.surface,
-                  backgroundImage:
-                      (widget.photoURL != null && widget.photoURL!.isNotEmpty)
-                          ? NetworkImage(widget.photoURL!)
-                          : const AssetImage('assets/images/default_avatar.png')
-                              as ImageProvider,
-                  child: (widget.photoURL == null || widget.photoURL!.isEmpty)
-                      ? Icon(Icons.person_outline_rounded,
-                          size: 70, color: Colors.grey[400])
-                      : null,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(widget.displayName,
-                  style: GoogleFonts.poppins(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      shadows: [
-                        Shadow(
-                            blurRadius: 1.0,
-                            color: Colors.black.withOpacity(0.5),
-                            offset: const Offset(0.5, 0.5))
-                      ]),
-                  textAlign: TextAlign.center),
-              const SizedBox(height: 2),
-              Text('@${widget.username}',
-                  style: GoogleFonts.lato(
-                      fontSize: 15,
-                      color: theme.colorScheme.secondary,
-                      shadows: [
-                        Shadow(
-                            blurRadius: 1.0,
-                            color: Colors.black.withOpacity(0.5),
-                            offset: const Offset(0.5, 0.5))
-                      ]),
-                  textAlign: TextAlign.center),
-              if (widget.bio != null && widget.bio!.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 40.0),
-                  child: Text(widget.bio!,
-                      style: GoogleFonts.lato(
-                          fontSize: 14,
-                          color: Colors.white.withOpacity(0.9),
-                          height: 1.45,
-                          shadows: [
-                            Shadow(
-                                blurRadius: 1.0,
-                                color: Colors.black.withOpacity(0.3),
-                                offset: const Offset(0.5, 0.5))
-                          ]),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis),
+                        color: theme.colorScheme.secondary.withOpacity(0.18),
+                        blurRadius: 18,
+                        spreadRadius: 2,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                    gradient: LinearGradient(
+                      colors: [
+                        theme.colorScheme.surface.withOpacity(0.55),
+                        theme.colorScheme.secondary.withOpacity(0.13),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(
+                            'Level ${widget.level}',
+                            style: GoogleFonts.poppins(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white),
+                          ),
+                          if (widget.level < 100)
+                            Text(
+                              '$displayXpNeeded XP to level ${widget.level + 1}',
+                              style: GoogleFonts.lato(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.white.withOpacity(0.8)),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 7),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(3.5),
+                        child: LinearProgressIndicator(
+                          value: experienceProgress,
+                          backgroundColor: Colors.white.withOpacity(0.25),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                              theme.colorScheme.secondary.withOpacity(0.9)),
+                          minHeight: 7,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      AnimatedBuilder(
+                        animation: _controller,
+                        builder: (context, child) {
+                          return ShaderMask(
+                            shaderCallback: (bounds) {
+                              return LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: const [
+                                  Colors.transparent,
+                                  Colors.white30,
+                                  Colors.transparent,
+                                ],
+                                stops: [
+                                  _shineAnimation.value - 0.5,
+                                  _shineAnimation.value,
+                                  _shineAnimation.value + 0.5,
+                                ],
+                              ).createShader(bounds);
+                            },
+                            blendMode: BlendMode.srcATop,
+                            child: Text(
+                              levelTitle,
+                              style: GoogleFonts.poppins(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                                color: titleColor,
+                                letterSpacing: 0.3,
+                                shadows: textShadows,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ],
-              const SizedBox(height: 20),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 65.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    AnimatedBuilder(
-                      animation: _controller,
-                      builder: (context, child) {
-                        return ShaderMask(
-                          shaderCallback: (bounds) {
-                            return LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: const [
-                                Colors.transparent,
-                                Colors.white30,
-                                Colors.transparent,
-                              ],
-                              stops: [
-                                _shineAnimation.value - 0.5,
-                                _shineAnimation.value,
-                                _shineAnimation.value + 0.5,
-                              ],
-                            ).createShader(bounds);
-                          },
-                          blendMode: BlendMode.srcATop,
-                          child: Text(
-                            levelTitle,
-                            style: GoogleFonts.poppins(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500,
-                              color: titleColor,
-                              letterSpacing: 0.3,
-                              shadows: textShadows,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text(
-                          'Level ${widget.level}',
-                          style: GoogleFonts.poppins(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white),
-                        ),
-                        if (widget.level < 100)
-                          Text(
-                            '$displayXpNeeded XP to level ${widget.level + 1}',
-                            style: GoogleFonts.lato(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white.withOpacity(0.8)),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 7),
-                    LinearProgressIndicator(
-                      value: experienceProgress,
-                      backgroundColor: Colors.white.withOpacity(0.25),
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                          theme.colorScheme.secondary.withOpacity(0.9)),
-                      minHeight: 7,
-                      borderRadius: BorderRadius.circular(3.5),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ],
