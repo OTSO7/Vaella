@@ -1,4 +1,3 @@
-// lib/app_router.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -18,6 +17,8 @@ import 'pages/edit_profile_page.dart';
 import 'pages/register_page.dart';
 import 'pages/create_post_page.dart';
 import 'pages/user_posts_list_page.dart';
+import 'pages/weather_page.dart'; // UUSI: Importtaa WeatherPage
+import 'models/hike_plan_model.dart'; // UUSI: Tarvitaan HikePlanin välittämiseen
 
 // Widgets
 import 'widgets/main_scaffold.dart';
@@ -73,6 +74,21 @@ class AppRouter extends StatelessWidget {
               );
             }
             return UserPostsListPage(userId: userId, username: username);
+          },
+        ),
+        GoRoute(
+          path: '/hike-plan/:planId/weather', // UUSI REITTI
+          name: 'weatherPage',
+          parentNavigatorKey: _rootNavigatorKey,
+          builder: (context, state) {
+            final hikePlan = state.extra as HikePlan?;
+            if (hikePlan == null) {
+              return Scaffold(
+                appBar: AppBar(title: const Text('Error')),
+                body: const Center(child: Text('Hike Plan data is missing.')),
+              );
+            }
+            return WeatherPage(hikePlan: hikePlan);
           },
         ),
         StatefulShellRoute.indexedStack(
@@ -138,12 +154,17 @@ class AppRouter extends StatelessWidget {
 
         final isLoggingIn = location == '/login';
         final isRegistering = location == '/register';
+        final isWeatherPage =
+            location.startsWith('/hike-plan/') && location.endsWith('/weather');
 
         if (!isLoggedIn && !isLoggingIn && !isRegistering) {
           return '/login';
         }
         if (isLoggedIn && (isLoggingIn || isRegistering)) {
           return '/home';
+        }
+        if (!isLoggedIn && isWeatherPage) {
+          return '/login';
         }
         return null;
       },

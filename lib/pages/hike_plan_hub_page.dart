@@ -1,9 +1,11 @@
+// lib/pages/hike_plan_hub_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'dart:ui' as ui;
+import 'package:go_router/go_router.dart'; // UUSI: Importtaa go_router
 
 import '../models/hike_plan_model.dart';
 import '../widgets/preparation_progress_modal.dart';
@@ -208,7 +210,23 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
               children: [
                 _buildPlannerGridItem(
                     context, "Weather Forecast", Icons.thermostat_rounded, () {
-                  /*TODO*/
+                  // MUUTETTU: Navigoi WeatherPageen
+                  if (_currentPlan.latitude != null &&
+                      _currentPlan.longitude != null) {
+                    GoRouter.of(context).pushNamed('weatherPage',
+                        pathParameters: {'planId': _currentPlan.id},
+                        extra: _currentPlan);
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: const Text(
+                          'Säätietojen näyttämiseen tarvitaan sijaintikoordinaatit.'),
+                      backgroundColor: Colors.redAccent,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      margin: const EdgeInsets.all(10),
+                    ));
+                  }
                 }, Colors.orange.shade300, animationIndex++),
                 _buildPlannerGridItem(
                     context, "Packing List", Icons.backpack_rounded, () {
