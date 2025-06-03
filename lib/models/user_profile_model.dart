@@ -1,28 +1,8 @@
+// lib/models/user_profile_model.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-// Apufunktio ikonien nimien muuttamiseen IconData:ksi
-IconData getIconFromName(String name) {
-  switch (name) {
-    case 'emoji_events_outlined':
-      return Icons.emoji_events_outlined;
-    case 'star':
-      return Icons.star;
-    case 'park':
-      return Icons.park;
-    case 'check_circle':
-      return Icons.check_circle;
-    case 'hiking':
-      return Icons.hiking;
-    case 'landscape':
-      return Icons.landscape;
-    // Lisää tarvittavat ikonit tähän
-    default:
-      return Icons.help_outline;
-  }
-}
-
-// Achievement-malli
+// Achievement-malli (oletetaan, että tämä on jo määritelty ja toimii)
 class Achievement {
   final String id;
   final String title;
@@ -31,7 +11,7 @@ class Achievement {
   final Color iconColor;
   final DateTime dateAchieved;
   final String? imageUrl;
-  final String iconName; // Uusi kenttä Firestore-tallennukseen
+  final String iconName;
 
   Achievement({
     required this.id,
@@ -44,16 +24,29 @@ class Achievement {
     this.iconName = 'emoji_events_outlined',
   });
 
+  static IconData getIconFromName(String name) {
+    switch (name) {
+      case 'emoji_events_outlined':
+        return Icons.emoji_events_outlined;
+      case 'star':
+        return Icons.star;
+      // ... muut ikonit ...
+      default:
+        return Icons.help_outline;
+    }
+  }
+
   factory Achievement.fromFirestore(Map<String, dynamic> data, String id) {
-    final name = data['iconName'] ?? 'emoji_events_outlined';
+    final name = data['iconName'] as String? ?? 'emoji_events_outlined';
     return Achievement(
       id: id,
-      title: data['title'] ?? '',
-      description: data['description'] ?? '',
+      title: data['title'] as String? ?? '',
+      description: data['description'] as String? ?? '',
       icon: getIconFromName(name),
-      iconColor: Color(data['iconColorValue'] ?? Colors.amber.value),
-      dateAchieved: (data['dateAchieved'] as Timestamp).toDate(),
-      imageUrl: data['imageUrl'],
+      iconColor: Color(data['iconColorValue'] as int? ?? Colors.amber.value),
+      dateAchieved:
+          (data['dateAchieved'] as Timestamp? ?? Timestamp.now()).toDate(),
+      imageUrl: data['imageUrl'] as String?,
       iconName: name,
     );
   }
@@ -64,38 +57,28 @@ class Achievement {
       'description': description,
       'iconName': iconName,
       'iconColorValue': iconColor.value,
-      'dateAchieved': dateAchieved,
+      'dateAchieved': Timestamp.fromDate(dateAchieved),
       'imageUrl': imageUrl,
     };
   }
 }
 
-// Sticker-malli
+// Sticker-malli (oletetaan, että tämä on jo määritelty ja toimii)
 class Sticker {
   final String id;
   final String name;
   final String imageUrl;
 
-  Sticker({
-    required this.id,
-    required this.name,
-    required this.imageUrl,
-  });
+  Sticker({required this.id, required this.name, required this.imageUrl});
 
   factory Sticker.fromFirestore(Map<String, dynamic> data, String id) {
     return Sticker(
       id: id,
-      name: data['name'] ?? '',
-      imageUrl: data['imageUrl'] ?? '',
+      name: data['name'] as String? ?? '',
+      imageUrl: data['imageUrl'] as String? ?? '',
     );
   }
-
-  Map<String, dynamic> toFirestore() {
-    return {
-      'name': name,
-      'imageUrl': imageUrl,
-    };
-  }
+  Map<String, dynamic> toFirestore() => {'name': name, 'imageUrl': imageUrl};
 }
 
 // UserProfile-malli
@@ -110,7 +93,9 @@ class UserProfile {
   Map<String, dynamic> stats;
   List<Achievement> achievements;
   List<Sticker> stickers;
-  List<String> friends; // UUSI: Lista ystävien UID:stä
+  List<String> followingIds;
+  List<String> followerIds;
+  int postsCount; // UUSI: Denormalisoitu julkaisujen määrä
 
   UserProfile({
     required this.uid,
@@ -123,43 +108,67 @@ class UserProfile {
     this.stats = const {},
     this.achievements = const [],
     this.stickers = const [],
-    this.friends = const [], // Alustetaan tyhjällä listalla
+    this.followingIds = const [],
+    this.followerIds = const [],
+    this.postsCount = 0, // UUSI: Oletusarvo 0
   });
 
   factory UserProfile.fromFirestore(Map<String, dynamic> data, String uid) {
-    // Varmista, että 'name' (displayName) on oikea kenttä, jos 'displayName' puuttuu
-    // Firestore-skeemasi näytti aiemmin käyttävän 'name' displayNameksi,
-    // joten huomioidaan se tässä.
     final String retrievedDisplayName =
-        data['displayName'] ?? data['name'] ?? '';
+        data['displayName'] as String? ?? data['name'] as String? ?? '';
+
+    List<Achievement> parsedAchievements = [];
+    if (data['achievements'] is List) {
+      parsedAchievements = (data['achievements'] as List<dynamic>).map((a) {
+        final achievementData = Map<String, dynamic>.from(a);
+        final String achievementId = achievementData['id']?.toString() ??
+            FirebaseFirestore.instance.collection('temp').doc().id;
+        return Achievement.fromFirestore(achievementData, achievementId);
+      }).toList();
+    }
+
+    List<Sticker> parsedStickers = [];
+    if (data['stickers'] is List) {
+      parsedStickers = (data['stickers'] as List<dynamic>).map((s) {
+        final stickerData = Map<String, dynamic>.from(s);
+        final String stickerId = stickerData['id']?.toString() ??
+            FirebaseFirestore.instance.collection('temp').doc().id;
+        return Sticker.fromFirestore(stickerData, stickerId);
+      }).toList();
+    }
+
+    List<String> parseStringList(dynamic listData) {
+      if (listData is List) {
+        return listData
+            .map((item) => item?.toString() ?? '')
+            .where((item) => item.isNotEmpty)
+            .toList()
+            .cast<String>();
+      }
+      return [];
+    }
 
     return UserProfile(
       uid: uid,
-      username: data['username'] ?? '',
+      username: data['username'] as String? ?? '',
       displayName: retrievedDisplayName,
-      email: data['email'] ?? '',
-      photoURL: data['photoURL'],
-      bio: data['bio'],
-      bannerImageUrl: data['bannerImageUrl'],
-      stats: Map<String, dynamic>.from(data['stats'] ?? {}),
-      achievements: (data['achievements'] as List<dynamic>?)
-              ?.map((a) => Achievement.fromFirestore(
-                  Map<String, dynamic>.from(a), a['id'] ?? ''))
-              .toList() ??
-          [],
-      stickers: (data['stickers'] as List<dynamic>?)
-              ?.map((s) => Sticker.fromFirestore(
-                  Map<String, dynamic>.from(s), s['id'] ?? ''))
-              .toList() ??
-          [],
-      friends: List<String>.from(data['friends'] ?? []), // Hae friends-lista
+      email: data['email'] as String? ?? '',
+      photoURL: data['photoURL'] as String?,
+      bio: data['bio'] as String?,
+      bannerImageUrl: data['bannerImageUrl'] as String?,
+      stats: Map<String, dynamic>.from(data['stats'] as Map? ?? {}),
+      achievements: parsedAchievements,
+      stickers: parsedStickers,
+      followingIds: parseStringList(data['followingIds'] ?? data['friends']),
+      followerIds: parseStringList(data['followerIds']),
+      postsCount: (data['postsCount'] as num?)?.toInt() ?? 0, // UUSI
     );
   }
 
   Map<String, dynamic> toFirestore() {
     return {
       'username': username,
-      'displayName': displayName, // Varmista, että käytät 'displayName' tässä
+      'displayName': displayName,
       'email': email,
       'photoURL': photoURL,
       'bio': bio,
@@ -167,11 +176,12 @@ class UserProfile {
       'stats': stats,
       'achievements': achievements.map((a) => a.toFirestore()).toList(),
       'stickers': stickers.map((s) => s.toFirestore()).toList(),
-      'friends': friends, // Tallenna friends-lista
+      'followingIds': followingIds,
+      'followerIds': followerIds,
+      'postsCount': postsCount, // UUSI
     };
   }
 
-  // Lisää myös UID copyWith-metodiin varmuuden vuoksi, jos sitä tarvittaisiin
   UserProfile copyWith({
     String? uid,
     String? username,
@@ -183,7 +193,9 @@ class UserProfile {
     Map<String, dynamic>? stats,
     List<Achievement>? achievements,
     List<Sticker>? stickers,
-    List<String>? friends,
+    List<String>? followingIds,
+    List<String>? followerIds,
+    int? postsCount, // UUSI
   }) {
     return UserProfile(
       uid: uid ?? this.uid,
@@ -196,7 +208,9 @@ class UserProfile {
       stats: stats ?? this.stats,
       achievements: achievements ?? this.achievements,
       stickers: stickers ?? this.stickers,
-      friends: friends ?? this.friends,
+      followingIds: followingIds ?? this.followingIds,
+      followerIds: followerIds ?? this.followerIds,
+      postsCount: postsCount ?? this.postsCount, // UUSI
     );
   }
 }

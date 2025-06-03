@@ -1,12 +1,15 @@
+// lib/pages/profile_page.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart'; // Suositeltu lisäys
+import 'package:google_fonts/google_fonts.dart';
 import '../providers/auth_provider.dart';
-import '../models/user_profile_model.dart' as user_model;
-import '../widgets/profile_header.dart'; // Profile header widget
-import '../widgets/profile_stats_grid.dart'; // For displaying stats
-import '../widgets/achievement_grid.dart' as achievement_widget; // Alias added
+import '../models/user_profile_model.dart'
+    as user_model; // Pidä alias selkeyden vuoksi
+import '../widgets/profile_header.dart';
+import '../widgets/profile_stats_grid.dart';
+import '../widgets/achievement_grid.dart' as achievement_widget;
+import '../widgets/profile_counts_bar.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -16,21 +19,18 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
+  // _postsCount ja _updatePostsCount on poistettu, koska postsCount tulee userProfile-objektista
+
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final theme = Theme.of(context);
-    final textTheme = Theme.of(context).textTheme.apply(
-          fontFamily: GoogleFonts.lato().fontFamily, // Esimerkki fontista
-        );
 
     if (!authProvider.isLoggedIn || authProvider.userProfile == null) {
       return Scaffold(
         appBar: AppBar(
-          title: Text(
-            'Profile',
-            style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-          ),
+          title: Text('Profile',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
           backgroundColor: theme.colorScheme.surface,
           elevation: 0,
         ),
@@ -39,10 +39,9 @@ class _ProfilePageState extends State<ProfilePage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               authProvider.isLoading
-                  ? CircularProgressIndicator(
-                      color: theme.colorScheme.primary,
-                    )
-                  : Text('Loading profile...', style: textTheme.bodyLarge),
+                  ? CircularProgressIndicator(color: theme.colorScheme.primary)
+                  : Text('Loading profile...',
+                      style: GoogleFonts.lato(fontSize: 16)),
               const SizedBox(height: 20),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
@@ -68,7 +67,6 @@ class _ProfilePageState extends State<ProfilePage> {
         '/profile/edit',
         extra: userProfile,
       );
-
       if (updatedProfile != null && mounted) {
         await authProvider.updateLocalUserProfile(updatedProfile);
         if (mounted) {
@@ -79,8 +77,7 @@ class _ProfilePageState extends State<ProfilePage> {
               backgroundColor: Colors.green[600],
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10.0),
-              ),
+                  borderRadius: BorderRadius.circular(10.0)),
               margin: const EdgeInsets.all(10.0),
             ),
           );
@@ -89,34 +86,21 @@ class _ProfilePageState extends State<ProfilePage> {
     }
 
     return Scaffold(
-      backgroundColor:
-          theme.scaffoldBackgroundColor, // Use a light grey for background
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: CustomScrollView(
         slivers: <Widget>[
           SliverAppBar(
-            expandedHeight: 380.0, // Increased height
+            expandedHeight: 380.0,
             floating: false,
             pinned: true,
-            elevation: 0, // Remove shadow when not scrolled
-            backgroundColor:
-                theme.colorScheme.surface, // Or a slightly different shade
+            elevation: 0.5,
+            backgroundColor: theme.colorScheme.surface,
             leading: IconButton(
               icon: Icon(Icons.logout_outlined,
                   color: theme.colorScheme.onSurface),
               tooltip: 'Log out',
-              onPressed: () {
-                authProvider.logout();
-              },
+              onPressed: () => authProvider.logout(),
             ),
-            // actions: [
-            //   IconButton(
-            //     icon: Icon(Icons.settings_outlined, color: theme.colorScheme.onSurface),
-            //     tooltip: 'Settings',
-            //     onPressed: () {
-            //       // Implement settings menu (e.g., showModalBottomSheet with Edit Profile & Logout)
-            //     },
-            //   ),
-            // ],
             flexibleSpace: FlexibleSpaceBar(
               collapseMode: CollapseMode.pin,
               background: ProfileHeader(
@@ -132,19 +116,41 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
             ),
           ),
-          _buildSectionHeader(
-              context, 'Statistics', Icons.insights_rounded), // Updated icon
+          SliverToBoxAdapter(
+            child: ProfileCountsBar(
+              postsCount: userProfile.postsCount,
+              followersCount: userProfile.followerIds.length,
+              followingCount: userProfile.followingIds.length,
+              onPostsTap: () {
+                // KORJATTU NAVIGOINTIKUTSU:
+                // Käytetään /users/:userId/posts -reittiä, joka on määritelty app_router.dart-tiedostossa
+                context.push('/users/${userProfile.uid}/posts',
+                    extra: userProfile.username);
+              },
+              onFollowersTap: () {
+                // TODO: Navigoi seuraajien listaan (esim. context.push('/users/${userProfile.uid}/followers');)
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text("Followers list coming soon!")));
+              },
+              onFollowingTap: () {
+                // TODO: Navigoi seurattujen listaan (esim. context.push('/users/${userProfile.uid}/following');)
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text("Following list coming soon!")));
+              },
+            ),
+          ),
+          // Statistics, Achievements, Badges osiot pysyvät ennallaan
+          _buildSectionHeader(context, 'Statistics', Icons.bar_chart_rounded),
           SliverToBoxAdapter(
             child: ProfileStatsGrid(stats: userProfile.stats),
           ),
-          const SliverToBoxAdapter(child: SizedBox(height: 8)), // Spacing
-          _buildSectionHeader(context, 'Achievements',
-              Icons.emoji_events_rounded), // Updated icon
+          _buildSectionHeader(
+              context, 'Achievements', Icons.emoji_events_rounded),
           userProfile.achievements.isEmpty
               ? SliverToBoxAdapter(
                   child: _buildEmptySectionPlaceholder(
                       context,
-                      'No achievements yet. Keep exploring to earn them!',
+                      'No achievements yet. Keep exploring!',
                       Icons.explore_outlined))
               : SliverToBoxAdapter(
                   child: achievement_widget.AchievementGrid(
@@ -152,7 +158,8 @@ class _ProfilePageState extends State<ProfilePage> {
                         .map((a) => achievement_widget.Achievement(
                               title: a.title,
                               description: a.description,
-                              icon: a.icon,
+                              icon: user_model.Achievement.getIconFromName(
+                                  a.iconName),
                               dateAchieved: a.dateAchieved,
                               iconColor: a.iconColor,
                               imageUrl: a.imageUrl,
@@ -161,35 +168,30 @@ class _ProfilePageState extends State<ProfilePage> {
                     isStickerGrid: false,
                   ),
                 ),
-          const SliverToBoxAdapter(child: SizedBox(height: 8)), // Spacing
           _buildSectionHeader(context, 'National Park Badges',
-              Icons.collections_bookmark_rounded), // Updated icon
+              Icons.collections_bookmark_rounded),
           userProfile.stickers.isEmpty
               ? SliverToBoxAdapter(
                   child: _buildEmptySectionPlaceholder(
                       context,
-                      'No national park badges collected yet. Visit parks to collect them!',
+                      'No national park badges collected yet.',
                       Icons.park_outlined))
               : SliverToBoxAdapter(
                   child: achievement_widget.AchievementGrid(
                     achievements: userProfile.stickers
                         .map((s) => achievement_widget.Achievement(
                               title: s.name,
-                              description: s.name, // Or a generic description
+                              description: s.name,
                               imageUrl: s.imageUrl,
-                              dateAchieved:
-                                  null, // Stickers might not have a dateAchieved
-                              icon: Icons
-                                  .shield_moon_outlined, // Placeholder if no image
+                              dateAchieved: null,
+                              icon: Icons.shield_moon_outlined,
                             ))
                         .toList(),
                     isStickerGrid: true,
                   ),
                 ),
           SliverToBoxAdapter(
-              child: SizedBox(
-                  height: kBottomNavigationBarHeight +
-                      32.0)), // More padding at the bottom
+              child: SizedBox(height: kBottomNavigationBarHeight + 32.0)),
         ],
       ),
     );
@@ -200,20 +202,16 @@ class _ProfilePageState extends State<ProfilePage> {
     final theme = Theme.of(context);
     return SliverToBoxAdapter(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 28, 20, 16), // Adjusted padding
+        padding: const EdgeInsets.fromLTRB(20, 28, 20, 16),
         child: Row(
           children: [
             Icon(icon, color: theme.colorScheme.primary, size: 26),
             const SizedBox(width: 12),
-            Text(
-              title,
-              style: GoogleFonts.poppins(
-                // Using Poppins for headers
-                fontSize: 20,
-                fontWeight: FontWeight.w600, // Bolder
-                color: theme.colorScheme.onSurface,
-              ),
-            ),
+            Text(title,
+                style: GoogleFonts.poppins(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurface)),
           ],
         ),
       ),
@@ -226,22 +224,14 @@ class _ProfilePageState extends State<ProfilePage> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
       child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 50, color: theme.hintColor.withOpacity(0.6)),
-            const SizedBox(height: 16),
-            Text(
-              message,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 50, color: theme.hintColor.withOpacity(0.6)),
+          const SizedBox(height: 16),
+          Text(message,
               style: GoogleFonts.lato(
-                // Using Lato for body
-                fontSize: 16,
-                color: theme.hintColor.withOpacity(0.8),
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+                  fontSize: 16, color: theme.hintColor.withOpacity(0.8)),
+              textAlign: TextAlign.center),
+        ]),
       ),
     );
   }
