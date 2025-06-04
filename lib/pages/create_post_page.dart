@@ -109,7 +109,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
                 surface: theme.cardColor,
                 onSurface: theme.colorScheme.onSurface,
               ),
-              dialogBackgroundColor: theme.cardColor,
               dialogTheme: DialogThemeData(
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16)))),

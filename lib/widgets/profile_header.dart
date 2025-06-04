@@ -13,7 +13,7 @@ class ProfileHeader extends StatefulWidget {
   final int experienceToNextLevel;
 
   const ProfileHeader({
-    Key? key,
+    super.key,
     required this.username,
     required this.displayName,
     this.photoURL,
@@ -23,7 +23,7 @@ class ProfileHeader extends StatefulWidget {
     required this.level,
     required this.currentExperience,
     required this.experienceToNextLevel,
-  }) : super(key: key);
+  });
 
   @override
   State<ProfileHeader> createState() => _ProfileHeaderState();

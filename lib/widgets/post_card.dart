@@ -600,9 +600,9 @@ class _PostCardState extends State<PostCard> {
   String _getTimeAgo(DateTime dateTime) {
     final Duration diff = DateTime.now().difference(dateTime);
     try {
-      if (diff.inDays > 365)
+      if (diff.inDays > 365) {
         return DateFormat('d.M.yyyy', _currentLocale).format(dateTime);
-      else if (diff.inDays > 30)
+      } else if (diff.inDays > 30)
         return DateFormat('d. MMM', _currentLocale).format(dateTime);
       else if (diff.inDays >= 7) {
         final weeks = (diff.inDays / 7).floor();
@@ -618,8 +618,9 @@ class _PostCardState extends State<PostCard> {
       else if (diff.inSeconds >= 10) return '${diff.inSeconds} s ago';
       return 'Now';
     } catch (e) {
-      if (diff.inDays > 7)
+      if (diff.inDays > 7) {
         return DateFormat('dd/MM/yy', 'en_US').format(dateTime);
+      }
       if (diff.inDays >= 1) return '${diff.inDays}d ago';
       if (diff.inHours >= 1) return '${diff.inHours}h ago';
       if (diff.inMinutes >= 1) return '${diff.inMinutes}m ago';

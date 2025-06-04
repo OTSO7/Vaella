@@ -304,8 +304,9 @@ class AuthProvider with ChangeNotifier {
             .where('username', isEqualTo: identifier.trim().toLowerCase())
             .limit(1)
             .get();
-        if (userQuery.docs.isEmpty)
+        if (userQuery.docs.isEmpty) {
           throw Exception('Username or email not found.');
+        }
         final userData = userQuery.docs.first.data();
         if (userData.containsKey('email') && userData['email'] != null) {
           emailToLogin = userData['email'];
@@ -353,8 +354,9 @@ class AuthProvider with ChangeNotifier {
           .where('username', isEqualTo: usernameLower)
           .limit(1)
           .get();
-      if (usernameExists.docs.isNotEmpty)
+      if (usernameExists.docs.isNotEmpty) {
         throw Exception('Username is already taken.');
+      }
 
       fb_auth.UserCredential userCredential =
           await _auth.createUserWithEmailAndPassword(
@@ -394,9 +396,9 @@ class AuthProvider with ChangeNotifier {
       }
     } on fb_auth.FirebaseAuthException catch (e) {
       String message;
-      if (e.code == 'weak-password')
+      if (e.code == 'weak-password') {
         message = 'Password is too weak.';
-      else if (e.code == 'email-already-in-use')
+      } else if (e.code == 'email-already-in-use')
         message = 'Email address is already in use.';
       else if (e.code == 'invalid-email')
         message = 'Invalid email address.';

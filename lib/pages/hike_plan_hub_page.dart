@@ -665,7 +665,7 @@ class _CustomSliverAppBarDelegate extends SliverPersistentHeaderDelegate {
               errorWidget: (context, url, error) => Container(
                 decoration: BoxDecoration(
                     gradient: LinearGradient(colors: [
-                  theme.colorScheme.surfaceVariant,
+                  theme.colorScheme.surfaceContainerHighest,
                   theme.colorScheme.surfaceContainer,
                 ], begin: Alignment.topCenter, end: Alignment.bottomCenter)),
                 child: Icon(Icons.broken_image_outlined,

@@ -315,13 +315,15 @@ class AppRouter extends StatelessWidget {
           headerForegroundColor: Colors.white,
           dayForegroundColor: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected)) return Colors.white;
-            if (states.contains(WidgetState.disabled))
+            if (states.contains(WidgetState.disabled)) {
               return Colors.grey.shade700;
+            }
             return Colors.white.withOpacity(0.8);
           }),
           dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected))
+            if (states.contains(WidgetState.selected)) {
               return Colors.teal.shade500;
+            }
             return Colors.transparent;
           }),
           todayForegroundColor: WidgetStateProperty.all(Colors.orange.shade300),
@@ -335,8 +337,9 @@ class AppRouter extends StatelessWidget {
         ),
         checkboxTheme: CheckboxThemeData(
           fillColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected))
+            if (states.contains(WidgetState.selected)) {
               return Colors.teal.shade400;
+            }
             return Colors.transparent;
           }),
           checkColor: WidgetStateProperty.all(Colors.black),

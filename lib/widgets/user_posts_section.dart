@@ -73,7 +73,7 @@ class _UserPostsSectionState extends State<UserPostsSection> {
         }
       });
       return posts;
-    } catch (e, stackTrace) {
+    } catch (e) {
       // print('Critical error fetching user posts for ${widget.userId}: $e\nStackTrace: $stackTrace');
       if (mounted) {
         widget.onPostsLoaded(0);

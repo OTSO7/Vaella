@@ -281,9 +281,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
               backgroundImage: backgroundImage,
               onBackgroundImageError: (_, __) {
                 // This can happen if NetworkImage fails
-                if (mounted)
+                if (mounted) {
                   setState(() =>
                       _profileImageDisplayUrl = 'use_default_placeholder');
+                }
               },
               child: (_pickedProfileImageFile == null &&
                       (_profileImageDisplayUrl == null ||
@@ -361,9 +362,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
                       fit: BoxFit.cover,
                       onError: (err, stack) {
                         // Handle NetworkImage load error for banner
-                        if (mounted)
+                        if (mounted) {
                           setState(() => _bannerImageDisplayUrl =
                               'use_default_placeholder_banner');
+                        }
                       }),
             ),
             child: showPlaceholder ||
@@ -517,14 +519,18 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 ),
                 enabled: !_isLoading,
                 validator: (value) {
-                  if (value == null || value.trim().isEmpty)
+                  if (value == null || value.trim().isEmpty) {
                     return 'Username is required';
-                  if (value.trim().length < 3)
+                  }
+                  if (value.trim().length < 3) {
                     return 'Username must be at least 3 characters';
-                  if (value.trim().length > 20)
+                  }
+                  if (value.trim().length > 20) {
                     return 'Username too long (max 20 chars)';
-                  if (!RegExp(r'^[a-zA-Z0-9_.]+$').hasMatch(value))
+                  }
+                  if (!RegExp(r'^[a-zA-Z0-9_.]+$').hasMatch(value)) {
                     return 'Letters, numbers, dots, underscores only';
+                  }
                   return null;
                 },
               ),
@@ -540,10 +546,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 ),
                 enabled: !_isLoading,
                 validator: (value) {
-                  if (value == null || value.trim().isEmpty)
+                  if (value == null || value.trim().isEmpty) {
                     return 'Display name is required';
-                  if (value.trim().length > 30)
+                  }
+                  if (value.trim().length > 30) {
                     return 'Display name too long (max 30 chars)';
+                  }
                   return null;
                 },
               ),
