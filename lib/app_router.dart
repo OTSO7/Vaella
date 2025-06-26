@@ -17,8 +17,10 @@ import 'pages/edit_profile_page.dart';
 import 'pages/register_page.dart';
 import 'pages/create_post_page.dart';
 import 'pages/user_posts_list_page.dart';
-import 'pages/weather_page.dart'; // UUSI: Importtaa WeatherPage
-import 'models/hike_plan_model.dart'; // UUSI: Tarvitaan HikePlanin välittämiseen
+import 'pages/weather_page.dart';
+import 'pages/hike_plan_hub_page.dart';
+import 'pages/packing_list_page.dart';
+import 'models/hike_plan_model.dart';
 
 // Widgets
 import 'widgets/main_scaffold.dart';
@@ -77,7 +79,22 @@ class AppRouter extends StatelessWidget {
           },
         ),
         GoRoute(
-          path: '/hike-plan/:planId/weather', // UUSI REITTI
+          path: '/hike-plan/:planId',
+          name: 'hikePlanHub',
+          parentNavigatorKey: _rootNavigatorKey,
+          builder: (context, state) {
+            final plan = state.extra as HikePlan?;
+            if (plan == null) {
+              return Scaffold(
+                appBar: AppBar(title: const Text('Error')),
+                body: const Center(child: Text('Hike plan not found!')),
+              );
+            }
+            return HikePlanHubPage(initialPlan: plan);
+          },
+        ),
+        GoRoute(
+          path: '/hike-plan/:planId/weather',
           name: 'weatherPage',
           parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) {
@@ -85,10 +102,28 @@ class AppRouter extends StatelessWidget {
             if (hikePlan == null) {
               return Scaffold(
                 appBar: AppBar(title: const Text('Error')),
-                body: const Center(child: Text('Hike Plan data is missing.')),
+                body: const Center(
+                    child: Text('Hike Plan data is missing for weather.')),
               );
             }
             return WeatherPage(hikePlan: hikePlan);
+          },
+        ),
+        GoRoute(
+          path: '/hike-plan/:planId/packingList',
+          name: 'packingListPage',
+          parentNavigatorKey: _rootNavigatorKey,
+          builder: (context, state) {
+            final planId = state.pathParameters['planId']!;
+            final hikePlan = state.extra as HikePlan?;
+            if (hikePlan == null) {
+              return Scaffold(
+                appBar: AppBar(title: const Text('Error')),
+                body: const Center(
+                    child: Text('Hike Plan data is missing for packing list.')),
+              );
+            }
+            return PackingListPage(planId: planId, initialPlan: hikePlan);
           },
         ),
         StatefulShellRoute.indexedStack(
@@ -154,8 +189,9 @@ class AppRouter extends StatelessWidget {
 
         final isLoggingIn = location == '/login';
         final isRegistering = location == '/register';
-        final isWeatherPage =
-            location.startsWith('/hike-plan/') && location.endsWith('/weather');
+        final isProtectedHikeRoute = location.startsWith('/hike-plan/') &&
+            !isLoggingIn &&
+            !isRegistering;
 
         if (!isLoggedIn && !isLoggingIn && !isRegistering) {
           return '/login';
@@ -163,7 +199,7 @@ class AppRouter extends StatelessWidget {
         if (isLoggedIn && (isLoggingIn || isRegistering)) {
           return '/home';
         }
-        if (!isLoggedIn && isWeatherPage) {
+        if (!isLoggedIn && isProtectedHikeRoute) {
           return '/login';
         }
         return null;
@@ -186,10 +222,9 @@ class AppRouter extends StatelessWidget {
           error: Colors.redAccent.shade200,
           onError: Colors.black,
           outline: Colors.grey.shade700,
-          // Accent colors
-          tertiary: Colors.deepPurpleAccent.shade200, // Accent color 1
+          tertiary: Colors.deepPurpleAccent.shade200,
           onTertiary: Colors.black,
-          secondaryContainer: Colors.amberAccent.shade200, // Accent color 2
+          secondaryContainer: Colors.amberAccent.shade200,
           onSecondaryContainer: Colors.black,
         ),
         textTheme: TextTheme(
@@ -347,6 +382,7 @@ class AppRouter extends StatelessWidget {
           side: BorderSide(color: Colors.white.withOpacity(0.4), width: 1.5),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
         ),
+        // FIXED: Changed DialogTheme to DialogThemeData
         dialogTheme: DialogThemeData(
           backgroundColor: const Color(0xFF2C2C2C),
           shape:

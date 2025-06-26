@@ -1,7 +1,8 @@
 // lib/models/hike_plan_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/material.dart'; // Added for Color
+import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
+import 'packing_list_item.dart'; // Import the new model
 
 // Enum for Hike Status
 enum HikeStatus { planned, upcoming, ongoing, completed, cancelled }
@@ -28,25 +29,25 @@ extension HikeDifficultyExtension on HikeDifficulty {
   }
 
   Color getColor(BuildContext context) {
-    // Using Theme colors for difficulty indication
-    final theme = Theme.of(context);
+    // These colors align with a dark theme where primary/accent are vivid
     switch (this) {
       case HikeDifficulty.easy:
-        return Colors.green.shade400;
+        return Colors.green.shade400; // Bright green for easy
       case HikeDifficulty.moderate:
-        return Colors.blue.shade400;
+        return Colors.blue.shade300; // Muted blue for moderate
       case HikeDifficulty.challenging:
-        return Colors.orange.shade400;
+        return Colors.orange.shade400; // Orange for challenging
       case HikeDifficulty.expert:
-        return Colors.red.shade400;
+        return Colors.red.shade400; // Red for expert
       case HikeDifficulty.unknown:
       default:
-        return theme.hintColor;
+        return Colors.white
+            .withOpacity(0.6); // Subtle for unknown (like hintColor)
     }
   }
 }
 
-// Keys for preparation items (remains in Finnish as per your original model)
+// Keys for preparation items
 class PrepItemKeys {
   static const String weather = 'weather';
   static const String dayPlanner = 'day_planner';
@@ -59,13 +60,13 @@ class PrepItemKeys {
   static String getDisplayName(String key) {
     switch (key) {
       case weather:
-        return 'Sää tarkistettu'; // Weather checked
+        return 'Sää tarkistettu';
       case dayPlanner:
-        return 'Päiväsuunnitelma tehty'; // Day plan made
+        return 'Päiväsuunnitelma tehty';
       case foodPlanner:
-        return 'Ruokasuunnitelma valmis'; // Food plan ready
+        return 'Ruokasuunnitelma valmis';
       case packingList:
-        return 'Pakkauslista laadittu'; // Packing list compiled
+        return 'Pakkauslista laadittu';
       default:
         return key;
     }
@@ -84,8 +85,9 @@ class HikePlan {
   final double? latitude;
   final double? longitude;
   final Map<String, bool> preparationItems;
-  final String? imageUrl; // ADDED: For the Hub Page AppBar background
-  final HikeDifficulty difficulty; // ADDED: For displaying hike difficulty
+  final String? imageUrl;
+  final HikeDifficulty difficulty;
+  final List<PackingListItem> packingList; // ADDED: Packing list items
 
   HikePlan({
     String? id,
@@ -99,27 +101,24 @@ class HikePlan {
     this.latitude,
     this.longitude,
     Map<String, bool>? preparationItems,
-    this.imageUrl, // ADDED
-    this.difficulty = HikeDifficulty.unknown, // ADDED with default
+    this.imageUrl,
+    this.difficulty = HikeDifficulty.unknown,
+    List<PackingListItem>? packingList, // ADDED
   })  : id = id ?? const Uuid().v4(),
-        status = status ??
-            _calculateStatus(startDate, endDate,
-                null), // Pass null for externally set status if not provided
+        status = status ?? _calculateStatus(startDate, endDate, null),
         preparationItems = preparationItems ??
             {
               PrepItemKeys.weather: false,
               PrepItemKeys.dayPlanner: false,
               PrepItemKeys.foodPlanner: false,
               PrepItemKeys.packingList: false,
-            };
+            },
+        packingList = packingList ?? []; // Initialize with empty list
 
-  // Helper method to calculate status
   static HikeStatus _calculateStatus(
       DateTime startDate, DateTime? endDate, HikeStatus? currentStatusIfAny) {
-    // If a status (like 'cancelled') is already definitively set, respect it.
     if (currentStatusIfAny == HikeStatus.cancelled) return HikeStatus.cancelled;
-    if (currentStatusIfAny == HikeStatus.completed)
-      return HikeStatus.completed; // If manually set to completed
+    if (currentStatusIfAny == HikeStatus.completed) return HikeStatus.completed;
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -133,19 +132,15 @@ class HikePlan {
     }
     if (sDate.isAtSameMomentAs(today) ||
         (sDate.isBefore(today) && (eDate == null || !eDate.isBefore(today)))) {
-      // Starts today OR started in past and not yet ended (or no end date)
       return HikeStatus.ongoing;
     }
     if (sDate.isAfter(today) &&
         sDate.isBefore(today.add(const Duration(days: 7)))) {
-      // Starts within the next week (but not today)
       return HikeStatus.upcoming;
     }
     if (sDate.isAfter(today)) {
-      // Starts further in the future
       return HikeStatus.planned;
     }
-    // Default fallback if other conditions aren't met (e.g., past start without end date, might be considered ongoing or needs review)
     return HikeStatus.planned;
   }
 
@@ -176,18 +171,24 @@ class HikePlan {
       });
     }
 
+    // Parse packing list
+    List<PackingListItem> packingListFromDb = [];
+    if (data['packingList'] != null && data['packingList'] is List) {
+      packingListFromDb = (data['packingList'] as List)
+          .map((item) => PackingListItem.fromMap(item as Map<String, dynamic>))
+          .toList();
+    }
+
     HikeStatus status;
     if (data['status'] != null) {
       status = HikeStatus.values.firstWhere(
         (e) => e.toString().split('.').last == data['status'],
         orElse: () => _calculateStatus(
-            // Fallback calculation if status string is invalid
             (data['startDate'] as Timestamp).toDate(),
             (data['endDate'] as Timestamp?)?.toDate(),
-            null), // Pass null as no specific pre-set status
+            null),
       );
     } else {
-      // If status field is missing entirely
       status = _calculateStatus((data['startDate'] as Timestamp).toDate(),
           (data['endDate'] as Timestamp?)?.toDate(), null);
     }
@@ -207,12 +208,13 @@ class HikePlan {
       endDate: (data['endDate'] as Timestamp?)?.toDate(),
       lengthKm: (data['lengthKm'] as num?)?.toDouble(),
       notes: data['notes'] as String?,
-      status: status, // Use the determined status
+      status: status,
       latitude: (data['latitude'] as num?)?.toDouble(),
       longitude: (data['longitude'] as num?)?.toDouble(),
       preparationItems: prepItemsFromDb,
-      imageUrl: data['imageUrl'] as String?, // ADDED
-      difficulty: difficulty, // ADDED
+      imageUrl: data['imageUrl'] as String?,
+      difficulty: difficulty,
+      packingList: packingListFromDb, // ADDED
     );
   }
 
@@ -228,9 +230,9 @@ class HikePlan {
       'latitude': latitude,
       'longitude': longitude,
       'preparationItems': preparationItems,
-      'imageUrl': imageUrl, // ADDED
-      'difficulty': difficulty.toString().split('.').last, // ADDED
-      // Consider adding 'createdAt' and 'updatedAt' using FieldValue.serverTimestamp()
+      'imageUrl': imageUrl,
+      'difficulty': difficulty.toString().split('.').last,
+      'packingList': packingList.map((item) => item.toMap()).toList(), // ADDED
     };
   }
 
@@ -251,11 +253,11 @@ class HikePlan {
     double? longitude,
     bool setLongitudeToNull = false,
     Map<String, bool>? preparationItems,
-    String? imageUrl, // ADDED
-    bool setImageUrlToNull = false, // ADDED
-    HikeDifficulty? difficulty, // ADDED
+    String? imageUrl,
+    bool setImageUrlToNull = false,
+    HikeDifficulty? difficulty,
+    List<PackingListItem>? packingList, // ADDED
   }) {
-    // Recalculate status if relevant dates change and no explicit status is provided
     HikeStatus newStatus;
     if (status != null) {
       newStatus = status;
@@ -263,8 +265,8 @@ class HikePlan {
       DateTime effectiveStartDate = startDate ?? this.startDate;
       DateTime? effectiveEndDate =
           setEndDateToNull ? null : (endDate ?? this.endDate);
-      newStatus = _calculateStatus(effectiveStartDate, effectiveEndDate,
-          this.status); // Pass current status for context
+      newStatus =
+          _calculateStatus(effectiveStartDate, effectiveEndDate, this.status);
     } else {
       newStatus = this.status;
     }
@@ -277,12 +279,13 @@ class HikePlan {
       endDate: setEndDateToNull ? null : (endDate ?? this.endDate),
       lengthKm: setLengthKmToNull ? null : (lengthKm ?? this.lengthKm),
       notes: setNotesToNull ? null : (notes ?? this.notes),
-      status: newStatus, // Use the potentially recalculated status
+      status: newStatus,
       latitude: setLatitudeToNull ? null : (latitude ?? this.latitude),
       longitude: setLongitudeToNull ? null : (longitude ?? this.longitude),
       preparationItems: preparationItems ?? this.preparationItems,
-      imageUrl: setImageUrlToNull ? null : (imageUrl ?? this.imageUrl), // ADDED
-      difficulty: difficulty ?? this.difficulty, // ADDED
+      imageUrl: setImageUrlToNull ? null : (imageUrl ?? this.imageUrl),
+      difficulty: difficulty ?? this.difficulty,
+      packingList: packingList ?? this.packingList, // ADDED
     );
   }
 }

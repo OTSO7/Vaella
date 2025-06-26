@@ -11,39 +11,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/hike_plan_model.dart';
 import '../widgets/preparation_progress_modal.dart';
 import '../services/hike_plan_service.dart';
-
-// App theme colors (remains the same)
-class AppColors {
-  static Color primaryColor(BuildContext context) =>
-      Theme.of(context).colorScheme.primary;
-  static Color accentColor(BuildContext context) =>
-      Theme.of(context).colorScheme.secondary;
-  static Color backgroundColor(BuildContext context) =>
-      Theme.of(context).scaffoldBackgroundColor;
-  static Color cardColor(BuildContext context) =>
-      Theme.of(context).colorScheme.surface;
-  static Color onCardColor(BuildContext context) =>
-      Theme.of(context).colorScheme.onSurface;
-  static Color textColor(BuildContext context) =>
-      Theme.of(context).colorScheme.onSurface;
-  static Color subtleTextColor(BuildContext context) =>
-      Theme.of(context).hintColor;
-  static Color errorColor(BuildContext context) =>
-      Theme.of(context).colorScheme.error;
-
-  static Color getTempColor(double temp) {
-    if (temp >= 30) return Colors.red.shade700;
-    if (temp >= 25) return Colors.redAccent.shade200;
-    if (temp >= 20) return Colors.orange.shade600;
-    if (temp >= 15) return Colors.amber.shade700;
-    if (temp >= 10) return Colors.lightGreen.shade600;
-    if (temp >= 5) return Colors.teal.shade400;
-    if (temp >= 0) return Colors.cyan.shade600;
-    if (temp >= -5) return Colors.blue.shade300;
-    if (temp >= -10) return Colors.lightBlue.shade200;
-    return Colors.indigo.shade200;
-  }
-}
+import '../utils/app_colors.dart'; // Import centralized colors
 
 class HikePlanHubPage extends StatefulWidget {
   final HikePlan initialPlan;
@@ -104,7 +72,7 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text('Error updating status: $e'),
-            backgroundColor: Colors.redAccent,
+            backgroundColor: AppColors.errorColor(context),
             behavior: SnackBarBehavior.floating,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -133,20 +101,28 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
 
   TextTheme _getAppTextTheme(BuildContext context) {
     final currentTheme = Theme.of(context);
+    // Use GoogleFonts.latoTextTheme for base and Poppins for headlines/titles
     return GoogleFonts.latoTextTheme(currentTheme.textTheme).copyWith(
-      headlineMedium:
-          GoogleFonts.poppins(textStyle: currentTheme.textTheme.headlineMedium),
-      headlineSmall:
-          GoogleFonts.poppins(textStyle: currentTheme.textTheme.headlineSmall),
-      titleLarge:
-          GoogleFonts.poppins(textStyle: currentTheme.textTheme.titleLarge),
-      titleMedium:
-          GoogleFonts.poppins(textStyle: currentTheme.textTheme.titleMedium),
-      bodyLarge: GoogleFonts.lato(textStyle: currentTheme.textTheme.bodyLarge),
-      bodyMedium:
-          GoogleFonts.lato(textStyle: currentTheme.textTheme.bodyMedium),
-      labelLarge:
-          GoogleFonts.poppins(textStyle: currentTheme.textTheme.labelLarge),
+      headlineLarge: currentTheme.textTheme.headlineLarge
+          ?.copyWith(fontFamily: GoogleFonts.poppins().fontFamily),
+      headlineMedium: currentTheme.textTheme.headlineMedium
+          ?.copyWith(fontFamily: GoogleFonts.poppins().fontFamily),
+      headlineSmall: currentTheme.textTheme.headlineSmall
+          ?.copyWith(fontFamily: GoogleFonts.poppins().fontFamily),
+      titleLarge: currentTheme.textTheme.titleLarge
+          ?.copyWith(fontFamily: GoogleFonts.poppins().fontFamily),
+      titleMedium: currentTheme.textTheme.titleMedium
+          ?.copyWith(fontFamily: GoogleFonts.poppins().fontFamily),
+      titleSmall: currentTheme.textTheme.titleSmall
+          ?.copyWith(fontFamily: GoogleFonts.poppins().fontFamily),
+      labelLarge: currentTheme.textTheme.labelLarge
+          ?.copyWith(fontFamily: GoogleFonts.poppins().fontFamily),
+      bodyLarge: currentTheme.textTheme.bodyLarge
+          ?.copyWith(fontFamily: GoogleFonts.lato().fontFamily),
+      bodyMedium: currentTheme.textTheme.bodyMedium
+          ?.copyWith(fontFamily: GoogleFonts.lato().fontFamily),
+      bodySmall: currentTheme.textTheme.bodySmall
+          ?.copyWith(fontFamily: GoogleFonts.lato().fontFamily),
     );
   }
 
@@ -191,14 +167,13 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
                     end: Alignment.bottomCenter,
                     stops: const [0.0, 0.3, 1.0])),
             child: SafeArea(
-              top: false, // SafeArea for bottom, AppBar handles top
+              top: false,
               bottom: true,
               child: AnimationLimiter(
                 child: CustomScrollView(
                   controller: _scrollController,
                   slivers: <Widget>[
                     SliverPersistentHeader(
-                      // Changed from _NewCustomSliverAppBar widget
                       pinned: true,
                       floating: false,
                       delegate: HubPageSliverAppBarDelegate(
@@ -209,8 +184,6 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
                         imageUrl: _currentPlan.imageUrl ?? '',
                         currentPlan: _currentPlan,
                         appTextTheme: appTextTheme,
-                        // Removed direct scrollController dependency for blur effect calculation
-                        // It will use shrinkOffset from delegate's build method
                       ),
                     ),
                     SliverPadding(
@@ -327,7 +300,7 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
 
   Widget _buildOverviewSectionNew(
       BuildContext context, TextTheme appTextTheme) {
-    final dateFormat = DateFormat('MMM d, yyyy', 'en_US');
+    final dateFormat = DateFormat('MMM d,yyyy', 'en_US');
     final primaryColor = AppColors.primaryColor(context);
 
     return Container(
@@ -389,8 +362,8 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
                         TextSpan(
                             text: _currentPlan.difficulty.toShortString(),
                             style: TextStyle(
-                                color: _currentPlan.difficulty.getColor(
-                                    context), // Using color from enum extension
+                                color:
+                                    _currentPlan.difficulty.getColor(context),
                                 fontWeight: FontWeight.w600)),
                       ]),
                 )),
@@ -582,11 +555,16 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
   Widget _buildPlannerActionsGridNew(BuildContext context) {
     final primaryColor = AppColors.primaryColor(context);
     final secondaryColor = AppColors.accentColor(context);
-    final tertiaryColor =
-        Color.lerp(primaryColor, AppColors.backgroundColor(context), 0.6)!;
-    final onPrimaryContainer = AppColors.onCardColor(context);
-    final onSecondaryContainer = AppColors.onCardColor(context);
-    final onTertiaryContainer = AppColors.onCardColor(context);
+    final tertiaryColor = Color.lerp(
+        primaryColor,
+        AppColors.backgroundColor(context),
+        0.6)!; // Using tertiary from app_router
+    final onPrimaryContainer =
+        AppColors.onPrimaryColor(context); // Now uses onPrimary from AppColors
+    final onSecondaryContainer =
+        AppColors.onAccentColor(context); // Now uses onAccent from AppColors
+    final onTertiaryContainer = AppColors.onCardColor(
+        context); // Using onCardColor for tertiary consistency
 
     final actions = [
       {
@@ -616,8 +594,12 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
         'title': "Packing List",
         'icon': Icons.backpack_outlined,
         'onPressed': () {
-          ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Packing List: Coming soon!")));
+          // Navigate to the new PackingListPage
+          GoRouter.of(context).pushNamed(
+            'packingListPage',
+            pathParameters: {'planId': _currentPlan.id},
+            extra: _currentPlan,
+          );
         },
         'color': primaryColor,
         'textColor': onPrimaryContainer
@@ -629,8 +611,10 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
           ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text("Route Plan: Coming soon!")));
         },
-        'color': tertiaryColor,
-        'textColor': onTertiaryContainer
+        'color':
+            tertiaryColor, // Using tertiary from app_router (deepPurpleAccent.shade200)
+        'textColor': AppColors.onCardColor(
+            context) // Using onCardColor to ensure readability
       },
       {
         'title': "Meal Plan",
@@ -639,9 +623,9 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
           ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text("Meal Plan: Coming soon!")));
         },
-        'color': Color.lerp(
-            secondaryColor, AppColors.backgroundColor(context), 0.6)!,
-        'textColor': AppColors.onCardColor(context)
+        'color': Color.lerp(secondaryColor, AppColors.backgroundColor(context),
+            0.6)!, // Blends accent with background
+        'textColor': AppColors.onCardColor(context) // Ensure good contrast
       },
     ];
 
@@ -761,21 +745,15 @@ class HubPageSliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   @override
   Widget build(
       BuildContext context, double shrinkOffset, bool overlapsContent) {
-    final theme = Theme.of(context);
     final bool hasImage = imageUrl.isNotEmpty;
     final double topPadding = MediaQuery.of(context).padding.top;
 
-    // Calculate current height of the AppBar
     final currentHeight = maxExtent - shrinkOffset;
-    // Calculate animation progress (0.0 when fully expanded, 1.0 when fully collapsed)
     final progress = (shrinkOffset / (maxExtent - minExtent)).clamp(0.0, 1.0);
 
-    final double titleOpacity =
-        1.0 - progress; // Title fades out as it collapses
-    final double expandedTitleScale =
-        ui.lerpDouble(1.2, 1.0, progress)!; // Title shrinks
+    final double titleOpacity = 1.0 - progress;
+    final double expandedTitleScale = ui.lerpDouble(1.2, 1.0, progress)!;
 
-    // Blur and overlay for image based on shrinkOffset
     double blurSigma = ui.lerpDouble(0, 3, progress)!;
     double imageOverlayOpacity = ui.lerpDouble(0, 0.4, progress)!;
 
@@ -797,7 +775,6 @@ class HubPageSliverAppBarDelegate extends SliverPersistentHeaderDelegate {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Background (Image or Gradient)
           if (hasImage)
             CachedNetworkImage(
               imageUrl: imageUrl,
@@ -827,16 +804,12 @@ class HubPageSliverAppBarDelegate extends SliverPersistentHeaderDelegate {
                 ),
               ),
             ),
-
-          // Blur and Overlay for image (controlled by shrinkOffset via progress)
           if (hasImage && blurSigma > 0.01)
             BackdropFilter(
               filter: ui.ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
               child: Container(
                   color: Colors.black.withOpacity(imageOverlayOpacity)),
             ),
-
-          // Gradient overlay for text readability
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -857,32 +830,23 @@ class HubPageSliverAppBarDelegate extends SliverPersistentHeaderDelegate {
               ),
             ),
           ),
-
-          // Collapsing Title (FlexibleSpaceBar like behavior)
           Positioned(
             left: 0,
             right: 0,
-            bottom: 0, // Sticks to bottom
-            height: currentHeight > minExtent
-                ? currentHeight
-                : minExtent, // Use current calculated height
+            bottom: 0,
+            height: currentHeight > minExtent ? currentHeight : minExtent,
             child: Container(
               padding: EdgeInsets.only(
-                bottom: 16.0, // Bottom padding for the title
-                left: ui.lerpDouble(20, 56 + topPadding * 0.5,
-                    progress)!, // Animate left padding
-                right:
-                    ui.lerpDouble(20, 56, progress)!, // Animate right padding
+                bottom: 16.0,
+                left: ui.lerpDouble(20, 56 + topPadding * 0.5, progress)!,
+                right: ui.lerpDouble(20, 56, progress)!,
               ),
-              alignment: Alignment(ui.lerpDouble(-0.8, 0.0, progress)!,
-                  1.0), // Animate horizontal alignment
+              alignment: Alignment(ui.lerpDouble(-0.8, 0.0, progress)!, 1.0),
               child: Opacity(
-                opacity:
-                    titleOpacity.clamp(0.0, 1.0), // Ensure opacity is valid
+                opacity: titleOpacity.clamp(0.0, 1.0),
                 child: Transform.scale(
                   scale: expandedTitleScale,
-                  alignment: Alignment
-                      .bottomLeft, // Scale from bottom left when expanding
+                  alignment: Alignment.bottomLeft,
                   child: Text(
                     planName,
                     style: appTextTheme.titleLarge?.copyWith(
@@ -899,24 +863,19 @@ class HubPageSliverAppBarDelegate extends SliverPersistentHeaderDelegate {
                             ]
                           : null,
                     ),
-                    textAlign:
-                        TextAlign.left, // Keep title aligned left when expanded
-                    maxLines: currentHeight > minExtent + 20
-                        ? 2
-                        : 1, // Allow more lines when expanded
+                    textAlign: TextAlign.left,
+                    maxLines: currentHeight > minExtent + 20 ? 2 : 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ),
             ),
           ),
-
-          // Centered title when fully collapsed (AppBar title style)
-          if (progress == 1.0) // Only show when fully collapsed
+          if (progress == 1.0)
             Positioned(
               top: topPadding,
-              left: 56, // Space for back button
-              right: 56, // Space for potential actions
+              left: 56,
+              right: 56,
               height: kToolbarHeight,
               child: Center(
                 child: Text(
@@ -938,10 +897,8 @@ class HubPageSliverAppBarDelegate extends SliverPersistentHeaderDelegate {
                 ),
               ),
             ),
-
-          // Back Button
           Positioned(
-            top: topPadding, // Respect safe area
+            top: topPadding,
             left: 8,
             child: Material(
               color: Colors.transparent,
