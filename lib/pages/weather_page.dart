@@ -359,7 +359,7 @@ class _WeatherPageState extends State<WeatherPage> {
     } else if (symbolCode.contains('fog')) {
       iconData = Icons.foggy;
       try {
-        Icon(Icons.foggy);
+        const Icon(Icons.foggy);
       } catch (_) {
         iconData = Icons.blur_on_rounded;
       }
@@ -388,64 +388,84 @@ class _WeatherPageState extends State<WeatherPage> {
     final code = symbolCode.toLowerCase();
     if (code.contains('clearsky_day')) return 'Clear (day)';
     if (code.contains('clearsky_night')) return 'Clear (night)';
-    if (code.contains('clearsky_polartwilight'))
+    if (code.contains('clearsky_polartwilight')) {
       return 'Clear (polar twilight)';
+    }
     if (code.contains('fair_day')) return 'Fair (day)';
     if (code.contains('fair_night')) return 'Fair (night)';
     if (code.contains('fair_polartwilight')) return 'Fair (polar twilight)';
     if (code.contains('partlycloudy_day')) return 'Partly cloudy (day)';
     if (code.contains('partlycloudy_night')) return 'Partly cloudy (night)';
-    if (code.contains('partlycloudy_polartwilight'))
+    if (code.contains('partlycloudy_polartwilight')) {
       return 'Partly cloudy (polar twilight)';
+    }
     if (code.contains('cloudy')) return 'Cloudy';
-    if (code.contains('lightrainshowers_day'))
+    if (code.contains('lightrainshowers_day')) {
       return 'Light rain showers (day)';
-    if (code.contains('lightrainshowers_night'))
+    }
+    if (code.contains('lightrainshowers_night')) {
       return 'Light rain showers (night)';
-    if (code.contains('lightrainshowers_polartwilight'))
+    }
+    if (code.contains('lightrainshowers_polartwilight')) {
       return 'Light rain showers (polar twilight)';
+    }
     if (code.contains('rainshowers_day')) return 'Rain showers (day)';
     if (code.contains('rainshowers_night')) return 'Rain showers (night)';
-    if (code.contains('rainshowers_polartwilight'))
+    if (code.contains('rainshowers_polartwilight')) {
       return 'Rain showers (polar twilight)';
-    if (code.contains('heavyrainshowers_day'))
+    }
+    if (code.contains('heavyrainshowers_day')) {
       return 'Heavy rain showers (day)';
-    if (code.contains('heavyrainshowers_night'))
+    }
+    if (code.contains('heavyrainshowers_night')) {
       return 'Heavy rain showers (night)';
-    if (code.contains('heavyrainshowers_polartwilight'))
+    }
+    if (code.contains('heavyrainshowers_polartwilight')) {
       return 'Heavy rain showers (polar twilight)';
+    }
     if (code.contains('lightrain')) return 'Light rain';
     if (code.contains('rain')) return 'Rain';
     if (code.contains('heavyrain')) return 'Heavy rain';
-    if (code.contains('lightsnowshowers_day'))
+    if (code.contains('lightsnowshowers_day')) {
       return 'Light snow showers (day)';
-    if (code.contains('lightsnowshowers_night'))
+    }
+    if (code.contains('lightsnowshowers_night')) {
       return 'Light snow showers (night)';
-    if (code.contains('lightsnowshowers_polartwilight'))
+    }
+    if (code.contains('lightsnowshowers_polartwilight')) {
       return 'Light snow showers (polar twilight)';
+    }
     if (code.contains('snowshowers_day')) return 'Snow showers (day)';
     if (code.contains('snowshowers_night')) return 'Snow showers (night)';
-    if (code.contains('snowshowers_polartwilight'))
+    if (code.contains('snowshowers_polartwilight')) {
       return 'Snow showers (polar twilight)';
-    if (code.contains('heavysnowshowers_day'))
+    }
+    if (code.contains('heavysnowshowers_day')) {
       return 'Heavy snow showers (day)';
-    if (code.contains('heavysnowshowers_night'))
+    }
+    if (code.contains('heavysnowshowers_night')) {
       return 'Heavy snow showers (night)';
-    if (code.contains('heavysnowshowers_polartwilight'))
+    }
+    if (code.contains('heavysnowshowers_polartwilight')) {
       return 'Heavy snow showers (polar twilight)';
+    }
     if (code.contains('lightsnow')) return 'Light snow';
     if (code.contains('snow')) return 'Snow';
     if (code.contains('heavysnow')) return 'Heavy snow';
-    if (code.contains('lightsleetshowers_day'))
+    if (code.contains('lightsleetshowers_day')) {
       return 'Light sleet showers (day)';
-    if (code.contains('lightsleetshowers_night'))
+    }
+    if (code.contains('lightsleetshowers_night')) {
       return 'Light sleet showers (night)';
+    }
     if (code.contains('sleetshowers_day')) return 'Sleet showers (day)';
     if (code.contains('sleetshowers_night')) return 'Sleet showers (night)';
-    if (code.contains('heavysleetshowers_day'))
+    if (code.contains('heavysleetshowers_day')) {
       return 'Heavy sleet showers (day)';
-    if (code.contains('heavysleetshowers_night'))
+    }
+    if (code.contains('heavysleetshowers_night')) {
       return 'Heavy sleet showers (night)';
+    }
     if (code.contains('lightsleet')) return 'Light sleet';
     if (code.contains('sleet')) return 'Sleet';
     if (code.contains('heavysleet')) return 'Heavy sleet';
@@ -453,18 +473,23 @@ class _WeatherPageState extends State<WeatherPage> {
     if (code.contains('lightrainthunder')) return 'Light rain and thunder';
     if (code.contains('rainthunder')) return 'Rain and thunder';
     if (code.contains('heavyrainthunder')) return 'Heavy rain and thunder';
-    if (code.contains('lightthundershowers_day'))
+    if (code.contains('lightthundershowers_day')) {
       return 'Light thunder showers (day)';
-    if (code.contains('lightthundershowers_night'))
+    }
+    if (code.contains('lightthundershowers_night')) {
       return 'Light thunder showers (night)';
+    }
     if (code.contains('thundershowers_day')) return 'Thunder showers (day)';
     if (code.contains('thundershowers_night')) return 'Thunder showers (night)';
-    if (code.contains('heavythundershowers_day'))
+    if (code.contains('heavythundershowers_day')) {
       return 'Heavy thunder showers (day)';
-    if (code.contains('heavythundershowers_night'))
+    }
+    if (code.contains('heavythundershowers_night')) {
       return 'Heavy thunder showers (night)';
-    if (code.contains('thunderstorm') || code.contains('thunder'))
+    }
+    if (code.contains('thunderstorm') || code.contains('thunder')) {
       return 'Thunder';
+    }
     // Fallback: try to prettify the code
     if (code.isNotEmpty) {
       // Replace underscores and dashes with spaces, capitalize first letter
@@ -774,7 +799,7 @@ class _WeatherPageState extends State<WeatherPage> {
                   ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  stops: [0.0, 0.3, 1.0])),
+                  stops: const [0.0, 0.3, 1.0])),
           child: SafeArea(
             child: _isLoading
                 ? Center(

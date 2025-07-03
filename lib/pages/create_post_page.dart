@@ -11,7 +11,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../providers/auth_provider.dart';
 import '../models/post_model.dart';
-import '../models/user_profile_model.dart'; // Varmista, että tämä on UserProfileModel
+// Varmista, että tämä on UserProfileModel
 
 class CreatePostPage extends StatefulWidget {
   final PostVisibility initialVisibility;
