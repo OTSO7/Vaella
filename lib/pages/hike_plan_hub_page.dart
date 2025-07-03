@@ -149,9 +149,9 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
               delegate: _SliverAppBarDelegate(
                 TabBar(
                   controller: _tabController,
-                  indicatorColor: theme.colorScheme.primary,
+                  indicatorColor: Colors.orange.shade300,
                   indicatorWeight: 3.0,
-                  labelColor: theme.colorScheme.primary,
+                  labelColor: Colors.orange.shade300,
                   unselectedLabelColor: theme.hintColor,
                   labelStyle: GoogleFonts.poppins(fontWeight: FontWeight.w600),
                   unselectedLabelStyle:
@@ -602,8 +602,8 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
               decoration: BoxDecoration(
                   gradient: LinearGradient(
                       colors: [
-                        Colors.black.withOpacity(0.5),
-                        Colors.transparent,
+                        Colors.teal.shade500,
+                        Colors.teal.shade700.withOpacity(0.8),
                         Colors.black.withOpacity(0.6)
                       ],
                       begin: Alignment.topCenter,
@@ -645,7 +645,7 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
                       Text(
                         _currentPlan.location,
                         style: appTextTheme.bodyLarge?.copyWith(
-                            color: Colors.white70,
+                            color: Colors.orange.shade300,
                             shadows: [
                               const Shadow(blurRadius: 1, color: Colors.black54)
                             ]),
