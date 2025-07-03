@@ -442,8 +442,9 @@ class _PackingListPageState extends State<PackingListPage>
                               TextEditingController(text: _selectedCategory),
                           decoration: _buildInputDecoration(
                             labelText: 'Category',
-                            suffixIcon:
-                                Icon(Icons.arrow_forward_ios_rounded, size: 20),
+                            suffixIcon: const Icon(
+                                Icons.arrow_forward_ios_rounded,
+                                size: 20),
                             appTextTheme: appTextTheme,
                           ),
                           style: appTextTheme.bodyLarge,
@@ -579,8 +580,8 @@ class _PackingListPageState extends State<PackingListPage>
           }
           if (snapshot.hasError) {
             return Scaffold(
-              appBar: AppBar(title: Text('Error')),
-              body: Center(child: Text('Could not load packing list.')),
+              appBar: AppBar(title: const Text('Error')),
+              body: const Center(child: Text('Could not load packing list.')),
             );
           }
 

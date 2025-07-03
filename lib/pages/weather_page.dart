@@ -267,7 +267,7 @@ class _WeatherPageState extends State<WeatherPage> {
       child: CustomScrollView(
         slivers: [
           _buildWeatherSliverAppBar(context, heroData, appTextTheme),
-          SliverToBoxAdapter(child: const SizedBox(height: 12)),
+          const SliverToBoxAdapter(child: SizedBox(height: 12)),
           _buildHourlyForecast(context, hourlyData, appTextTheme),
           SliverToBoxAdapter(
             child: Padding(
@@ -589,9 +589,9 @@ class _WeatherPageState extends State<WeatherPage> {
       {double size = 56.0, Color? color}) {
     IconData iconData;
     final code = symbolCode.toLowerCase();
-    if (code.contains('sun') || code.contains('clearsky_day'))
+    if (code.contains('sun') || code.contains('clearsky_day')) {
       iconData = Icons.wb_sunny_rounded;
-    else if (code.contains('clearsky_night'))
+    } else if (code.contains('clearsky_night'))
       iconData = Icons.nightlight_round;
     else if (code.contains('cloud') || code.contains('fair'))
       iconData = Icons.cloud_queue_rounded;
