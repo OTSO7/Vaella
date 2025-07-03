@@ -4,12 +4,39 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'dart:async';
-import 'package:uuid/uuid.dart'; // Import for Uuid
+import 'dart:ui';
+import 'package:uuid/uuid.dart';
+import 'package:percent_indicator/percent_indicator.dart';
 
 import '../models/hike_plan_model.dart';
 import '../models/packing_list_item.dart';
 import '../services/hike_plan_service.dart';
 import '../utils/app_colors.dart';
+
+class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
+  _SliverAppBarDelegate(this._tabBar);
+
+  final TabBar _tabBar;
+
+  @override
+  double get minExtent => _tabBar.preferredSize.height;
+  @override
+  double get maxExtent => _tabBar.preferredSize.height;
+
+  @override
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: Theme.of(context).scaffoldBackgroundColor.withOpacity(0.95),
+      child: _tabBar,
+    );
+  }
+
+  @override
+  bool shouldRebuild(_SliverAppBarDelegate oldDelegate) {
+    return false;
+  }
+}
 
 class PackingListPage extends StatefulWidget {
   final String planId;
@@ -25,10 +52,8 @@ class PackingListPage extends StatefulWidget {
   State<PackingListPage> createState() => _PackingListPageState();
 }
 
-class _PackingListPageState extends State<PackingListPage> {
-  // RE-ADDED: _currentPlan as a state variable to prevent rebuilds on stream updates
-  HikePlan?
-      _currentHikePlan; // Changed name for clarity to avoid confusion with StreamBuilder's snapshot.data
+class _PackingListPageState extends State<PackingListPage>
+    with TickerProviderStateMixin {
   final HikePlanService _hikePlanService = HikePlanService();
   final TextEditingController _newItemNameController = TextEditingController();
   final TextEditingController _newItemQuantityController =
@@ -36,37 +61,34 @@ class _PackingListPageState extends State<PackingListPage> {
   final TextEditingController _categoryFilterController =
       TextEditingController();
   String _selectedCategory = 'General';
-  List<String> _categories = [
-    'General',
-    'Clothing',
+
+  // MUUTETTU: Vain yksi pääkategorialista.
+  final List<String> _packingCategories = const [
     'Shelter',
-    'Cooking',
-    'Navigation',
-    'First Aid',
-    'Hygiene',
-    'Tools',
-    'Documents',
-    'Electronics',
     'Food',
-    'Miscellaneous',
+    'Clothing',
+    'Tools',
+    'Hygiene',
+    'First Aid',
+    'Bonus',
   ];
 
-  Timer? _debounceTimer;
-  StreamSubscription<HikePlan?>?
-      _hikePlanSubscription; // Keep this to manage stream lifecycle
+  // POISTETTU: _secondaryCategories ja _allCategories poistettu tarpeettomina.
 
+  Timer? _debounceTimer;
   final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
       GlobalKey<ScaffoldMessengerState>();
 
-  final Map<String, bool> _pendingUpdates = {};
+  late final ScrollController _scrollController;
+  TabController? _tabController;
 
   @override
   void initState() {
     super.initState();
-    _currentHikePlan =
-        widget.initialPlan; // Initialize with initial data from route
-    print('PackingListPage: Initial Plan ID from widget: ${widget.planId}');
-    _subscribeToHikePlanChanges(); // Start listening to Firestore immediately
+    _scrollController = ScrollController();
+    // MUUTETTU: TabControllerin pituus on nyt suoraan _packingCategories-listan pituus.
+    _tabController =
+        TabController(length: _packingCategories.length, vsync: this);
   }
 
   @override
@@ -75,56 +97,12 @@ class _PackingListPageState extends State<PackingListPage> {
     _newItemQuantityController.dispose();
     _categoryFilterController.dispose();
     _debounceTimer?.cancel();
-    _hikePlanSubscription?.cancel(); // Cancel subscription on dispose
+    _scrollController.dispose();
+    _tabController?.dispose();
     super.dispose();
   }
 
-  void _subscribeToHikePlanChanges() {
-    _hikePlanSubscription?.cancel(); // Ensure only one active subscription
-    _hikePlanSubscription =
-        _hikePlanService.getHikePlanStream(widget.planId).listen((plan) {
-      if (mounted) {
-        if (plan != null) {
-          // This setState will trigger a rebuild with the latest data from Firestore
-          // It's the primary way _currentHikePlan stays updated.
-          setState(() {
-            _currentHikePlan = plan;
-          });
-          print(
-              'PackingListPage: Plan data updated from stream: ID ${plan.id}');
-          print(
-              'PackingListPage: Streamed Packing List: ${plan.packingList.map((item) => '${item.name} packed: ${item.isPacked}').toList()}');
-        } else {
-          print(
-              'PackingListPage: Plan not found or deleted via stream. Navigating back.');
-          // If the plan no longer exists in Firestore, navigate back
-          if (mounted) {
-            GoRouter.of(context).pop();
-            _scaffoldMessengerKey.currentState?.showSnackBar(
-              SnackBar(
-                content:
-                    Text('Hike plan was deleted.', style: GoogleFonts.lato()),
-                backgroundColor: AppColors.errorColor(context),
-              ),
-            );
-          }
-        }
-      }
-    }, onError: (error) {
-      print('PackingListPage: Error subscribing to hike plan: $error');
-      if (mounted) {
-        _scaffoldMessengerKey.currentState?.showSnackBar(
-          SnackBar(
-            content: Text('Error loading hike plan: $error',
-                style: GoogleFonts.lato()),
-            backgroundColor: AppColors.errorColor(context),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    });
-  }
-
+  // Aputoiminnot ja logiikka pysyvät ennallaan...
   TextTheme _getAppTextTheme(BuildContext context) {
     final currentTheme = Theme.of(context);
     return GoogleFonts.latoTextTheme(currentTheme.textTheme).copyWith(
@@ -205,48 +183,17 @@ class _PackingListPageState extends State<PackingListPage> {
     );
   }
 
-  Future<void> _updateHikePlan(HikePlan updatedPlan, String? affectedItemId,
-      {bool showSuccess = true}) async {
-    print('PackingListPage: _updateHikePlan called for plan ${updatedPlan.id}');
-
-    // Set pending status for the affected item immediately (optimistic UI)
-    if (affectedItemId != null && mounted) {
-      setState(() {
-        _pendingUpdates[affectedItemId] = true;
-      });
-      print(
-          'PackingListPage: Optimistic update: Item $affectedItemId marked as pending.');
-    }
-
+  Future<void> _updateHikePlan(HikePlan updatedPlan,
+      {bool showSuccess = false}) async {
+    print('PackingListPage: Queuing update for plan ${updatedPlan.id}');
     _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 700), () async {
-      print(
-          'PackingListPage: Debounce timer fired for plan ${updatedPlan.id}.');
-      if (!mounted) {
-        print(
-            'PackingListPage: Debounce callback: Widget not mounted, returning.');
-        return;
-      }
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () async {
+      if (!mounted) return;
 
       try {
-        print(
-            'PackingListPage: Attempting Firestore update for plan ${updatedPlan.id}...');
-        print(
-            'PackingListPage: Packing list items before save: ${updatedPlan.packingList.map((item) => '${item.name} (${item.isPacked ? 'packed' : 'unpack'})').toList()}');
-
         await _hikePlanService.updateHikePlan(updatedPlan);
-
         print(
             'PackingListPage: Firestore update successful for plan ${updatedPlan.id}.');
-
-        // Clear pending status after successful update
-        if (affectedItemId != null && mounted) {
-          setState(() {
-            _pendingUpdates.remove(affectedItemId);
-          });
-          print(
-              'PackingListPage: Optimistic update: Item $affectedItemId pending status cleared.');
-        }
 
         if (mounted && showSuccess) {
           _scaffoldMessengerKey.currentState?.hideCurrentSnackBar();
@@ -264,17 +211,6 @@ class _PackingListPageState extends State<PackingListPage> {
         }
       } catch (e) {
         print('PackingListPage: Error during Firestore update: $e');
-        // Clear pending status and show error
-        if (affectedItemId != null && mounted) {
-          setState(() {
-            _pendingUpdates.remove(affectedItemId);
-            // The StreamBuilder will automatically revert the UI because Firestore data
-            // won't reflect the failed change. This is the desired behavior for optimistic UI.
-            print(
-                'PackingListPage: Optimistic update: Item $affectedItemId pending status cleared due to error. UI will revert via stream.');
-          });
-        }
-
         if (mounted) {
           _scaffoldMessengerKey.currentState?.hideCurrentSnackBar();
           _scaffoldMessengerKey.currentState?.showSnackBar(
@@ -293,21 +229,17 @@ class _PackingListPageState extends State<PackingListPage> {
     });
   }
 
-  // MODIFIED: _togglePackedStatus now updates the item's `isPacked` status directly
-  // within the current list received from the StreamBuilder and dispatches it.
-  void _togglePackedStatus(PackingListItem item, HikePlan currentHikePlan) {
-    print('PackingListPage: Toggling status for item: ${item.name}');
+  void _onItemStatusChanged(
+      PackingListItem item, bool newPackedStatus, HikePlan currentHikePlan) {
+    print(
+        'PackingListPage: Status changed for item: ${item.name} to $newPackedStatus');
 
-    // Create a new list where the target item's isPacked status is toggled.
     final List<PackingListItem> updatedList =
         currentHikePlan.packingList.map((i) {
-      return i.id == item.id ? i.copyWith(isPacked: !item.isPacked) : i;
+      return i.id == item.id ? i.copyWith(isPacked: newPackedStatus) : i;
     }).toList();
 
-    // Call _updateHikePlan to dispatch the updated plan to Firestore.
-    // The UI will be optimistically updated via _pendingUpdates state.
-    _updateHikePlan(
-        currentHikePlan.copyWith(packingList: updatedList), item.id);
+    _updateHikePlan(currentHikePlan.copyWith(packingList: updatedList));
   }
 
   Future<void> _selectCategory(BuildContext context, TextTheme appTextTheme,
@@ -319,17 +251,12 @@ class _PackingListPageState extends State<PackingListPage> {
       builder: (context) {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter modalSetState) {
-            List<String> filteredCategories = _categories.where((category) {
+            List<String> filteredCategories =
+                _packingCategories.where((category) {
               return category
                   .toLowerCase()
                   .contains(_categoryFilterController.text.toLowerCase());
             }).toList();
-
-            filteredCategories.sort((a, b) {
-              if (a == 'General') return -1;
-              if (b == 'General') return 1;
-              return a.compareTo(b);
-            });
 
             return DraggableScrollableSheet(
               initialChildSize: 0.6,
@@ -347,14 +274,9 @@ class _PackingListPageState extends State<PackingListPage> {
                     children: [
                       Padding(
                         padding: const EdgeInsets.all(16.0),
-                        child: Text(
-                          'Select Category',
-                          style: appTextTheme.titleLarge?.copyWith(
-                            color: AppColors.textColor(context),
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
+                        child: Text('Select Category',
+                            style: appTextTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.bold)),
                       ),
                       Padding(
                         padding: const EdgeInsets.symmetric(
@@ -367,9 +289,7 @@ class _PackingListPageState extends State<PackingListPage> {
                             appTextTheme: appTextTheme,
                           ),
                           style: appTextTheme.bodyLarge,
-                          onChanged: (value) {
-                            modalSetState(() {});
-                          },
+                          onChanged: (value) => modalSetState(() {}),
                         ),
                       ),
                       Expanded(
@@ -382,7 +302,7 @@ class _PackingListPageState extends State<PackingListPage> {
                               crossAxisCount: 2,
                               crossAxisSpacing: 12,
                               mainAxisSpacing: 12,
-                              childAspectRatio: 2.5,
+                              childAspectRatio: 2.8,
                             ),
                             itemCount: filteredCategories.length,
                             itemBuilder: (context, index) {
@@ -415,8 +335,7 @@ class _PackingListPageState extends State<PackingListPage> {
                                           appTextTheme.bodyMedium?.copyWith(
                                         color: isSelected
                                             ? AppColors.onPrimaryColor(context)
-                                            : AppColors.onCardColor(context)
-                                                .withOpacity(0.9),
+                                            : AppColors.onCardColor(context),
                                         fontWeight: isSelected
                                             ? FontWeight.bold
                                             : FontWeight.normal,
@@ -424,7 +343,6 @@ class _PackingListPageState extends State<PackingListPage> {
                                       side: BorderSide(
                                         color: isSelected
                                             ? AppColors.primaryColor(context)
-                                                .withOpacity(0.8)
                                             : Theme.of(context)
                                                 .dividerColor
                                                 .withOpacity(0.7),
@@ -433,9 +351,6 @@ class _PackingListPageState extends State<PackingListPage> {
                                       shape: RoundedRectangleBorder(
                                           borderRadius:
                                               BorderRadius.circular(12)),
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 16, vertical: 12),
-                                      elevation: isSelected ? 4 : 1,
                                     ),
                                   ),
                                 ),
@@ -459,14 +374,13 @@ class _PackingListPageState extends State<PackingListPage> {
     }
   }
 
-  // MODIFIED: _addOrUpdateItem now operates on the currentHikePlan from the StreamBuilder context
   void _addOrUpdateItem(
       {PackingListItem? itemToEdit,
       String? defaultCategory,
       required HikePlan currentHikePlan}) {
     _newItemNameController.text = itemToEdit?.name ?? '';
     _newItemQuantityController.text = (itemToEdit?.quantity ?? 1).toString();
-    _selectedCategory = itemToEdit?.category ?? defaultCategory ?? 'General';
+    _selectedCategory = itemToEdit?.category ?? defaultCategory ?? 'Bonus';
 
     showModalBottomSheet(
       context: context,
@@ -493,19 +407,15 @@ class _PackingListPageState extends State<PackingListPage> {
                   children: [
                     Text(
                       itemToEdit == null ? 'Add New Item' : 'Edit Item',
-                      style: appTextTheme.titleLarge?.copyWith(
-                        color: AppColors.textColor(context),
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: appTextTheme.titleLarge
+                          ?.copyWith(fontWeight: FontWeight.bold),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 24),
                     TextField(
                       controller: _newItemNameController,
                       decoration: _buildInputDecoration(
-                        labelText: 'Item Name',
-                        appTextTheme: appTextTheme,
-                      ),
+                          labelText: 'Item Name', appTextTheme: appTextTheme),
                       style: appTextTheme.bodyLarge,
                     ),
                     const SizedBox(height: 16),
@@ -513,9 +423,7 @@ class _PackingListPageState extends State<PackingListPage> {
                       controller: _newItemQuantityController,
                       keyboardType: TextInputType.number,
                       decoration: _buildInputDecoration(
-                        labelText: 'Quantity',
-                        appTextTheme: appTextTheme,
-                      ),
+                          labelText: 'Quantity', appTextTheme: appTextTheme),
                       style: appTextTheme.bodyLarge,
                     ),
                     const SizedBox(height: 16),
@@ -534,9 +442,8 @@ class _PackingListPageState extends State<PackingListPage> {
                               TextEditingController(text: _selectedCategory),
                           decoration: _buildInputDecoration(
                             labelText: 'Category',
-                            suffixIcon: Icon(Icons.arrow_forward_ios_rounded,
-                                color: AppColors.subtleTextColor(context),
-                                size: 20),
+                            suffixIcon:
+                                Icon(Icons.arrow_forward_ios_rounded, size: 20),
                             appTextTheme: appTextTheme,
                           ),
                           style: appTextTheme.bodyLarge,
@@ -547,35 +454,10 @@ class _PackingListPageState extends State<PackingListPage> {
                     const SizedBox(height: 24),
                     ElevatedButton(
                       onPressed: () {
-                        if (_newItemNameController.text.trim().isEmpty) {
-                          _scaffoldMessengerKey.currentState?.showSnackBar(
-                            SnackBar(
-                              content: const Text('Item name cannot be empty!'),
-                              backgroundColor: AppColors.errorColor(context),
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10)),
-                              margin: const EdgeInsets.all(10),
-                            ),
-                          );
-                          return;
-                        }
+                        if (_newItemNameController.text.trim().isEmpty) return;
                         final int quantity =
                             int.tryParse(_newItemQuantityController.text) ?? 1;
-                        if (quantity <= 0) {
-                          _scaffoldMessengerKey.currentState?.showSnackBar(
-                            SnackBar(
-                              content:
-                                  const Text('Quantity must be at least 1!'),
-                              backgroundColor: AppColors.errorColor(context),
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10)),
-                              margin: const EdgeInsets.all(10),
-                            ),
-                          );
-                          return;
-                        }
+                        if (quantity <= 0) return;
 
                         String newItemId = itemToEdit?.id ?? const Uuid().v4();
 
@@ -584,14 +466,13 @@ class _PackingListPageState extends State<PackingListPage> {
                                 currentHikePlan.packingList);
 
                         if (itemToEdit == null) {
-                          final newItem = PackingListItem(
+                          updatedList.add(PackingListItem(
                             id: newItemId,
                             name: _newItemNameController.text.trim(),
                             quantity: quantity,
                             category: _selectedCategory,
                             isPacked: false,
-                          );
-                          updatedList.add(newItem);
+                          ));
                         } else {
                           final int index = updatedList
                               .indexWhere((i) => i.id == itemToEdit.id);
@@ -605,54 +486,30 @@ class _PackingListPageState extends State<PackingListPage> {
                         }
                         _updateHikePlan(
                             currentHikePlan.copyWith(packingList: updatedList),
-                            newItemId);
+                            showSuccess: true);
                         _newItemNameController.clear();
                         _newItemQuantityController.clear();
                         Navigator.pop(context);
                       },
-                      style: Theme.of(context)
-                          .elevatedButtonTheme
-                          .style
-                          ?.copyWith(
-                            backgroundColor: MaterialStateProperty.all(
-                                AppColors.primaryColor(context)),
-                            foregroundColor: MaterialStateProperty.all(
-                                AppColors.onPrimaryColor(context)),
-                            padding: MaterialStateProperty.all(
-                                const EdgeInsets.symmetric(vertical: 16)),
-                            shape: MaterialStateProperty.all(
-                                RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12))),
-                            elevation: MaterialStateProperty.all(4),
-                          ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryColor(context),
+                        foregroundColor: AppColors.onPrimaryColor(context),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
                       child: Text(
                         itemToEdit == null ? 'Add Item' : 'Save Changes',
                         style: appTextTheme.labelLarge?.copyWith(
-                          color: AppColors.onPrimaryColor(context),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
+                            fontWeight: FontWeight.bold, fontSize: 16),
                       ),
                     ),
-                    if (itemToEdit != null) ...[
-                      const SizedBox(height: 12),
+                    if (itemToEdit != null)
                       TextButton(
                         onPressed: () {
                           Navigator.pop(context);
                           _confirmDeleteItem(itemToEdit, currentHikePlan);
                         },
-                        style: Theme.of(context)
-                            .textButtonTheme
-                            .style
-                            ?.copyWith(
-                              foregroundColor: MaterialStateProperty.all(
-                                  AppColors.errorColor(context)),
-                              padding: MaterialStateProperty.all(
-                                  const EdgeInsets.symmetric(vertical: 12)),
-                              shape: MaterialStateProperty.all(
-                                  RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12))),
-                            ),
                         child: Text(
                           'Delete Item',
                           style: appTextTheme.labelLarge?.copyWith(
@@ -660,7 +517,6 @@ class _PackingListPageState extends State<PackingListPage> {
                               fontSize: 14),
                         ),
                       ),
-                    ],
                   ],
                 ),
               ),
@@ -684,17 +540,12 @@ class _PackingListPageState extends State<PackingListPage> {
             style: Theme.of(context).dialogTheme.contentTextStyle),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            style: Theme.of(context).textButtonTheme.style?.copyWith(
-                foregroundColor: MaterialStateProperty.all(
-                    AppColors.subtleTextColor(context))),
-            child: const Text('Cancel'),
-          ),
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: Theme.of(context).textButtonTheme.style?.copyWith(
-                foregroundColor:
-                    MaterialStateProperty.all(AppColors.errorColor(context))),
+            style: TextButton.styleFrom(
+                foregroundColor: AppColors.errorColor(context)),
             child: const Text('Delete'),
           ),
         ],
@@ -702,13 +553,11 @@ class _PackingListPageState extends State<PackingListPage> {
     );
 
     if (confirm == true) {
-      print(
-          'PackingListPage: Confirming deletion of item: ${itemToDelete.name}');
       final updatedList =
           List<PackingListItem>.from(currentHikePlan.packingList)
             ..removeWhere((item) => item.id == itemToDelete.id);
-      _updateHikePlan(
-          currentHikePlan.copyWith(packingList: updatedList), itemToDelete.id);
+      _updateHikePlan(currentHikePlan.copyWith(packingList: updatedList),
+          showSuccess: true);
     }
   }
 
@@ -722,452 +571,428 @@ class _PackingListPageState extends State<PackingListPage> {
       child: StreamBuilder<HikePlan?>(
         stream: _hikePlanService.getHikePlanStream(widget.planId),
         builder: (context, snapshot) {
-          // If data is loading or null, show loading indicator.
-          if (snapshot.connectionState == ConnectionState.waiting ||
-              !snapshot.hasData ||
-              snapshot.data == null) {
+          if (!snapshot.hasData) {
             return Scaffold(
-              backgroundColor: theme.scaffoldBackgroundColor,
-              appBar: AppBar(
-                title: Text('Loading Packing List...',
-                    style: appTextTheme.titleLarge),
-                backgroundColor: theme.appBarTheme.backgroundColor,
-                elevation: theme.appBarTheme.elevation,
-                leading: IconButton(
-                    icon: Icon(Icons.arrow_back_ios_new_rounded,
-                        color: theme.appBarTheme.foregroundColor),
-                    onPressed: () => GoRouter.of(context).pop()),
-              ),
-              body: Center(
-                child: CircularProgressIndicator(
-                    color: AppColors.primaryColor(context)),
-              ),
-            );
+                body: Center(
+                    child: CircularProgressIndicator(
+                        color: AppColors.primaryColor(context))));
           }
-
           if (snapshot.hasError) {
-            print('PackingListPage StreamBuilder Error: ${snapshot.error}');
             return Scaffold(
-              backgroundColor: theme.scaffoldBackgroundColor,
-              appBar: AppBar(
-                title: Text('Error', style: appTextTheme.titleLarge),
-                backgroundColor: theme.appBarTheme.backgroundColor,
-                elevation: theme.appBarTheme.elevation,
-                leading: IconButton(
-                    icon: Icon(Icons.arrow_back_ios_new_rounded,
-                        color: theme.appBarTheme.foregroundColor),
-                    onPressed: () => GoRouter.of(context).pop()),
-              ),
-              body: Center(
-                child: Text('Failed to load packing list: ${snapshot.error}',
-                    style: appTextTheme.bodyLarge
-                        ?.copyWith(color: AppColors.errorColor(context))),
-              ),
+              appBar: AppBar(title: Text('Error')),
+              body: Center(child: Text('Could not load packing list.')),
             );
           }
 
-          final HikePlan currentHikePlan =
-              snapshot.data!; // Use non-nullable as we handled null above
-
-          // This logic ensures that if the stream returns an updated plan,
-          // we re-evaluate the categories and their sorting.
-          final List<PackingListItem> currentPackingList =
-              currentHikePlan.packingList;
-
+          final HikePlan currentHikePlan = snapshot.data!;
           final Map<String, List<PackingListItem>> groupedItems = {};
-          for (var item in currentPackingList) {
-            if (!groupedItems.containsKey(item.category)) {
-              groupedItems[item.category] = [];
-            }
-            groupedItems[item.category]!.add(item);
+          for (var item in currentHikePlan.packingList) {
+            groupedItems.putIfAbsent(item.category, () => []).add(item);
           }
-
-          final sortedCategories = groupedItems.keys.toList()
-            ..sort((a, b) {
-              if (a == 'General') return -1;
-              if (b == 'General') return 1;
-              return a.compareTo(b);
-            });
-
-          for (var category in sortedCategories) {
-            groupedItems[category]!.sort((a, b) {
-              if (a.isPacked && !b.isPacked) return 1;
-              if (!a.isPacked && b.isPacked) return -1;
-              return a.name.toLowerCase().compareTo(b.name.toLowerCase());
-            });
-          }
-
-          final int totalItems = currentPackingList.length;
-          final int packedItems =
-              currentPackingList.where((item) => item.isPacked).length;
-          final double progress =
-              totalItems > 0 ? packedItems / totalItems : 0.0;
 
           return Scaffold(
             backgroundColor: theme.scaffoldBackgroundColor,
-            appBar: AppBar(
-              title: Text(
-                'Packing List for ${currentHikePlan.hikeName}',
-                style: appTextTheme.titleLarge?.copyWith(
-                  color: theme.appBarTheme.titleTextStyle?.color,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              backgroundColor: theme.appBarTheme.backgroundColor,
-              elevation: theme.appBarTheme.elevation ?? 0.5,
-              leading: IconButton(
-                icon: Icon(Icons.arrow_back_ios_new_rounded,
-                    color: theme.appBarTheme.foregroundColor),
-                onPressed: () => GoRouter.of(context).pop(),
-              ),
-            ),
-            body: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Packing Progress',
-                        style: appTextTheme.titleMedium?.copyWith(
-                          color: AppColors.textColor(context),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: theme.cardColor,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  '$packedItems / $totalItems items packed',
-                                  style: appTextTheme.bodyLarge?.copyWith(
-                                    color: AppColors.textColor(context)
-                                        .withOpacity(0.9),
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                Text(
-                                  '${(progress * 100).toStringAsFixed(0)}%',
-                                  style: appTextTheme.bodyLarge?.copyWith(
-                                    color: AppColors.accentColor(context),
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
-                              child: LinearProgressIndicator(
-                                value: progress,
-                                backgroundColor: AppColors.accentColor(context)
-                                    .withOpacity(0.2),
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  AppColors.accentColor(context),
-                                ),
-                                minHeight: 15,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+            body: CustomScrollView(
+              controller: _scrollController,
+              slivers: [
+                _buildSliverAppBar(context, currentHikePlan, groupedItems),
+                SliverPersistentHeader(
+                  delegate: _SliverAppBarDelegate(
+                    TabBar(
+                      controller: _tabController,
+                      isScrollable: true,
+                      indicatorColor: theme.colorScheme.primary,
+                      indicatorWeight: 3.0,
+                      labelColor: theme.colorScheme.primary,
+                      unselectedLabelColor: theme.hintColor,
+                      labelStyle:
+                          GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                      unselectedLabelStyle:
+                          GoogleFonts.poppins(fontWeight: FontWeight.w500),
+                      // MUUTETTU: Ei enää "More"-tabia
+                      tabs: _packingCategories
+                          .map((category) => Tab(text: category))
+                          .toList(),
+                    ),
                   ),
+                  pinned: true,
                 ),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: totalItems == 0
-                      ? Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(20.0),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.backpack_outlined,
-                                    size: 60,
-                                    color: AppColors.subtleTextColor(context)
-                                        .withOpacity(0.4)),
-                                const SizedBox(height: 20),
-                                Text(
-                                  "Your packing list is empty.\nTap the '+' button to add your first item!",
-                                  textAlign: TextAlign.center,
-                                  style: appTextTheme.titleMedium?.copyWith(
-                                    color: AppColors.subtleTextColor(context),
-                                    fontStyle: FontStyle.italic,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                      : AnimationLimiter(
-                          child: ListView.separated(
-                            padding: const EdgeInsets.fromLTRB(
-                                16.0, 0.0, 16.0, 90.0),
-                            itemCount: sortedCategories.length,
-                            itemBuilder: (context, categoryIndex) {
-                              final category = sortedCategories[categoryIndex];
-                              final itemsInCategory = groupedItems[category]!;
-                              final packedInCategory = itemsInCategory
-                                  .where((item) => item.isPacked)
-                                  .length;
-                              final totalInCategory = itemsInCategory.length;
-
-                              return AnimationConfiguration.staggeredList(
-                                position: categoryIndex,
-                                duration: const Duration(milliseconds: 375),
-                                child: SlideAnimation(
-                                  verticalOffset: 50.0,
-                                  child: FadeInAnimation(
-                                    child: _buildCategoryExpansionTile(
-                                      context,
-                                      category,
-                                      packedInCategory,
-                                      totalInCategory,
-                                      itemsInCategory,
-                                      appTextTheme,
-                                      theme,
-                                      currentHikePlan,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                            separatorBuilder: (context, index) =>
-                                const SizedBox(height: 12.0),
-                          ),
-                        ),
-                ),
+                SliverFillRemaining(
+                  child: TabBarView(
+                    controller: _tabController,
+                    // MUUTETTU: Ei enää "More"-sivua
+                    children: _packingCategories
+                        .map((category) => _buildCategoryPage(context, category,
+                            groupedItems[category] ?? [], currentHikePlan))
+                        .toList(),
+                  ),
+                )
               ],
             ),
             floatingActionButton: FloatingActionButton.extended(
-              onPressed: () =>
-                  _addOrUpdateItem(currentHikePlan: currentHikePlan),
-              label: Text(
-                'Add New Item',
-                style: appTextTheme.labelLarge?.copyWith(
-                    color: theme.floatingActionButtonTheme.foregroundColor),
-              ),
-              icon: Icon(Icons.add_rounded,
-                  color: theme.floatingActionButtonTheme.foregroundColor),
-              backgroundColor: theme.floatingActionButtonTheme.backgroundColor,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-              elevation: 6,
+              onPressed: () {
+                // MUUTETTU: Yksinkertaistettu logiikka
+                final currentCategory =
+                    _packingCategories[_tabController!.index];
+                _addOrUpdateItem(
+                    currentHikePlan: currentHikePlan,
+                    defaultCategory: currentCategory);
+              },
+              label: Text('Add Item',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+              icon: const Icon(Icons.add_rounded),
+              backgroundColor: theme.colorScheme.primary,
+              foregroundColor: theme.colorScheme.onPrimary,
             ),
-            floatingActionButtonLocation:
-                FloatingActionButtonLocation.centerFloat,
           );
         },
       ),
     );
   }
 
-  Widget _buildCategoryExpansionTile(
-    BuildContext context,
-    String category,
-    int packedCount,
-    int totalCount,
-    List<PackingListItem> items,
-    TextTheme appTextTheme,
-    ThemeData theme,
-    HikePlan currentHikePlan,
-  ) {
-    return Card(
-      elevation: theme.cardTheme.elevation,
-      shape: theme.cardTheme.shape,
-      color: theme.cardColor,
-      clipBehavior: Clip.antiAlias,
-      child: ExpansionTile(
-        initiallyExpanded: true,
-        tilePadding:
-            const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-        title: Text(
-          '$category',
-          style: appTextTheme.titleMedium?.copyWith(
-            color: AppColors.primaryColor(context),
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        subtitle: Text(
-          '$packedCount / $totalCount items packed',
-          style: appTextTheme.bodyMedium?.copyWith(
-            color: AppColors.subtleTextColor(context),
-          ),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '${(packedCount / (totalCount == 0 ? 1 : totalCount) * 100).toStringAsFixed(0)}%',
-              style: appTextTheme.bodyMedium?.copyWith(
-                color: AppColors.accentColor(context),
-                fontWeight: FontWeight.bold,
+  Widget _buildCategoryPage(BuildContext context, String category,
+      List<PackingListItem> items, HikePlan plan) {
+    items.sort((a, b) {
+      if (a.isPacked && !b.isPacked) return 1;
+      if (!a.isPacked && b.isPacked) return -1;
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+
+    if (items.isEmpty) {
+      return _buildEmptySectionPlaceholder(context,
+          'No items in "$category" yet.', _getIconForCategory(category));
+    }
+
+    return AnimationLimiter(
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
+        itemCount: items.length,
+        itemBuilder: (context, index) {
+          final item = items[index];
+          return AnimationConfiguration.staggeredList(
+            position: index,
+            duration: const Duration(milliseconds: 375),
+            child: SlideAnimation(
+              verticalOffset: 50.0,
+              child: FadeInAnimation(
+                child: _buildPackingListItem(
+                    context, item, _getAppTextTheme(context), plan),
               ),
             ),
-            const SizedBox(width: 8),
-            Icon(
-              Icons.expand_more_rounded,
-              color: AppColors.subtleTextColor(context),
+          );
+        },
+      ),
+    );
+  }
+
+  // POISTETTU: _buildMoreCategoriesPage on poistettu tarpeettomana.
+  // ...
+
+  // POISTETTU: _buildCategoryHeader on poistettu, koska sen toiminnallisuus
+  // on nyt integroitu suoraan _buildCategoryPage-näkymään (tyhjän tilan osalta)
+  // ja TabBar hoitaa navigoinnin.
+  // ...
+
+  IconData _getIconForCategory(String category) {
+    switch (category.toLowerCase()) {
+      case 'clothing':
+        return Icons.checkroom_rounded;
+      case 'shelter':
+        return Icons.holiday_village_rounded;
+      case 'cooking':
+        return Icons.outdoor_grill_rounded;
+      case 'Tools':
+        return Icons.explore_rounded;
+      case 'first aid':
+        return Icons.medical_services_rounded;
+      case 'hygiene':
+        return Icons.sanitizer_rounded;
+      case 'tools':
+        return Icons.construction_rounded;
+      case 'electronics':
+        return Icons.camera_alt_rounded;
+      case 'food':
+        return Icons.fastfood_rounded;
+      case 'bonus':
+        return Icons.star_border_rounded;
+      default:
+        return Icons.category_rounded;
+    }
+  }
+
+  SliverAppBar _buildSliverAppBar(BuildContext context, HikePlan plan,
+      Map<String, List<PackingListItem>> groupedItems) {
+    final theme = Theme.of(context);
+    const double expandedHeight = 400.0;
+
+    final totalItems = plan.packingList.length;
+    final packedItems = plan.packingList.where((i) => i.isPacked).length;
+    final progress = totalItems > 0 ? packedItems / totalItems : 0.0;
+
+    return SliverAppBar(
+      expandedHeight: expandedHeight,
+      pinned: true,
+      elevation: 0,
+      backgroundColor: Colors.transparent,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_ios_new_rounded),
+        onPressed: () => GoRouter.of(context).pop(),
+      ),
+      title: AnimatedBuilder(
+        animation: _scrollController,
+        builder: (context, child) {
+          final showTitle = _scrollController.hasClients &&
+              _scrollController.offset > expandedHeight - kToolbarHeight - 20;
+          return AnimatedOpacity(
+            duration: const Duration(milliseconds: 200),
+            opacity: showTitle ? 1.0 : 0.0,
+            child: Text(
+              'Packing List',
+              style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.onSurface),
+            ),
+          );
+        },
+      ),
+      flexibleSpace: FlexibleSpaceBar(
+        background: ClipRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+            child: AnimatedBuilder(
+              animation: _scrollController,
+              builder: (context, child) {
+                return Container(
+                  color: theme.colorScheme.surface.withOpacity(
+                      (_scrollController.hasClients &&
+                              _scrollController.offset > 0
+                          ? (_scrollController.offset / expandedHeight)
+                              .clamp(0.0, 0.6)
+                          : 0.0)),
+                  child: child,
+                );
+              },
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(height: kToolbarHeight),
+                  CircularPercentIndicator(
+                    animateFromLastPercent: true,
+                    animationDuration: 400,
+                    radius: 50.0,
+                    lineWidth: 9.0,
+                    percent: progress,
+                    center: Text('${(progress * 100).toStringAsFixed(0)}%',
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 22,
+                          color: theme.colorScheme.primary,
+                        )),
+                    progressColor: theme.colorScheme.primary,
+                    backgroundColor: theme.colorScheme.primary.withOpacity(0.2),
+                    circularStrokeCap: CircularStrokeCap.round,
+                    animation: true,
+                  ),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Text(
+                      plan.hikeName,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 18,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '$packedItems of $totalItems packed',
+                    style:
+                        GoogleFonts.lato(fontSize: 16, color: theme.hintColor),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptySectionPlaceholder(
+      BuildContext context, String message, IconData icon) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 60, color: theme.hintColor.withOpacity(0.5)),
+            const SizedBox(height: 20),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.lato(
+                fontSize: 17,
+                color: theme.hintColor,
+                fontStyle: FontStyle.italic,
+              ),
             ),
           ],
         ),
-        children: [
-          Divider(height: 1, color: theme.dividerColor.withOpacity(0.6)),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (items.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                        vertical: 8.0, horizontal: 8.0),
-                    child: Text(
-                      'No items in this category yet.',
-                      style: appTextTheme.bodyMedium?.copyWith(
-                        color: AppColors.subtleTextColor(context),
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  )
-                else
-                  ...items
-                      .map((item) => _buildPackingListItem(
-                          context, item, appTextTheme, currentHikePlan))
-                      .toList(),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: () => _addOrUpdateItem(
-                        defaultCategory: category,
-                        currentHikePlan: currentHikePlan),
-                    icon: Icon(Icons.add_circle_outline,
-                        color: AppColors.accentColor(context)),
-                    label: Text(
-                      'Add item to $category',
-                      style: appTextTheme.labelLarge?.copyWith(
-                        color: AppColors.accentColor(context),
-                        fontSize: 14,
-                      ),
-                    ),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
 
   Widget _buildPackingListItem(BuildContext context, PackingListItem item,
       TextTheme appTextTheme, HikePlan currentHikePlan) {
-    // Check if this item is currently in a pending update state
-    final bool isPending = _pendingUpdates.containsKey(item.id);
+    return _OptimizedPackingListItem(
+      key: ValueKey(item.id),
+      item: item,
+      appTextTheme: appTextTheme,
+      onStatusChanged: (newStatus) {
+        _onItemStatusChanged(item, newStatus, currentHikePlan);
+      },
+      onEdit: () {
+        _addOrUpdateItem(itemToEdit: item, currentHikePlan: currentHikePlan);
+      },
+    );
+  }
+}
 
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4.0),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: isPending
-              ? null
-              : () => _togglePackedStatus(item, currentHikePlan),
-          onLongPress: isPending
-              ? null
-              : () => _addOrUpdateItem(
-                  itemToEdit: item, currentHikePlan: currentHikePlan),
-          borderRadius: BorderRadius.circular(10),
-          child: AnimatedOpacity(
-            opacity: isPending ? 0.5 : 1.0,
-            duration: const Duration(milliseconds: 200),
-            child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
-              child: Row(
-                children: [
-                  Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Icon(
-                        item.isPacked
-                            ? Icons.check_box_rounded
-                            : Icons.check_box_outline_blank_rounded,
-                        color: item.isPacked
-                            ? AppColors.primaryColor(context)
-                            : AppColors.subtleTextColor(context),
-                        size: 24,
-                      ),
-                      if (isPending)
-                        SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.0,
-                            color: AppColors.accentColor(context),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      '${item.quantity > 1 ? '${item.quantity}x ' : ''}${item.name}',
-                      style: appTextTheme.bodyLarge?.copyWith(
-                        color: item.isPacked
-                            ? AppColors.subtleTextColor(context)
-                                .withOpacity(0.7)
-                            : AppColors.onCardColor(context),
-                        decoration: item.isPacked
-                            ? TextDecoration.lineThrough
-                            : TextDecoration.none,
-                        fontWeight:
-                            item.isPacked ? FontWeight.normal : FontWeight.w500,
-                      ),
-                      overflow: TextOverflow.ellipsis,
+class _OptimizedPackingListItem extends StatefulWidget {
+  final PackingListItem item;
+  final TextTheme appTextTheme;
+  final VoidCallback onEdit;
+  final ValueChanged<bool> onStatusChanged;
+
+  const _OptimizedPackingListItem({
+    super.key,
+    required this.item,
+    required this.appTextTheme,
+    required this.onEdit,
+    required this.onStatusChanged,
+  });
+
+  @override
+  State<_OptimizedPackingListItem> createState() =>
+      _OptimizedPackingListItemState();
+}
+
+class _OptimizedPackingListItemState extends State<_OptimizedPackingListItem> {
+  late bool _localIsPacked;
+  bool _isPending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _localIsPacked = widget.item.isPacked;
+  }
+
+  @override
+  void didUpdateWidget(covariant _OptimizedPackingListItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.item.isPacked != _localIsPacked && !_isPending) {
+      setState(() {
+        _localIsPacked = widget.item.isPacked;
+      });
+    }
+  }
+
+  Future<void> _handleTap() async {
+    setState(() {
+      _localIsPacked = !_localIsPacked;
+      _isPending = true;
+    });
+
+    widget.onStatusChanged(_localIsPacked);
+
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    if (mounted) {
+      setState(() {
+        _isPending = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      elevation: _localIsPacked ? 0.5 : 2.5,
+      shadowColor: _localIsPacked
+          ? Colors.transparent
+          : theme.shadowColor.withOpacity(0.3),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+              color: _localIsPacked
+                  ? theme.dividerColor.withOpacity(0.5)
+                  : Colors.transparent,
+              width: 1)),
+      margin: const EdgeInsets.symmetric(vertical: 5.0),
+      child: InkWell(
+        onTap: _isPending ? null : _handleTap,
+        onLongPress: _isPending ? null : widget.onEdit,
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedOpacity(
+          opacity: _isPending ? 0.6 : 1.0,
+          duration: const Duration(milliseconds: 200),
+          child: Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12.0, vertical: 14.0),
+            child: Row(
+              children: [
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Checkbox(
+                      value: _localIsPacked,
+                      onChanged: (value) => _handleTap(),
+                      activeColor: theme.colorScheme.primary,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6)),
                     ),
+                    if (_isPending)
+                      SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: AppColors.accentColor(context),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${widget.item.quantity > 1 ? '${widget.item.quantity}x ' : ''}${widget.item.name}',
+                    style: widget.appTextTheme.bodyLarge?.copyWith(
+                      color: _localIsPacked
+                          ? theme.hintColor
+                          : theme.colorScheme.onSurface,
+                      decoration: _localIsPacked
+                          ? TextDecoration.lineThrough
+                          : TextDecoration.none,
+                      decorationColor: theme.hintColor,
+                      fontWeight:
+                          _localIsPacked ? FontWeight.normal : FontWeight.w500,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  IconButton(
-                    icon: Icon(Icons.edit_note_rounded,
-                        color: AppColors.subtleTextColor(context), size: 22),
-                    onPressed: isPending
-                        ? null
-                        : () => _addOrUpdateItem(
-                            itemToEdit: item, currentHikePlan: currentHikePlan),
-                    tooltip: 'Edit item',
-                  ),
-                ],
-              ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.edit_note_rounded,
+                      color: theme.hintColor, size: 24),
+                  onPressed: _isPending ? null : widget.onEdit,
+                  tooltip: 'Edit item',
+                ),
+              ],
             ),
           ),
         ),
