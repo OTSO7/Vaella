@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:go_router/go_router.dart';
+import 'package:go_router/go_router.dart'; // KORJATTU: Tässä oli aiemmin kirjoitusvirhe
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
 import 'package:latlong2/latlong.dart' hide Path;
@@ -143,6 +143,29 @@ class _HomePageState extends State<HomePage> {
             ))
         .toList();
 
+    const List<double> invertMatrix = [
+      -1,
+      0,
+      0,
+      0,
+      255,
+      0,
+      -1,
+      0,
+      0,
+      255,
+      0,
+      0,
+      -1,
+      0,
+      255,
+      0,
+      0,
+      0,
+      1,
+      0,
+    ];
+
     return FlutterMap(
       mapController: _mapController,
       options: MapOptions(
@@ -151,15 +174,18 @@ class _HomePageState extends State<HomePage> {
         maxZoom: 18.0,
       ),
       children: [
-        // MUUTETTU: Vaihdettu karttatyyli CARTO Voyageriksi.
-        // Tämä on hillitty, selkeä ja graafinen tyyli haaleilla väreillä.
-        TileLayer(
-          urlTemplate:
-              'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-          subdomains: const ['a', 'b', 'c', 'd'],
-          userAgentPackageName: 'com.example.treknoteflutter',
+        ColorFiltered(
+          colorFilter: const ColorFilter.matrix(invertMatrix),
+          child: TileLayer(
+            urlTemplate:
+                'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+            subdomains: const ['a', 'b', 'c', 'd'],
+            userAgentPackageName: 'com.example.treknoteflutter',
+          ),
         ),
-
+        Container(
+          color: Colors.white.withOpacity(0.15),
+        ),
         MarkerClusterLayerWidget(
           options: MarkerClusterLayerOptions(
             maxClusterRadius: 80,
@@ -174,7 +200,6 @@ class _HomePageState extends State<HomePage> {
             },
           ),
         ),
-
         RichAttributionWidget(
           attributions: [
             TextSourceAttribution(
