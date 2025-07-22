@@ -151,15 +151,14 @@ class _HomePageState extends State<HomePage> {
         maxZoom: 18.0,
       ),
       children: [
-        // MUUTETTU: Vaihdettu karttatyyli CARTO Positroniin.
+        // MUUTETTU: Vaihdettu karttatyyli CARTO Voyageriksi.
+        // Tämä on hillitty, selkeä ja graafinen tyyli haaleilla väreillä.
         TileLayer(
           urlTemplate:
-              'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+              'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
           subdomains: const ['a', 'b', 'c', 'd'],
           userAgentPackageName: 'com.example.treknoteflutter',
         ),
-
-        // Aiempi tumma overlay on poistettu.
 
         MarkerClusterLayerWidget(
           options: MarkerClusterLayerOptions(
@@ -201,7 +200,8 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Image.asset('assets/images/white2.png', height: 70),
+        title: Image.asset('assets/images/white2.png',
+            height: 35, fit: BoxFit.contain),
         centerTitle: true,
         backgroundColor: theme.scaffoldBackgroundColor,
         elevation: 0,
