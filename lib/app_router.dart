@@ -1,3 +1,5 @@
+// lib/app_router.dart (tai missä se sinulla onkin)
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +11,7 @@ import 'models/post_model.dart';
 import 'models/user_profile_model.dart';
 import 'models/hike_plan_model.dart';
 
+// Varmista, että kaikki sivut on importattu oikein
 import 'pages/login_page.dart';
 import 'pages/home_page.dart';
 import 'pages/notes_page.dart';
@@ -20,7 +23,8 @@ import 'pages/user_posts_list_page.dart';
 import 'pages/weather_page.dart';
 import 'pages/hike_plan_hub_page.dart';
 import 'pages/packing_list_page.dart';
-import 'pages/route_planner_page.dart'; // UUSI
+import 'pages/route_planner_page.dart';
+import 'pages/post_detail_page.dart'; // MUUTOS: Lisätty import
 
 import 'widgets/main_scaffold.dart';
 
@@ -39,6 +43,7 @@ class AppRouter extends StatelessWidget {
       debugLogDiagnostics: true,
       refreshListenable: authProvider,
       routes: [
+        // --- Olemassa olevat reitit pysyvät ennallaan ---
         GoRoute(
           path: '/login',
           name: 'login',
@@ -125,7 +130,6 @@ class AppRouter extends StatelessWidget {
             return PackingListPage(planId: planId, initialPlan: hikePlan);
           },
         ),
-        // UUSI REITTI
         GoRoute(
           path: '/hike-plan/:planId/route-planner',
           name: 'routePlannerPage',
@@ -140,6 +144,23 @@ class AppRouter extends StatelessWidget {
             return RoutePlannerPage(plan: hikePlan);
           },
         ),
+
+        // MUUTOS: Lisätty uusi reitti postauksen tietosivulle
+        GoRoute(
+          path: '/post/:id',
+          name: 'postDetail',
+          parentNavigatorKey: _rootNavigatorKey, // Avaa koko näytön sivuna
+          builder: (context, state) {
+            final postId = state.pathParameters['id'];
+            if (postId == null) {
+              return const Scaffold(
+                  body: Center(
+                      child: Text('Error: Post ID is missing from URL.')));
+            }
+            return PostDetailPage(postId: postId);
+          },
+        ),
+
         StatefulShellRoute.indexedStack(
           builder: (BuildContext context, GoRouterState state,
               StatefulNavigationShell navigationShell) {
@@ -199,13 +220,11 @@ class AppRouter extends StatelessWidget {
       redirect: (BuildContext context, GoRouterState state) {
         final isLoggedIn = authProvider.isLoggedIn;
         final String location = state.matchedLocation;
-
         final isLoggingIn = location == '/login';
         final isRegistering = location == '/register';
         final isProtectedHikeRoute = location.startsWith('/hike-plan/') &&
             !isLoggingIn &&
             !isRegistering;
-
         if (!isLoggedIn && !isLoggingIn && !isRegistering) {
           return '/login';
         }
@@ -219,6 +238,7 @@ class AppRouter extends StatelessWidget {
       },
     );
 
+    // --- ThemeData ennallaan ---
     final themeData = ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: const Color(0xFF1A1A1A),
@@ -361,38 +381,37 @@ class AppRouter extends StatelessWidget {
           backgroundColor: const Color(0xFF2C2C2C),
           headerBackgroundColor: Colors.teal.shade700,
           headerForegroundColor: Colors.white,
-          dayForegroundColor: MaterialStateProperty.resolveWith((states) {
-            if (states.contains(MaterialState.selected)) return Colors.white;
-            if (states.contains(MaterialState.disabled)) {
+          dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) return Colors.white;
+            if (states.contains(WidgetState.disabled)) {
               return Colors.grey.shade700;
             }
             return Colors.white.withOpacity(0.8);
           }),
-          dayBackgroundColor: MaterialStateProperty.resolveWith((states) {
-            if (states.contains(MaterialState.selected)) {
+          dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
               return Colors.teal.shade500;
             }
             return Colors.transparent;
           }),
-          todayForegroundColor:
-              MaterialStateProperty.all(Colors.orange.shade300),
+          todayForegroundColor: WidgetStateProperty.all(Colors.orange.shade300),
           todayBorder:
               BorderSide(color: Colors.orange.shade300.withOpacity(0.5)),
           yearForegroundColor:
-              MaterialStateProperty.all(Colors.white.withOpacity(0.8)),
+              WidgetStateProperty.all(Colors.white.withOpacity(0.8)),
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           elevation: 4,
         ),
         checkboxTheme: CheckboxThemeData(
-          fillColor: MaterialStateProperty.resolveWith((states) {
-            if (states.contains(MaterialState.selected)) {
+          fillColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
               return Colors.teal.shade400;
             }
             return Colors.transparent;
           }),
-          checkColor: MaterialStateProperty.all(Colors.black),
-          overlayColor: MaterialStateProperty.all(Colors.teal.withOpacity(0.1)),
+          checkColor: WidgetStateProperty.all(Colors.black),
+          overlayColor: WidgetStateProperty.all(Colors.teal.withOpacity(0.1)),
           side: BorderSide(color: Colors.white.withOpacity(0.4), width: 1.5),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
         ),

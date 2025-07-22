@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'dart:ui';
 import '../models/hike_plan_model.dart';
 // POISTETTU: Paikallinen AppColors-luokka. Käytämme nyt suoraan teemaa.
 

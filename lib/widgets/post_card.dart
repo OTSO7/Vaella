@@ -1,3 +1,5 @@
+// lib/widgets/post_card.dart
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +11,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/post_model.dart';
 import '../providers/auth_provider.dart';
+import 'star_rating_display.dart';
 
 class PostCard extends StatefulWidget {
   final Post post;
@@ -27,10 +30,10 @@ class PostCard extends StatefulWidget {
 }
 
 class _PostCardState extends State<PostCard> {
+  // ... (Luokan alku ja metodit pysyvät ennallaan) ...
   bool _isLiked = false;
   int _likeCount = 0;
   bool _isDeleting = false;
-
   @override
   void initState() {
     super.initState();
@@ -58,7 +61,6 @@ class _PostCardState extends State<PostCard> {
         widget.post.likes.add(widget.currentUserId!);
       }
     });
-
     FirebaseFirestore.instance.collection('posts').doc(widget.post.id).update({
       'likes': widget.post.likes,
     });
@@ -94,9 +96,7 @@ class _PostCardState extends State<PostCard> {
           .collection('posts')
           .doc(widget.post.id)
           .delete();
-      if (widget.post.postImageUrl != null) {
-        // Kuvan poisto logiikka...
-      }
+      if (widget.post.postImageUrl != null) {/* Kuvan poisto logiikka... */}
       Provider.of<AuthProvider>(context, listen: false)
           .handlePostDeletionSuccess();
       if (widget.onPostDeleted != null) {
@@ -130,39 +130,47 @@ class _PostCardState extends State<PostCard> {
       margin: const EdgeInsets.symmetric(vertical: 12.0),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (widget.post.postImageUrl != null)
-            _buildImageHeader(context, timeAgo, isOwnPost),
-          if (widget.post.postImageUrl == null)
-            _buildNoImageHeader(context, timeAgo, isOwnPost),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(widget.post.title,
-                    style: theme.textTheme.titleLarge
-                        ?.copyWith(fontWeight: FontWeight.bold)),
-                if (widget.post.caption.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(widget.post.caption,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                          height: 1.5)),
+      child: InkWell(
+        onTap: () => context.push('/post/${widget.post.id}'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (widget.post.postImageUrl != null)
+              _buildImageHeader(context, timeAgo, isOwnPost),
+            if (widget.post.postImageUrl == null)
+              _buildNoImageHeader(context, timeAgo, isOwnPost),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(widget.post.title,
+                      style: theme.textTheme.titleLarge
+                          ?.copyWith(fontWeight: FontWeight.bold)),
+                  if (widget.post.caption.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(widget.post.caption,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            height: 1.5)),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-          _buildHikeStats(context),
-          Divider(
-              height: 1,
-              color: theme.dividerColor.withOpacity(0.5),
-              indent: 16,
-              endIndent: 16),
-          _buildActionButtons(context),
-        ],
+
+            // MUUTOS: Tässä on uusi, siistimpi info-palkki
+            _buildInfoBar(context),
+
+            Divider(
+                height: 1,
+                color: theme.dividerColor.withOpacity(0.5),
+                indent: 16,
+                endIndent: 16),
+            _buildActionButtons(context),
+          ],
+        ),
       ),
     )
         .animate()
@@ -170,22 +178,90 @@ class _PostCardState extends State<PostCard> {
         .slideY(begin: 0.1, curve: Curves.easeOutCubic);
   }
 
+  // LISÄTTY: Uusi metodi info-palkin rakentamiseen
+  Widget _buildInfoBar(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(12.0),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildInfoBarItem(context,
+              icon: Icon(Icons.hiking_rounded,
+                  color: theme.colorScheme.secondary),
+              value: widget.post.distanceKm.toStringAsFixed(1),
+              unit: 'km'),
+          _buildInfoBarItem(context,
+              icon: Icon(Icons.night_shelter_outlined,
+                  color: theme.colorScheme.secondary),
+              value: '${widget.post.nights}',
+              unit: widget.post.nights == 1 ? 'night' : 'nights'),
+          // Erillinen käsittely arvostelulle
+          Column(
+            children: [
+              StarRatingDisplay(
+                rating: widget.post.averageRating,
+                showLabel: false,
+                size: 20,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${widget.post.averageRating.toStringAsFixed(1)} Rating',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              )
+            ],
+          )
+        ],
+      ),
+    );
+  }
+
+  // LISÄTTY: Uusi apumetodi info-palkin osille
+  Widget _buildInfoBarItem(BuildContext context,
+      {required Icon icon, required String value, required String unit}) {
+    final theme = Theme.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        icon,
+        const SizedBox(height: 4),
+        Text(value,
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.bold)),
+        Text(unit,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+      ],
+    );
+  }
+
+  // ... (Loput build-metodit ovat ennallaan)
   Widget _buildImageHeader(
       BuildContext context, String timeAgo, bool isOwnPost) {
     return Stack(
       children: [
-        CachedNetworkImage(
-          imageUrl: widget.post.postImageUrl!,
-          height: 220,
-          width: double.infinity,
-          fit: BoxFit.cover,
-          placeholder: (context, url) => Container(
-              height: 220, color: Theme.of(context).colorScheme.surfaceVariant),
-          errorWidget: (context, url, error) => Container(
-              height: 220,
-              color: Colors.black,
-              child: const Icon(Icons.broken_image,
-                  color: Colors.white54, size: 50)),
+        Hero(
+          tag: 'post_image_${widget.post.id}',
+          child: CachedNetworkImage(
+            imageUrl: widget.post.postImageUrl!,
+            height: 220,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            placeholder: (context, url) => Container(
+                height: 220,
+                color: Theme.of(context).colorScheme.surfaceContainerHighest),
+            errorWidget: (context, url, error) => Container(
+                height: 220,
+                color: Colors.black,
+                child: const Icon(Icons.broken_image,
+                    color: Colors.white54, size: 50)),
+          ),
         ),
         Positioned.fill(
           child: Container(
@@ -279,44 +355,6 @@ class _PostCardState extends State<PostCard> {
           if (isOwnPost)
             _buildMoreOptionsButton(context,
                 color: Theme.of(context).colorScheme.onSurfaceVariant),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHikeStats(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          _buildStatItem(
-              context, Icons.pin_drop_outlined, widget.post.location),
-          _buildStatItem(context, Icons.hiking_rounded,
-              '${widget.post.distanceKm.toStringAsFixed(1)} km'),
-          _buildStatItem(context, Icons.night_shelter_outlined,
-              '${widget.post.nights} nights'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatItem(BuildContext context, IconData icon, String text) {
-    final theme = Theme.of(context);
-    return Expanded(
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 18, color: theme.colorScheme.secondary),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              text,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(fontWeight: FontWeight.bold),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
         ],
       ),
     );

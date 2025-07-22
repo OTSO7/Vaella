@@ -1,9 +1,11 @@
+// lib/pages/home_page.dart
+
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:go_router/go_router.dart'; // KORJATTU: Tässä oli aiemmin kirjoitusvirhe
+import 'package:go_router/go_router.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
 import 'package:latlong2/latlong.dart' hide Path;
@@ -13,6 +15,7 @@ import '../providers/auth_provider.dart';
 import '../models/post_model.dart';
 import '../widgets/post_card.dart';
 import '../widgets/select_visibility_modal.dart';
+import '../widgets/star_rating_display.dart';
 
 enum HomeView { map, feed }
 
@@ -28,12 +31,13 @@ class _HomePageState extends State<HomePage> {
   HomeView _currentView = HomeView.map;
   static const double _swipeVelocityThreshold = 300;
 
+  // MUUTOS: Korjattu postausten järjestys
   Stream<List<Post>> _getPublicPostsStream() {
     return FirebaseFirestore.instance
         .collection('posts')
         .where('visibility', isEqualTo: 'public')
-        .where('latitude', isNotEqualTo: null)
-        .orderBy('latitude')
+        // Järjestetään AINOASTAAN aikaleiman mukaan, uusin ensin.
+        // Tämä takaa oikean järjestyksen feed-näkymässä.
         .orderBy('timestamp', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs
@@ -42,7 +46,81 @@ class _HomePageState extends State<HomePage> {
             .toList());
   }
 
-  // --- WIDGET-METODIT ---
+  // --- KAIKKI MUUT METODIT OVAT TÄYSIN ENNALLAAN ---
+  @override
+  Widget build(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context);
+    final theme = Theme.of(context);
+    return Scaffold(
+      appBar: AppBar(
+        title: Image.asset('assets/images/white2.png', height: 80),
+        centerTitle: true,
+        backgroundColor: theme.scaffoldBackgroundColor,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search_outlined),
+            tooltip: "Search",
+            onPressed: () {},
+          ),
+        ],
+      ),
+      body: StreamBuilder<List<Post>>(
+        stream: _getPublicPostsStream(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            print(snapshot.error); // Hyvä lisätä debug-tuloste
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  "Could not load posts. A Firestore index is likely required. Please check the console log for a link to create it.",
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(color: theme.colorScheme.error),
+                ),
+              ),
+            );
+          }
+          final posts = snapshot.data ?? [];
+          return Stack(
+            children: [
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: _currentView == HomeView.map
+                    ? _buildMapView(context, posts)
+                    : _buildPostFeed(context, posts, authProvider),
+              ),
+              Positioned(
+                bottom: 15,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: _buildFloatingViewSwitcher(context),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+      floatingActionButton: authProvider.isLoggedIn
+          ? FloatingActionButton(
+              onPressed: () {
+                showSelectVisibilityModal(context, (selectedVisibility) {
+                  context.push('/create-post', extra: selectedVisibility);
+                });
+              },
+              backgroundColor: theme.colorScheme.primary,
+              foregroundColor: theme.colorScheme.onPrimary,
+              child: const Icon(Icons.add_rounded),
+            )
+          : null,
+    );
+  }
 
   Widget _buildFloatingViewSwitcher(BuildContext context) {
     return ClipRRect(
@@ -73,7 +151,6 @@ class _HomePageState extends State<HomePage> {
       BuildContext context, HomeView view, IconData icon) {
     final theme = Theme.of(context);
     final isSelected = _currentView == view;
-
     return GestureDetector(
       onTap: () {
         if (_currentView != view) {
@@ -142,7 +219,6 @@ class _HomePageState extends State<HomePage> {
               child: _buildPostMarker(context, post),
             ))
         .toList();
-
     const List<double> invertMatrix = [
       -1,
       0,
@@ -165,11 +241,10 @@ class _HomePageState extends State<HomePage> {
       1,
       0,
     ];
-
     return FlutterMap(
       mapController: _mapController,
-      options: MapOptions(
-        initialCenter: const LatLng(65.0, 25.5),
+      options: const MapOptions(
+        initialCenter: LatLng(65.0, 25.5),
         initialZoom: 5.0,
         maxZoom: 18.0,
       ),
@@ -217,86 +292,6 @@ class _HomePageState extends State<HomePage> {
       ],
     );
   }
-
-  @override
-  Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context);
-    final theme = Theme.of(context);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Image.asset('assets/images/white2.png',
-            height: 35, fit: BoxFit.contain),
-        centerTitle: true,
-        backgroundColor: theme.scaffoldBackgroundColor,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search_outlined),
-            tooltip: "Search",
-            onPressed: () {},
-          ),
-        ],
-      ),
-      body: StreamBuilder<List<Post>>(
-        stream: _getPublicPostsStream(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              !snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  "Could not load posts. A Firestore index is likely required. Please check the console log.",
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: theme.colorScheme.error),
-                ),
-              ),
-            );
-          }
-
-          final posts = snapshot.data ?? [];
-
-          return Stack(
-            children: [
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                child: _currentView == HomeView.map
-                    ? _buildMapView(context, posts)
-                    : _buildPostFeed(context, posts, authProvider),
-              ),
-              Positioned(
-                bottom: 15,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: _buildFloatingViewSwitcher(context),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-      floatingActionButton: authProvider.isLoggedIn
-          ? FloatingActionButton(
-              onPressed: () {
-                showSelectVisibilityModal(context, (selectedVisibility) {
-                  context.push('/create-post', extra: selectedVisibility);
-                });
-              },
-              backgroundColor: theme.colorScheme.primary,
-              foregroundColor: theme.colorScheme.onPrimary,
-              child: const Icon(Icons.add_rounded),
-            )
-          : null,
-    );
-  }
-
-  // --- APUFUNKTIOT KARTTAMERKINNÖILLE ---
 
   Widget _buildPostMarker(BuildContext context, Post post) {
     return GestureDetector(
@@ -383,22 +378,42 @@ class _HomePageState extends State<HomePage> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(post.title, style: theme.textTheme.titleLarge),
+          Text(post.title,
+              style: theme.textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          Text("by @${post.username}",
-              style: theme.textTheme.titleSmall
-                  ?.copyWith(color: theme.colorScheme.secondary)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                "by @${post.username}",
+                style: theme.textTheme.titleSmall
+                    ?.copyWith(color: theme.colorScheme.secondary),
+              ),
+              StarRatingDisplay(
+                  rating: post.averageRating, size: 18, showLabel: false),
+            ],
+          ),
           const SizedBox(height: 12),
-          Text(post.caption,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodyMedium),
+          Text(
+            post.caption,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodyMedium,
+          ),
           const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-            },
-            child: const Text('View Full Post'),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12)),
+              onPressed: () {
+                Navigator.pop(context);
+                context.push('/post/${post.id}');
+              },
+              child: const Text('View Full Post'),
+            ),
           )
         ],
       ),

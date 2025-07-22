@@ -135,7 +135,7 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
       await _hikePlanService.updateHikePlan(updatedPlan);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Route saved successfully!'),
+            content: const Text('Route saved successfully!'),
             backgroundColor: Colors.green.shade700));
         context.pop();
       }

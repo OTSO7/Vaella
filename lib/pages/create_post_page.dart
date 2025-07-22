@@ -1,10 +1,11 @@
+// lib/pages/create_post_page.dart
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
-import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
@@ -12,13 +13,13 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
+import 'package:syncfusion_flutter_datepicker/datepicker.dart';
 
 import '../models/post_model.dart';
 import '../providers/auth_provider.dart';
 
 class CreatePostPage extends StatefulWidget {
   final PostVisibility initialVisibility;
-
   const CreatePostPage({super.key, required this.initialVisibility});
 
   @override
@@ -26,32 +27,103 @@ class CreatePostPage extends StatefulWidget {
 }
 
 class _CreatePostPageState extends State<CreatePostPage> {
-  // --- STATE VARIABLES ---
-  final _formKey = GlobalKey<FormState>();
-  final TextEditingController _titleController = TextEditingController();
-  final TextEditingController _captionController = TextEditingController();
-  final TextEditingController _locationController = TextEditingController();
-  final TextEditingController _distanceController = TextEditingController();
-  final TextEditingController _nightsController = TextEditingController();
-  final TextEditingController _weightController = TextEditingController();
-  final TextEditingController _caloriesController = TextEditingController();
+  // --- STATE-MUUTTUJAT ---
+  int _currentStep = 0;
+  final PageController _pageController = PageController();
+  final List<GlobalKey<FormState>> _formKeys = [
+    GlobalKey<FormState>(),
+    GlobalKey<FormState>(),
+    GlobalKey<FormState>()
+  ];
+
+  // --- CONTROLLERIT ---
+  final _titleController = TextEditingController();
+  final _captionController = TextEditingController();
+  final _locationController = TextEditingController();
+  final _distanceController = TextEditingController();
+  final _nightsController = TextEditingController();
+  final _weightController = TextEditingController();
 
   XFile? _imageFile;
   DateTime? _startDate;
   DateTime? _endDate;
   late PostVisibility _selectedVisibility;
-  final List<String> _selectedSharedData = [];
   double? _latitude;
   double? _longitude;
   bool _isLoading = false;
 
-  // --- LOCATION SEARCH STATE ---
+  bool _showPackWeightField = false;
+
+  double _weatherRating = 0.0;
+  double _difficultyRating = 0.0;
+  double _experienceRating = 0.0;
+
+  // --- SIJAINNIN HAUN STATE ---
   List<Map<String, dynamic>> _locationSuggestions = [];
   Timer? _debounce;
   final ValueNotifier<bool> _isSearchingLocation = ValueNotifier(false);
   final FocusNode _locationFocusNode = FocusNode();
   String _currentSearchQuery = '';
-  Position? _currentPosition;
+
+  // lista suosituimmista paikoista
+  final List<Map<String, dynamic>> _popularDestinations = const [
+    {
+      'name': 'Karhunkierros',
+      'area': 'Kuusamo',
+      'isPopular': true,
+      'keywords': ['karhunkierros', 'karhu'],
+      'lat': 66.37162668137469,
+      'lon': 29.30838567629724,
+    },
+    {
+      'name': 'Urho Kekkosen kansallispuisto',
+      'area': 'Savukoski, Sodankylä, Inari',
+      'isPopular': true,
+      'keywords': ['urho', 'urho kekkonen', 'ukk', 'uk-puisto'],
+      'lat': 68.1666654499649,
+      'lon': 28.25000050929616,
+    },
+    {
+      'name': 'Pallas-Yllästunturin kansallispuisto',
+      'area': 'Enontekiö, Kittilä, Kolari',
+      'isPopular': true,
+      'keywords': ['palla', 'pallas', 'ylläs', 'pallas-ylläs', 'hetta'],
+      'lat': 67.96666545447972,
+      'lon': 24.133333365079718,
+    },
+    {
+      'name': 'Nuuksion kansallispuisto',
+      'area': 'Espoo, Kirkkonummi',
+      'isPopular': true,
+      'keywords': ['nuuksio', 'nuuk'],
+      'lat': 60.29272641885399,
+      'lon': 24.55651004451601,
+    },
+    {
+      'name': 'Kolin kansallispuisto',
+      'area': 'Lieksa, Joensuu',
+      'isPopular': true,
+      'keywords': ['kol', 'koli', 'kolin'],
+      'lat': 63.096856314964896,
+      'lon': 29.806231767971884,
+    },
+    {
+      'name': 'Repoveden kansallispuisto',
+      'area': 'Kouvola, Mäntyharju',
+      'isPopular': true,
+      'keywords': ['repovesi', 'repo'],
+      'lat': 61.1879941764923,
+      'lon': 26.902363366617525,
+    },
+    {
+      'name': 'Kilpisjärvi',
+      'area': 'Enontekiö',
+      'isPopular': true,
+      'keywords': ['kilpis', 'kilpisjärvi'],
+      'lat': 69.04428710574022,
+      'lon': 20.803299621352853,
+    },
+  ];
 
   @override
   void initState() {
@@ -59,7 +131,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
     _selectedVisibility = widget.initialVisibility;
     _locationController.addListener(_onLocationChanged);
     _locationFocusNode.addListener(_onFocusChanged);
-    _getCurrentLocation();
   }
 
   @override
@@ -71,264 +142,200 @@ class _CreatePostPageState extends State<CreatePostPage> {
     _distanceController.dispose();
     _nightsController.dispose();
     _weightController.dispose();
-    _caloriesController.dispose();
+    _pageController.dispose();
     _debounce?.cancel();
     _isSearchingLocation.dispose();
-    _locationFocusNode.removeListener(_onFocusChanged);
     _locationFocusNode.dispose();
     super.dispose();
   }
 
-  // --- LOCATION SEARCH LOGIC ---
-
-  Future<void> _getCurrentLocation() async {
-    try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return;
-
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) return;
-      }
-      if (permission == LocationPermission.deniedForever) return;
-
-      _currentPosition = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high);
-    } catch (e) {
-      print("Could not get location: $e");
-    }
-  }
-
   void _onFocusChanged() {
-    if (!mounted) return;
-    if (!_locationFocusNode.hasFocus && _locationSuggestions.isNotEmpty) {
-      setState(() => _locationSuggestions = []);
+    if (!_locationFocusNode.hasFocus) {
+      Future.delayed(const Duration(milliseconds: 200), () {
+        if (mounted) {
+          setState(() => _locationSuggestions = []);
+        }
+      });
     }
   }
 
   void _onLocationChanged() {
-    final query = _locationController.text.trim();
-    if (query == _currentSearchQuery) return;
-
-    if (_latitude != null) {
-      setState(() {
-        _latitude = null;
-        _longitude = null;
-      });
-    }
-    _currentSearchQuery = query;
-
     if (_debounce?.isActive ?? false) _debounce!.cancel();
     _debounce = Timer(const Duration(milliseconds: 500), () {
-      if (query == _locationController.text.trim() && query.length > 2) {
-        _searchLocationSuggestions(query);
+      final query = _locationController.text.trim();
+      if (query.length > 2 && query != _currentSearchQuery) {
+        _isSearchingLocation.value = true;
+        _currentSearchQuery = query;
+        _searchLocations(query);
       } else if (query.isEmpty) {
-        if (mounted) setState(() => _locationSuggestions = []);
+        setState(() => _locationSuggestions = []);
       }
     });
   }
 
-  Future<void> _searchLocationSuggestions(String query) async {
-    if (!mounted) return;
-    _isSearchingLocation.value = true;
+  // MUUTOS: Koko hakulogiikka on uusittu älykkäämmäksi
+  Future<void> _searchLocations(String query) async {
+    final normalizedQuery = query.toLowerCase();
 
+    // 1. Suodata paikalliset suosikit
+    final popularResults = _popularDestinations.where((dest) {
+      final nameMatch = dest['name'].toLowerCase().contains(normalizedQuery);
+      final keywordMatch = (dest['keywords'] as List<String>)
+          .any((k) => k.contains(normalizedQuery));
+      return nameMatch || keywordMatch;
+    }).toList();
+
+    // 2. Hae tulokset API:sta (keskittyen Suomeen)
+    final uri = Uri.parse(
+        'https://nominatim.openstreetmap.org/search?q=$query&format=json&addressdetails=1&limit=5&countrycodes=fi');
+    List<Map<String, dynamic>> apiResults = [];
     try {
-      final natureQuery = '$query hiking national park luontokohde';
-      final priorityUrl = _buildSearchUrl(natureQuery, limit: 7);
-      final priorityResponse = await http
-          .get(priorityUrl, headers: {'User-Agent': 'TrekNoteApp/1.0'});
-
-      final generalUrl = _buildSearchUrl(query, limit: 3);
-      final generalResponse = await http
-          .get(generalUrl, headers: {'User-Agent': 'TrekNoteApp/1.0'});
-
-      if (!mounted) return;
-
-      List<Map<String, dynamic>> priorityResults = (priorityResponse
-                  .statusCode ==
-              200)
-          ? List<Map<String, dynamic>>.from(json.decode(priorityResponse.body))
-          : [];
-
-      List<Map<String, dynamic>> generalResults = (generalResponse.statusCode ==
-              200)
-          ? List<Map<String, dynamic>>.from(json.decode(generalResponse.body))
-          : [];
-
-      final combinedResults = <int, Map<String, dynamic>>{};
-      for (var result in [...priorityResults, ...generalResults]) {
-        if (priorityResults.any((p) => p['osm_id'] == result['osm_id'])) {
-          result['score_bonus'] = true;
-        }
-        combinedResults[result['osm_id']] = result;
+      final response =
+          await http.get(uri, headers: {'User-Agent': 'TrekNote/1.0'});
+      if (mounted && response.statusCode == 200) {
+        apiResults =
+            List<Map<String, dynamic>>.from(json.decode(response.body));
       }
-
-      final sortedResults = combinedResults.values.toList();
-      sortedResults.sort((a, b) =>
-          _getRelevanceScore(b, query).compareTo(_getRelevanceScore(a, query)));
-
-      setState(() => _locationSuggestions = sortedResults);
     } catch (e) {
-      print("Location search error: $e");
-    } finally {
-      if (mounted) _isSearchingLocation.value = false;
+      print("Location search failed: $e");
+    }
+
+    // 3. Yhdistä ja poista duplikaatit
+    final combinedResults = <Map<String, dynamic>>[];
+    final addedNames = <String>{};
+
+    // Lisää suosikit ensin
+    for (var dest in popularResults) {
+      combinedResults.add(dest);
+      addedNames.add(dest['name'].toLowerCase());
+    }
+
+    // Lisää API-tulokset, jos ne eivät ole jo listalla
+    for (var result in apiResults) {
+      final displayName =
+          (result['display_name'] as String?)?.toLowerCase() ?? '';
+      if (!addedNames.any((name) => displayName.contains(name))) {
+        combinedResults.add(result);
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _locationSuggestions = combinedResults;
+        _isSearchingLocation.value = false;
+      });
     }
   }
 
-  Uri _buildSearchUrl(String query, {int limit = 5}) {
-    String url =
-        'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=json&limit=$limit&addressdetails=1&extratags=1&namedetails=1&accept-language=fi,en';
-    if (_currentPosition != null) {
-      url +=
-          '&viewbox=${_currentPosition!.longitude - 1},${_currentPosition!.latitude - 1},${_currentPosition!.longitude + 1},${_currentPosition!.latitude + 1}&bounded=1';
-    }
-    return Uri.parse(url);
-  }
-
-  int _getRelevanceScore(Map<String, dynamic> suggestion, String query) {
-    int score = 0;
-    String? category = suggestion['category'];
-    String? type = suggestion['type'];
-    String displayName = (suggestion['display_name'] ?? '').toLowerCase();
-
-    if (suggestion['score_bonus'] == true) {
-      score += 200;
-    }
-
-    if (category == 'tourism' ||
-        category == 'natural' ||
-        category == 'leisure' ||
-        category == 'historic') {
-      score += 100;
-    } else if (category == 'boundary' && type == 'administrative') {
-      score += 10;
-    } else if (category == 'highway') {
-      score -= 50;
-    }
-
-    if (displayName.contains(query.toLowerCase())) {
-      score += 20;
-    }
-
-    return score;
-  }
-
+  // MUUTOS: Päivitetty käsittelemään kahta erilaista tulostyyppiä (suosikki vs. API)
   void _selectLocationSuggestion(Map<String, dynamic> suggestion) {
-    if (!mounted) return;
+    final bool isPopular = suggestion['isPopular'] ?? false;
+    String displayName;
+    double lat;
+    double lon;
+
+    if (isPopular) {
+      displayName = '${suggestion['name']}, ${suggestion['area']}';
+      lat = suggestion['lat'];
+      lon = suggestion['lon'];
+    } else {
+      displayName = suggestion['display_name'] ?? 'Unknown location';
+      lat = double.tryParse(suggestion['lat'].toString()) ?? 0.0;
+      lon = double.tryParse(suggestion['lon'].toString()) ?? 0.0;
+    }
+
     setState(() {
-      _locationController.text = _formatSuggestionName(suggestion);
-      _latitude = double.tryParse(suggestion['lat'].toString());
-      _longitude = double.tryParse(suggestion['lon'].toString());
+      _locationController.text = displayName;
+      _latitude = lat;
+      _longitude = lon;
       _locationSuggestions = [];
-      _currentSearchQuery = _locationController.text.trim();
+      _currentSearchQuery = displayName;
     });
-    _locationFocusNode.unfocus();
+    FocusScope.of(context).unfocus();
   }
 
-  String _formatSuggestionName(Map<String, dynamic> suggestion) {
-    final address = suggestion['address'] as Map<String, dynamic>? ?? {};
-    final namedetails =
-        suggestion['namedetails'] as Map<String, dynamic>? ?? {};
+  // --- BUILD-METODIT JA MUU UI-LOGIIKKA (pääosin ennallaan) ---
 
-    String? primaryName = namedetails['name'] ??
-        address['tourism'] ??
-        address['natural'] ??
-        address['historic'] ??
-        address['leisure'] ??
-        address['amenity'] ??
-        address['shop'];
+  // ... (Kaikki muu koodi, kuten _onNextPressed, _createPost, _buildStepOne, _buildStepTwo, _buildStepThree, jne. on ennallaan)
+  // ... (Täydellisyyden vuoksi liitän ne alle, mutta muutokset ovat yllä olevissa funktioissa ja sijainnin `_buildLocationField`-widgetissä)
 
-    primaryName ??= address['road'] ?? address['neighbourhood'];
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Create Post (${_currentStep + 1}/3)',
+            style: GoogleFonts.poppins()),
+        backgroundColor: theme.scaffoldBackgroundColor,
+        elevation: 0,
+        leading: _currentStep > 0
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                onPressed: _onBackPressed)
+            : null,
+      ),
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: Column(
+        children: [
+          _buildProgressIndicator(),
+          Expanded(
+            child: PageView(
+              controller: _pageController,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                _buildStepOne(context),
+                _buildStepTwo(context),
+                _buildStepThree(context),
+              ],
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: _buildBottomNavBar(context),
+    );
+  }
 
-    String? contextName = address['city'] ??
-        address['town'] ??
-        address['village'] ??
-        address['municipality'];
-
-    if (primaryName != null &&
-        contextName != null &&
-        primaryName.toLowerCase() != contextName.toLowerCase()) {
-      return '$primaryName, $contextName';
-    } else if (primaryName != null) {
-      return (address['country'] != null &&
-              primaryName.toLowerCase() == contextName?.toLowerCase())
-          ? '$primaryName, ${address['country']}'
-          : primaryName;
-    } else if (contextName != null) {
-      return contextName;
+  void _onNextPressed() {
+    if (_formKeys[_currentStep].currentState!.validate()) {
+      if (_currentStep == 1 && (_startDate == null || _endDate == null)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Please select hike dates.")));
+        }
+        return;
+      }
+      if (_currentStep < 2) {
+        setState(() => _currentStep++);
+        _pageController.animateToPage(_currentStep,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut);
+      } else {
+        _createPost();
+      }
     }
-
-    return suggestion['display_name']?.toString().split(',').first ??
-        'Unknown Location';
   }
 
-  IconData _getIconForSuggestionType(Map<String, dynamic> suggestion) {
-    String? category = suggestion['category'];
-    String? type = suggestion['type'];
-
-    switch (category) {
-      case 'natural':
-        return Icons.eco_outlined;
-      case 'tourism':
-        return Icons.attractions_outlined;
-      case 'boundary':
-        return Icons.public_outlined;
-      case 'highway':
-        return Icons.signpost_outlined;
-      case 'amenity':
-        return Icons.local_cafe_outlined;
-      case 'leisure':
-        return Icons.hiking_outlined;
-      case 'historic':
-        return Icons.museum_outlined;
-      default:
-        return Icons.location_on_outlined;
+  void _onBackPressed() {
+    if (_currentStep > 0) {
+      setState(() => _currentStep--);
+      _pageController.animateToPage(_currentStep,
+          duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
     }
   }
-
-  // --- POST CREATION & SAVING LOGIC ---
 
   Future<void> _createPost() async {
-    final theme = Theme.of(context);
-    if (!_formKey.currentState!.validate()) return;
-    if (_startDate == null || _endDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Please select the start and end dates for the hike.',
-            style: GoogleFonts.lato()),
-        backgroundColor: theme.colorScheme.error,
-      ));
-      return;
-    }
-    if (_latitude == null || _longitude == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Please select a valid location from the suggestions.',
-            style: GoogleFonts.lato()),
-        backgroundColor: theme.colorScheme.error,
-      ));
-      return;
-    }
-
     setState(() => _isLoading = true);
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    if (authProvider.userProfile == null) {
-      _showErrorDialog('User profile not found.');
-      return;
-    }
-
     try {
       String? uploadedImageUrl;
       if (_imageFile != null) {
         uploadedImageUrl = await _uploadImageInternal(_imageFile!);
       }
-
       final newPostRef = FirebaseFirestore.instance.collection('posts').doc();
       final newPost = Post(
         id: newPostRef.id,
         userId: authProvider.userProfile!.uid,
-        username: authProvider.userProfile!.username.isNotEmpty
-            ? authProvider.userProfile!.username
-            : authProvider.userProfile!.displayName,
+        username: authProvider.userProfile!.username,
         userAvatarUrl: authProvider.userProfile!.photoURL ?? '',
         postImageUrl: uploadedImageUrl,
         title: _titleController.text.trim(),
@@ -343,16 +350,18 @@ class _CreatePostPageState extends State<CreatePostPage> {
                 _distanceController.text.trim().replaceAll(',', '.')) ??
             0.0,
         nights: int.tryParse(_nightsController.text.trim()) ?? 0,
-        weightKg:
-            double.tryParse(_weightController.text.trim().replaceAll(',', '.')),
-        caloriesPerDay: double.tryParse(_caloriesController.text.trim()),
-        planId: null,
+        weightKg: _showPackWeightField
+            ? double.tryParse(
+                _weightController.text.trim().replaceAll(',', '.'))
+            : null,
         visibility: _selectedVisibility,
-        likes: [],
-        commentCount: 0,
-        sharedData: _selectedSharedData,
+        planId: null,
+        ratings: {
+          'weather': _weatherRating,
+          'difficulty': _difficultyRating,
+          'experience': _experienceRating,
+        },
       );
-
       await newPostRef.set(newPost.toFirestore());
       await authProvider.handlePostCreationSuccess();
       _showSuccessDialog();
@@ -363,441 +372,50 @@ class _CreatePostPageState extends State<CreatePostPage> {
     }
   }
 
-  // --- UI & WIDGETS ---
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Create New Hike Post',
-            style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-        elevation: 0.5,
-        backgroundColor: theme.colorScheme.surface,
-        foregroundColor: theme.colorScheme.onSurface,
+  Widget _buildProgressIndicator() {
+    double beginValue = _currentStep / 3.0;
+    double endValue = (_currentStep + 1) / 3.0;
+    return TweenAnimationBuilder<double>(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+      tween: Tween<double>(begin: beginValue, end: endValue),
+      builder: (context, value, child) => LinearProgressIndicator(
+        value: value,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        minHeight: 6,
       ),
-      backgroundColor: theme.scaffoldBackgroundColor,
-      body: Stack(children: [
-        SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20.0, 16.0, 20.0, 120.0),
-          child: Form(
-            key: _formKey,
-            child: AbsorbPointer(
-              absorbing: _isLoading,
-              child: Opacity(
-                opacity: _isLoading ? 0.7 : 1.0,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    GestureDetector(
-                      onTap: _pickImage,
-                      child: Container(
-                        height: 200,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceContainerLowest,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                              color: _imageFile == null
-                                  ? theme.dividerColor.withOpacity(0.7)
-                                  : Colors.transparent,
-                              width: 1.5),
-                          image: _imageFile != null
-                              ? DecorationImage(
-                                  image: FileImage(File(_imageFile!.path)),
-                                  fit: BoxFit.cover)
-                              : null,
-                        ),
-                        child: _imageFile == null
-                            ? Center(
-                                child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.add_a_photo_outlined,
-                                      size: 50,
-                                      color: theme.colorScheme.primary
-                                          .withOpacity(0.8)),
-                                  const SizedBox(height: 12),
-                                  Text('Add a cover photo (optional)',
-                                      style: GoogleFonts.lato(
-                                          fontSize: 16,
-                                          color: theme
-                                              .colorScheme.onSurfaceVariant)),
-                                ],
-                              ))
-                            : null,
-                      ),
-                    ),
-                    _buildSectionTitle(
-                        'Basic Information', Icons.notes_rounded),
-                    TextFormField(
-                      controller: _titleController,
-                      style: GoogleFonts.lato(fontSize: 16),
-                      decoration: _customInputDecoration(
-                          labelText: 'Hike Title',
-                          hintText: 'e.g. Koli National Park Adventure',
-                          prefixIcon: Icons.flag_outlined,
-                          theme: theme),
-                      validator: (value) =>
-                          (value == null || value.trim().isEmpty)
-                              ? 'Title is required.'
-                              : value.trim().length < 5
-                                  ? 'Title too short (min 5 chars).'
-                                  : null,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _captionController,
-                      style: GoogleFonts.lato(fontSize: 16),
-                      decoration: _customInputDecoration(
-                              labelText: 'Description / Story',
-                              hintText:
-                                  'Share your experience, tips, feelings...',
-                              prefixIcon: Icons.article_outlined,
-                              theme: theme)
-                          .copyWith(alignLabelWithHint: true),
-                      maxLines: 5,
-                      minLines: 3,
-                      maxLength: 1000,
-                      validator: (value) =>
-                          (value == null || value.trim().isEmpty)
-                              ? 'Description is required.'
-                              : value.trim().length < 20
-                                  ? 'Description too short (min 20 chars).'
-                                  : null,
-                    ),
-                    _buildSectionTitle('Hike Details', Icons.hiking_rounded),
-                    Column(
-                      children: [
-                        TextFormField(
-                          controller: _locationController,
-                          focusNode: _locationFocusNode,
-                          style: GoogleFonts.lato(fontSize: 16),
-                          decoration: _customInputDecoration(
-                            labelText: 'Location / Area',
-                            hintText: 'e.g. Karhunkierros, Kuusamo',
-                            prefixIcon: Icons.location_on_outlined,
-                            theme: theme,
-                            suffixIcon: ValueListenableBuilder<bool>(
-                              valueListenable: _isSearchingLocation,
-                              builder: (context, isSearching, child) =>
-                                  isSearching
-                                      ? const Padding(
-                                          padding: EdgeInsets.all(12.0),
-                                          child: SizedBox(
-                                              height: 20,
-                                              width: 20,
-                                              child: CircularProgressIndicator(
-                                                  strokeWidth: 2.0)))
-                                      : const SizedBox.shrink(),
-                            ),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty)
-                              return 'Location is required';
-                            if (_latitude == null)
-                              return 'Please select a location from suggestions';
-                            return null;
-                          },
-                        ),
-                        if (_locationSuggestions.isNotEmpty)
-                          Container(
-                            constraints: const BoxConstraints(maxHeight: 200),
-                            decoration: BoxDecoration(
-                                color: theme.cardColor,
-                                borderRadius: const BorderRadius.vertical(
-                                    bottom: Radius.circular(12)),
-                                border: Border.all(color: theme.dividerColor)),
-                            child: ListView.builder(
-                              padding: EdgeInsets.zero,
-                              shrinkWrap: true,
-                              itemCount: _locationSuggestions.length,
-                              itemBuilder: (context, index) {
-                                final suggestion = _locationSuggestions[index];
-                                return ListTile(
-                                  leading: Icon(
-                                      _getIconForSuggestionType(suggestion),
-                                      color: theme.colorScheme.secondary),
-                                  title:
-                                      Text(_formatSuggestionName(suggestion)),
-                                  dense: true,
-                                  onTap: () =>
-                                      _selectLocationSuggestion(suggestion),
-                                );
-                              },
-                            ),
-                          )
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: InkWell(
-                            onTap: () => _selectDate(context, isStart: true),
-                            borderRadius: BorderRadius.circular(12),
-                            child: InputDecorator(
-                              decoration: _customInputDecoration(
-                                labelText: 'Start Date',
-                                prefixIcon: Icons.calendar_month_outlined,
-                                theme: theme,
-                              ).copyWith(
-                                hintText: '',
-                                contentPadding:
-                                    const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                              ),
-                              child: Text(
-                                _startDate == null
-                                    ? 'Select'
-                                    : DateFormat('dd.MM.yyyy')
-                                        .format(_startDate!),
-                                style: GoogleFonts.lato(
-                                  fontSize: 16,
-                                  color: _startDate == null
-                                      ? theme.hintColor
-                                      : theme.colorScheme.onSurface,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: InkWell(
-                            onTap: () => _selectDate(context, isStart: false),
-                            borderRadius: BorderRadius.circular(12),
-                            child: InputDecorator(
-                              decoration: _customInputDecoration(
-                                labelText: 'End Date',
-                                prefixIcon: Icons.event_available_outlined,
-                                theme: theme,
-                              ).copyWith(
-                                hintText: '',
-                                contentPadding:
-                                    const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                              ),
-                              child: Text(
-                                _endDate == null
-                                    ? 'Select'
-                                    : DateFormat('dd.MM.yyyy')
-                                        .format(_endDate!),
-                                style: GoogleFonts.lato(
-                                  fontSize: 16,
-                                  color: _endDate == null
-                                      ? theme.hintColor
-                                      : theme.colorScheme.onSurface,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _distanceController,
-                            style: GoogleFonts.lato(fontSize: 16),
-                            keyboardType: const TextInputType.numberWithOptions(
-                                decimal: true),
-                            decoration: _customInputDecoration(
-                                labelText: 'Distance (km)',
-                                prefixIcon: Icons.timeline_rounded,
-                                theme: theme),
-                            validator: (v) => (v != null &&
-                                    v.isNotEmpty &&
-                                    double.tryParse(v.replaceAll(',', '.')) ==
-                                        null)
-                                ? 'Invalid number'
-                                : null,
-                            onChanged: (v) => _distanceController.text =
-                                v.replaceAll(',', '.'),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _nightsController,
-                            style: GoogleFonts.lato(fontSize: 16),
-                            keyboardType: TextInputType.number,
-                            decoration: _customInputDecoration(
-                                labelText: 'Nights',
-                                prefixIcon: Icons.night_shelter_outlined,
-                                theme: theme),
-                            validator: (v) => (v != null &&
-                                    v.isNotEmpty &&
-                                    int.tryParse(v) == null)
-                                ? 'Invalid number'
-                                : null,
-                          ),
-                        ),
-                      ],
-                    ),
-                    _buildSectionTitle('Additional Details (Optional)',
-                        Icons.more_horiz_rounded),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _weightController,
-                            style: GoogleFonts.lato(fontSize: 16),
-                            keyboardType: const TextInputType.numberWithOptions(
-                                decimal: true),
-                            decoration: _customInputDecoration(
-                                labelText: 'Pack Weight (kg)',
-                                prefixIcon: Icons.backpack_outlined,
-                                theme: theme),
-                            validator: (v) => (v != null &&
-                                    v.isNotEmpty &&
-                                    double.tryParse(v.replaceAll(',', '.')) ==
-                                        null)
-                                ? 'Invalid number'
-                                : null,
-                            onChanged: (v) =>
-                                _weightController.text = v.replaceAll(',', '.'),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _caloriesController,
-                            style: GoogleFonts.lato(fontSize: 16),
-                            keyboardType: TextInputType.number,
-                            decoration: _customInputDecoration(
-                                labelText: 'Avg. Calories/day',
-                                prefixIcon:
-                                    Icons.local_fire_department_outlined,
-                                theme: theme),
-                            validator: (v) => (v != null &&
-                                    v.isNotEmpty &&
-                                    int.tryParse(v) == null)
-                                ? 'Invalid number'
-                                : null,
-                          ),
-                        ),
-                      ],
-                    ),
-                    _buildSectionTitle('Post Settings',
-                        Icons.settings_input_component_outlined),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      child: Row(
-                        children: [
-                          Text(
-                            "Visibility:",
-                            style: GoogleFonts.lato(
-                              fontSize: 16,
-                              color: theme.colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const Spacer(),
-                          _buildVisibilityIndicator(),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'What details do you want to share in this post?',
-                      style: GoogleFonts.lato(
-                        fontSize: 16,
-                        color: theme.colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    _buildShareOption('Route (shows location pin on map)',
-                        'route', Icons.map_outlined),
-                    _buildShareOption('Packing list details (pack weight)',
-                        'packing', Icons.inventory_2_outlined),
-                    _buildShareOption('Meal plan details (calories/day)',
-                        'food', Icons.restaurant_menu_outlined),
-                    const SizedBox(height: 32),
-                  ],
-                ),
-              ),
-            ),
-          ),
+    );
+  }
+
+  Widget _buildBottomNavBar(BuildContext context) {
+    final isLastStep = _currentStep == 2;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
+      child: ElevatedButton(
+        onPressed: _isLoading ? null : _onNextPressed,
+        style: ElevatedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          textStyle:
+              GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600),
         ),
-        if (_isLoading)
-          Container(
-            color: Colors.black.withOpacity(0.6),
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                          theme.colorScheme.secondary)),
-                  const SizedBox(height: 20),
-                  Text("Publishing your adventure...",
-                      style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w500))
-                ],
-              ),
-            ),
-          ),
-      ]),
-      bottomNavigationBar: Material(
-        elevation: 8.0,
-        color: theme.scaffoldBackgroundColor,
-        child: Padding(
-          padding: EdgeInsets.only(
-            left: 20.0,
-            right: 20.0,
-            top: 12.0,
-            bottom: MediaQuery.of(context).padding.bottom + 12.0,
-          ),
-          child: ElevatedButton.icon(
-            onPressed: _isLoading ? null : _createPost,
-            icon: const Icon(Icons.publish_rounded, size: 22),
-            label: Text('Publish Hike Post',
-                style: GoogleFonts.poppins(
-                    fontWeight: FontWeight.w600, fontSize: 17)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: theme.colorScheme.primary,
-              foregroundColor: theme.colorScheme.onPrimary,
-              padding: const EdgeInsets.symmetric(vertical: 15),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              disabledBackgroundColor:
-                  theme.colorScheme.primary.withOpacity(0.5),
-            ),
-          ),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          child: _isLoading
+              ? const SizedBox(
+                  height: 24,
+                  width: 24,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 3, color: Colors.white))
+              : Text(isLastStep ? 'Publish Post' : 'Next Step',
+                  key: ValueKey(_currentStep)),
         ),
       ),
     );
   }
 
-  // --- HELPER METHODS ---
-
-  void _showErrorDialog(String message) {
-    if (mounted) {
-      _showOutcomeDialog(
-        isSuccess: false,
-        title: 'Error',
-        message: message.replaceFirst("Exception: ", ""),
-        onDismissed: () {},
-      );
-    }
-  }
-
-  void _showSuccessDialog() {
-    if (mounted) {
-      _showOutcomeDialog(
-        isSuccess: true,
-        title: 'Success!',
-        message: 'New hike post created.',
-        onDismissed: () {
-          if (mounted) Navigator.of(context).pop();
-        },
-      );
-    }
-  }
-
+  Widget _buildSectionHeader(BuildContext context, String title) => Text(title,
+      style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w600));
   Future<void> _pickImage() async {
     if (_isLoading) return;
     final ImagePicker picker = ImagePicker();
@@ -812,57 +430,10 @@ class _CreatePostPageState extends State<CreatePostPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Failed to pick image: ${e.toString()}',
-                  style: GoogleFonts.lato())),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Failed to pick image: ${e.toString()}',
+                style: GoogleFonts.lato())));
       }
-    }
-  }
-
-  Future<void> _selectDate(BuildContext context,
-      {required bool isStart}) async {
-    if (_isLoading) return;
-    final theme = Theme.of(context);
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: isStart
-          ? (_startDate ?? DateTime.now())
-          : (_endDate ?? _startDate ?? DateTime.now()),
-      firstDate: DateTime(DateTime.now().year - 10),
-      lastDate: DateTime(DateTime.now().year + 10),
-      builder: (context, child) {
-        return Theme(
-          data: theme.copyWith(
-            colorScheme: theme.colorScheme.copyWith(
-              primary: theme.colorScheme.primary,
-              onPrimary: theme.colorScheme.onPrimary,
-              surface: theme.cardColor,
-              onSurface: theme.colorScheme.onSurface,
-            ),
-            dialogTheme: DialogThemeData(
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16))),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      setState(() {
-        if (isStart) {
-          _startDate = picked;
-          if (_endDate != null && _endDate!.isBefore(_startDate!)) {
-            _endDate = _startDate;
-          }
-        } else {
-          _endDate = picked;
-          if (_startDate != null && _startDate!.isAfter(_endDate!)) {
-            _startDate = _endDate;
-          }
-        }
-      });
     }
   }
 
@@ -880,43 +451,34 @@ class _CreatePostPageState extends State<CreatePostPage> {
     }
   }
 
-  InputDecoration _customInputDecoration({
-    required String labelText,
-    String? hintText,
-    required IconData prefixIcon,
-    required ThemeData theme,
-    Widget? suffixIcon,
-  }) {
-    return InputDecoration(
-      labelText: labelText,
-      hintText: hintText,
-      labelStyle: GoogleFonts.lato(
-          color: theme.colorScheme.onSurfaceVariant, fontSize: 16),
-      hintStyle: GoogleFonts.lato(color: theme.hintColor, fontSize: 15),
-      prefixIcon: Icon(prefixIcon, color: theme.colorScheme.primary, size: 22),
-      suffixIcon: suffixIcon,
-      border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12.0),
-          borderSide: BorderSide(color: theme.dividerColor.withOpacity(0.7))),
-      enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12.0),
-          borderSide: BorderSide(color: theme.dividerColor.withOpacity(0.7))),
-      focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12.0),
-          borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.8)),
-      filled: true,
-      fillColor: theme.colorScheme.surfaceContainerLowest.withOpacity(0.8),
-      contentPadding:
-          const EdgeInsets.symmetric(vertical: 16.0, horizontal: 12.0),
-    );
+  void _showErrorDialog(String message) {
+    if (mounted) {
+      _showOutcomeDialog(
+          isSuccess: false,
+          title: 'Error',
+          message: message.replaceFirst("Exception: ", ""),
+          onDismissed: () {});
+    }
+  }
+
+  void _showSuccessDialog() {
+    if (mounted) {
+      _showOutcomeDialog(
+        isSuccess: true,
+        title: 'Success!',
+        message: 'New hike post created. You earned 50 XP!',
+        onDismissed: () {
+          if (mounted) Navigator.of(context).pop();
+        },
+      );
+    }
   }
 
   Widget _buildAnimatedIcon(bool isSuccess) {
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 300),
-      transitionBuilder: (Widget child, Animation<double> animation) {
-        return ScaleTransition(scale: animation, child: child);
-      },
+      transitionBuilder: (Widget child, Animation<double> animation) =>
+          ScaleTransition(scale: animation, child: child),
       child: isSuccess
           ? Icon(Icons.check_circle_outline_rounded,
               key: const ValueKey('success_icon'),
@@ -929,18 +491,23 @@ class _CreatePostPageState extends State<CreatePostPage> {
     );
   }
 
-  Future<void> _showOutcomeDialog({
-    required bool isSuccess,
-    required String title,
-    required String message,
-    required VoidCallback onDismissed,
-  }) async {
+  Future<void> _showOutcomeDialog(
+      {required bool isSuccess,
+      required String title,
+      required String message,
+      required VoidCallback onDismissed}) async {
     if (!mounted) return;
     final theme = Theme.of(context);
-    await showDialog<void>(
+    showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext dialogContext) {
+        Future.delayed(const Duration(seconds: 2, milliseconds: 500), () {
+          if (Navigator.of(dialogContext).canPop()) {
+            Navigator.of(dialogContext).pop();
+          }
+          onDismissed();
+        });
         return AlertDialog(
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -951,103 +518,459 @@ class _CreatePostPageState extends State<CreatePostPage> {
             const SizedBox(height: 20),
             Text(title,
                 style: GoogleFonts.poppins(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.onSurface)),
+                    fontSize: 20, fontWeight: FontWeight.w600)),
             const SizedBox(height: 12),
             Text(message,
                 textAlign: TextAlign.center,
-                style: GoogleFonts.lato(
-                    fontSize: 15, color: theme.colorScheme.onSurfaceVariant)),
+                style: GoogleFonts.lato(fontSize: 15)),
           ]),
         );
       },
     );
-    await Future.delayed(const Duration(seconds: 2, milliseconds: 500));
-    if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
-      Navigator.of(context, rootNavigator: true).pop();
-    }
-    onDismissed();
   }
 
-  Widget _buildSectionTitle(String title, IconData icon) {
+  Widget _buildStyledTextFormField({
+    Key? key,
+    required TextEditingController controller,
+    required String labelText,
+    required String hintText,
+    required IconData icon,
+    int maxLines = 1,
+    TextInputType keyboardType = TextInputType.text,
+    String? Function(String?)? validator,
+    FocusNode? focusNode,
+  }) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(top: 28.0, bottom: 12.0),
-      child: Row(children: [
-        Icon(icon, color: theme.colorScheme.secondary, size: 22),
-        const SizedBox(width: 10),
-        Text(title,
-            style: GoogleFonts.poppins(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface)),
-      ]),
+    return TextFormField(
+      key: key,
+      controller: controller,
+      focusNode: focusNode,
+      style: GoogleFonts.lato(fontSize: 16),
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      validator: validator,
+      decoration: InputDecoration(
+        labelText: labelText,
+        hintText: hintText,
+        prefixIcon: Icon(icon,
+            color: theme.colorScheme.primary.withOpacity(0.8), size: 20),
+      ),
     );
   }
 
-  Widget _buildVisibilityIndicator() {
+  void _showDateRangePicker() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        maxChildSize: 0.9,
+        builder: (context, scrollController) => Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text("Select Hike Dates",
+                  style: Theme.of(context).textTheme.titleLarge),
+            ),
+            Expanded(
+              child: SfDateRangePicker(
+                onSelectionChanged: (DateRangePickerSelectionChangedArgs args) {
+                  if (args.value is PickerDateRange) {
+                    final range = args.value as PickerDateRange;
+                    if (range.startDate != null) {
+                      setState(() {
+                        _startDate = range.startDate;
+                        _endDate = range.endDate ?? range.startDate;
+                      });
+                    }
+                  }
+                },
+                selectionMode: DateRangePickerSelectionMode.range,
+                initialSelectedRange: _startDate != null && _endDate != null
+                    ? PickerDateRange(_startDate, _endDate)
+                    : null,
+                monthViewSettings:
+                    const DateRangePickerMonthViewSettings(firstDayOfWeek: 1),
+                headerStyle: DateRangePickerHeaderStyle(
+                    textStyle:
+                        GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: ElevatedButton(
+                child: const Text("Confirm"),
+                onPressed: () => Navigator.pop(context),
+              ),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDateRangeField(BuildContext context) {
     final theme = Theme.of(context);
-    IconData icon;
-    String text;
-    Color color;
-    switch (_selectedVisibility) {
-      case PostVisibility.public:
-        icon = Icons.public_rounded;
-        text = 'Public';
-        color = theme.colorScheme.primary;
-        break;
-      case PostVisibility.friends:
-        icon = Icons.group_outlined;
-        text = 'Friends';
-        color = theme.colorScheme.secondary;
-        break;
-      case PostVisibility.private:
-        icon = Icons.lock_outline_rounded;
-        text = 'Private';
-        color = Colors.grey.shade600;
-        break;
+    String dateText = "Select start and end dates*";
+    if (_startDate != null && _endDate != null) {
+      if (_startDate == _endDate) {
+        dateText = DateFormat.yMMMd().format(_startDate!);
+      } else {
+        dateText =
+            '${DateFormat.yMMMd().format(_startDate!)} - ${DateFormat.yMMMd().format(_endDate!)}';
+      }
+    } else if (_startDate != null) {
+      dateText = DateFormat.yMMMd().format(_startDate!);
     }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-          color: color.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withOpacity(0.4))),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, color: color, size: 19),
-        const SizedBox(width: 8),
-        Text(text,
+    return InkWell(
+      onTap: _showDateRangePicker,
+      borderRadius: BorderRadius.circular(12),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: "Hike Dates",
+          prefixIcon: Icon(Icons.calendar_today_outlined,
+              color: theme.colorScheme.primary.withOpacity(0.8), size: 20),
+        ),
+        child: Text(dateText,
             style: GoogleFonts.lato(
-                color: color, fontWeight: FontWeight.w600, fontSize: 14)),
-      ]),
+                fontSize: 16,
+                color: _startDate != null
+                    ? theme.colorScheme.onSurface
+                    : theme.hintColor)),
+      ),
     );
   }
 
-  Widget _buildShareOption(String title, String key, IconData icon) {
+  Widget _buildImagePicker(BuildContext context) {
     final theme = Theme.of(context);
-    return CheckboxListTile(
-      title: Text(title, style: GoogleFonts.lato(fontSize: 15.5)),
-      value: _selectedSharedData.contains(key),
-      onChanged: _isLoading
-          ? null
-          : (bool? value) {
-              setState(() {
-                if (value == true) {
-                  _selectedSharedData.add(key);
+    return GestureDetector(
+      onTap: _pickImage,
+      child: AspectRatio(
+        aspectRatio: 16 / 9,
+        child: Container(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color:
+                  _imageFile == null ? theme.dividerColor : Colors.transparent,
+              width: 1.5,
+            ),
+            image: _imageFile != null
+                ? DecorationImage(
+                    image: FileImage(File(_imageFile!.path)), fit: BoxFit.cover)
+                : null,
+          ),
+          child: _imageFile == null
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.add_a_photo_outlined,
+                          size: 40, color: theme.colorScheme.primary),
+                      const SizedBox(height: 8),
+                      Text('Add a cover photo',
+                          style: GoogleFonts.lato(fontSize: 16)),
+                    ],
+                  ),
+                )
+              : null,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStepOne(BuildContext context) {
+    return Form(
+      key: _formKeys[0],
+      child: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        children: [
+          _buildSectionHeader(context, "1. Your Story & Photo"),
+          const SizedBox(height: 16),
+          _buildImagePicker(context),
+          const SizedBox(height: 24),
+          _buildStyledTextFormField(
+            controller: _titleController,
+            labelText: "Hike Title*",
+            hintText: "e.g., Autumn Adventure in Koli",
+            icon: Icons.flag_outlined,
+            validator: (value) => (value == null || value.trim().isEmpty)
+                ? 'Title is required.'
+                : null,
+          ),
+          const SizedBox(height: 16),
+          _buildStyledTextFormField(
+            controller: _captionController,
+            labelText: "Your Story",
+            hintText: "Share your experience...",
+            icon: Icons.article_outlined,
+            maxLines: 5,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStepTwo(BuildContext context) {
+    return Form(
+      key: _formKeys[1],
+      child: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        children: [
+          _buildSectionHeader(context, "2. Hike Details"),
+          const SizedBox(height: 24),
+          _buildLocationField(context),
+          const SizedBox(height: 24),
+          _buildDateRangeField(context),
+          const SizedBox(height: 24),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                  child: _buildStyledTextFormField(
+                controller: _distanceController,
+                labelText: "Distance (km)*",
+                hintText: "42.5",
+                icon: Icons.hiking_rounded,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return "Required";
+                  if (double.tryParse(v.replaceAll(',', '.')) == null)
+                    return 'Invalid';
+                  return null;
+                },
+              )),
+              const SizedBox(width: 16),
+              Expanded(
+                  child: _buildStyledTextFormField(
+                controller: _nightsController,
+                labelText: "Nights*",
+                hintText: "3",
+                icon: Icons.night_shelter_outlined,
+                keyboardType: TextInputType.number,
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return "Required";
+                  if (int.tryParse(v) == null) return 'Invalid';
+                  return null;
+                },
+              )),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStepThree(BuildContext context) {
+    return Form(
+      key: _formKeys[2],
+      child: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        children: [
+          _buildSectionHeader(context, "3. Final Touches"),
+          const SizedBox(height: 24),
+          _buildOptionalFields(context),
+          const SizedBox(height: 24),
+          _buildRatingsSection(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOptionalFields(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text("Optional Details",
+            style: GoogleFonts.lato(
+                color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        const SizedBox(height: 8),
+        FilterChip(
+          label: const Text("Pack Weight"),
+          selected: _showPackWeightField,
+          onSelected: (selected) =>
+              setState(() => _showPackWeightField = selected),
+          avatar: const Icon(Icons.backpack_outlined, size: 18),
+        ),
+        const SizedBox(height: 16),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          child: _showPackWeightField
+              ? _buildStyledTextFormField(
+                  key: const ValueKey('weight_field'),
+                  controller: _weightController,
+                  labelText: "Pack Weight (kg)",
+                  hintText: "e.g., 15.5",
+                  icon: Icons.backpack_outlined,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                )
+              : const SizedBox.shrink(key: ValueKey('weight_empty')),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRatingsSection(BuildContext context) {
+    return Card(
+      elevation: 0,
+      color: Theme.of(context).colorScheme.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Rate Your Hike",
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 16),
+            _buildRatingBar(
+              title: "Weather Conditions",
+              currentRating: _weatherRating,
+              onRatingChanged: (rating) {
+                setState(() => _weatherRating = rating);
+              },
+            ),
+            const SizedBox(height: 16),
+            _buildRatingBar(
+              title: "Trail Difficulty",
+              currentRating: _difficultyRating,
+              onRatingChanged: (rating) {
+                setState(() => _difficultyRating = rating);
+              },
+            ),
+            const SizedBox(height: 16),
+            _buildRatingBar(
+              title: "Overall Experience",
+              currentRating: _experienceRating,
+              onRatingChanged: (rating) {
+                setState(() => _experienceRating = rating);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRatingBar({
+    required String title,
+    required double currentRating,
+    required ValueChanged<double> onRatingChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title,
+            style: GoogleFonts.lato(fontSize: 16, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 4),
+        Row(
+          children: List.generate(5, (index) {
+            final starNumber = index + 1.0;
+            return IconButton(
+              onPressed: () => onRatingChanged(starNumber),
+              icon: Icon(
+                starNumber <= currentRating
+                    ? Icons.star_rounded
+                    : Icons.star_border_rounded,
+                color: Colors.amber.shade600,
+                size: 32,
+              ),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            );
+          }),
+        ),
+      ],
+    );
+  }
+
+  // MUUTOS: Tämä on tärkein UI-muutos sijainnin haulle
+  Widget _buildLocationField(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        _buildStyledTextFormField(
+          controller: _locationController,
+          focusNode: _locationFocusNode,
+          labelText: "Location*",
+          hintText: "Search for a trail or area...",
+          icon: Icons.location_on_outlined,
+          validator: (value) {
+            if (value == null || value.trim().isEmpty)
+              return 'Location is required';
+            if (_latitude == null || _longitude == null)
+              return 'Please select a valid location from suggestions';
+            return null;
+          },
+        ),
+        if (_locationSuggestions.isNotEmpty)
+          Container(
+            constraints: const BoxConstraints(maxHeight: 220),
+            margin: const EdgeInsets.only(top: 4),
+            decoration: BoxDecoration(
+              color: theme.cardColor,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                )
+              ],
+              border: Border.all(color: theme.dividerColor.withOpacity(0.5)),
+            ),
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 4.0),
+              shrinkWrap: true,
+              itemCount: _locationSuggestions.length,
+              itemBuilder: (context, index) {
+                final suggestion = _locationSuggestions[index];
+                final bool isPopular = suggestion['isPopular'] ?? false;
+
+                if (isPopular) {
+                  // Tyylitelty ListTile suosituille kohteille
+                  return ListTile(
+                    leading: Icon(Icons.star_rounded,
+                        color: Colors.amber.shade600, size: 24),
+                    title: Text(suggestion['name'],
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text(suggestion['area']),
+                    trailing: Chip(
+                      label: const Text('POPULAR',
+                          style: TextStyle(
+                              fontSize: 10, fontWeight: FontWeight.bold)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 0),
+                      backgroundColor:
+                          theme.colorScheme.primaryContainer.withOpacity(0.5),
+                      side: BorderSide.none,
+                    ),
+                    onTap: () => _selectLocationSuggestion(suggestion),
+                  );
                 } else {
-                  _selectedSharedData.remove(key);
+                  // Normaali ListTile API-tuloksille
+                  return ListTile(
+                    leading: Icon(Icons.pin_drop_outlined,
+                        color: theme.colorScheme.secondary),
+                    title: Text(
+                      suggestion['display_name'] ?? 'N/A',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    dense: true,
+                    onTap: () => _selectLocationSuggestion(suggestion),
+                  );
                 }
-              });
-            },
-      secondary:
-          Icon(icon, color: theme.colorScheme.secondary.withOpacity(0.9)),
-      activeColor: theme.colorScheme.primary,
-      controlAffinity: ListTileControlAffinity.leading,
-      contentPadding: const EdgeInsets.symmetric(vertical: 2.0, horizontal: 0),
-      dense: true,
-      checkboxShape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+              },
+            ),
+          ),
+      ],
     );
   }
 }
