@@ -1,15 +1,14 @@
-// lib/widgets/post_card.dart
-import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:intl/date_symbol_data_local.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../models/post_model.dart';
 import '../providers/auth_provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 
 class PostCard extends StatefulWidget {
   final Post post;
@@ -30,7 +29,6 @@ class PostCard extends StatefulWidget {
 class _PostCardState extends State<PostCard> {
   bool _isLiked = false;
   int _likeCount = 0;
-  String _currentLocale = 'en_US';
   bool _isDeleting = false;
 
   @override
@@ -40,261 +38,361 @@ class _PostCardState extends State<PostCard> {
     if (widget.currentUserId != null) {
       _isLiked = widget.post.likes.contains(widget.currentUserId);
     }
+    initializeDateFormatting();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final locale = Localizations.maybeLocaleOf(context);
-    if (locale != null) {
-      _currentLocale = locale.toLanguageTag();
-      initializeDateFormatting(_currentLocale, null)
-          .catchError((_) => initializeDateFormatting('en_US', null));
-    } else {
-      initializeDateFormatting('en_US', null);
+  void _toggleLike() {
+    if (widget.currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Please log in to like posts.")));
+      return;
+    }
+    setState(() {
+      if (_isLiked) {
+        _likeCount--;
+        _isLiked = false;
+        widget.post.likes.remove(widget.currentUserId);
+      } else {
+        _likeCount++;
+        _isLiked = true;
+        widget.post.likes.add(widget.currentUserId!);
+      }
+    });
+
+    FirebaseFirestore.instance.collection('posts').doc(widget.post.id).update({
+      'likes': widget.post.likes,
+    });
+  }
+
+  Future<void> _confirmDeletePost() async {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Post?'),
+        content: const Text('This action cannot be undone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _deletePost();
+            },
+            child: Text('Delete',
+                style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deletePost() async {
+    setState(() => _isDeleting = true);
+    try {
+      await FirebaseFirestore.instance
+          .collection('posts')
+          .doc(widget.post.id)
+          .delete();
+      if (widget.post.postImageUrl != null) {
+        // Kuvan poisto logiikka...
+      }
+      Provider.of<AuthProvider>(context, listen: false)
+          .handlePostDeletionSuccess();
+      if (widget.onPostDeleted != null) {
+        widget.onPostDeleted!();
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Error deleting post: $e')));
+      setState(() => _isDeleting = false);
     }
   }
 
-  // --- Kaikki logiikkafunktiot (toggleLike, delete, jne.) pysyvät ennallaan ---
-  void _toggleLike() {/* ... */}
-  Future<void> _confirmDeletePost() async {/* ... */}
-  Future<void> _deletePost() async {/* ... */}
-  void _showFeatureComingSoon(BuildContext context, String featureName) {
-    /* ... */
+  String _getTimeAgo(DateTime dateTime) {
+    final diff = DateTime.now().difference(dateTime);
+    if (diff.inDays > 7) return DateFormat('d MMM y').format(dateTime);
+    if (diff.inDays > 0) return '${diff.inDays}d ago';
+    if (diff.inHours > 0) return '${diff.inHours}h ago';
+    if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
+    return 'Just now';
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final textTheme = theme.textTheme;
     final timeAgo = _getTimeAgo(widget.post.timestamp);
+    bool isOwnPost = widget.currentUserId == widget.post.userId;
 
-    return AnimatedOpacity(
-      duration: const Duration(milliseconds: 300),
-      opacity: _isDeleting ? 0.4 : 1.0,
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            _buildHeader(context, theme, textTheme, timeAgo),
-            const SizedBox(height: 8),
-            _buildContent(context, theme, textTheme),
-            const SizedBox(height: 12),
-            if (widget.post.postImageUrl != null &&
-                widget.post.postImageUrl!.isNotEmpty)
-              _buildPostImage(context, theme),
-            _buildActionButtonsFooter(context, theme),
-            Padding(
-              padding: const EdgeInsets.only(top: 12.0, left: 16, right: 16),
-              child: Divider(
-                  height: 1, color: theme.dividerColor.withOpacity(0.5)),
-            )
-          ],
+    return Card(
+      elevation: 4,
+      shadowColor: Colors.black.withOpacity(0.3),
+      margin: const EdgeInsets.symmetric(vertical: 12.0),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (widget.post.postImageUrl != null)
+            _buildImageHeader(context, timeAgo, isOwnPost),
+          if (widget.post.postImageUrl == null)
+            _buildNoImageHeader(context, timeAgo, isOwnPost),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(widget.post.title,
+                    style: theme.textTheme.titleLarge
+                        ?.copyWith(fontWeight: FontWeight.bold)),
+                if (widget.post.caption.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(widget.post.caption,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          height: 1.5)),
+                ],
+              ],
+            ),
+          ),
+          _buildHikeStats(context),
+          Divider(
+              height: 1,
+              color: theme.dividerColor.withOpacity(0.5),
+              indent: 16,
+              endIndent: 16),
+          _buildActionButtons(context),
+        ],
+      ),
+    )
+        .animate()
+        .fadeIn(duration: 400.ms)
+        .slideY(begin: 0.1, curve: Curves.easeOutCubic);
+  }
+
+  Widget _buildImageHeader(
+      BuildContext context, String timeAgo, bool isOwnPost) {
+    return Stack(
+      children: [
+        CachedNetworkImage(
+          imageUrl: widget.post.postImageUrl!,
+          height: 220,
+          width: double.infinity,
+          fit: BoxFit.cover,
+          placeholder: (context, url) => Container(
+              height: 220, color: Theme.of(context).colorScheme.surfaceVariant),
+          errorWidget: (context, url, error) => Container(
+              height: 220,
+              color: Colors.black,
+              child: const Icon(Icons.broken_image,
+                  color: Colors.white54, size: 50)),
         ),
-      )
-          .animate()
-          .fadeIn(duration: 450.ms)
-          .slideY(begin: 0.1, end: 0, curve: Curves.easeOut),
+        Positioned.fill(
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.black.withOpacity(0.6),
+                  Colors.transparent,
+                  Colors.black.withOpacity(0.8)
+                ],
+                stops: const [0.0, 0.4, 1.0],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: 12,
+          left: 16,
+          right: 16,
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: () => context.push('/profile/${widget.post.userId}'),
+                child: CircleAvatar(
+                  radius: 20,
+                  backgroundColor: Theme.of(context).cardColor,
+                  backgroundImage: widget.post.userAvatarUrl.isNotEmpty
+                      ? CachedNetworkImageProvider(widget.post.userAvatarUrl)
+                      : null,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("@${widget.post.username}",
+                        style: GoogleFonts.poppins(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15)),
+                    Text(timeAgo,
+                        style: GoogleFonts.lato(
+                            color: Colors.white70, fontSize: 13)),
+                  ],
+                ),
+              ),
+              if (isOwnPost) _buildMoreOptionsButton(context),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildHeader(BuildContext context, ThemeData theme,
-      TextTheme textTheme, String timeAgo) {
-    final bool isOwnPost = widget.currentUserId == widget.post.userId;
+  Widget _buildNoImageHeader(
+      BuildContext context, String timeAgo, bool isOwnPost) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Row(
-        children: <Widget>[
+        children: [
           GestureDetector(
             onTap: () => context.push('/profile/${widget.post.userId}'),
             child: CircleAvatar(
               radius: 20,
-              backgroundColor: theme.colorScheme.surfaceContainerHighest,
+              backgroundColor: Theme.of(context).cardColor,
               backgroundImage: widget.post.userAvatarUrl.isNotEmpty
                   ? CachedNetworkImageProvider(widget.post.userAvatarUrl)
                   : null,
-              child: widget.post.userAvatarUrl.isEmpty
-                  ? const Icon(Icons.person_outline_rounded, size: 22)
-                  : null,
             ),
           ),
-          const SizedBox(width: 12.0),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text("@${widget.post.username}",
                     style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.w600,
-                        color: Colors.orange.shade300,
-                        fontSize: 15),
-                    overflow: TextOverflow.ellipsis),
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15)),
                 Text(timeAgo,
-                    style: textTheme.bodySmall
-                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                    style: GoogleFonts.lato(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 13)),
               ],
             ),
           ),
           if (isOwnPost)
-            PopupMenuButton<String>(
-              icon: Icon(Icons.more_horiz_rounded,
-                  color: theme.colorScheme.onSurfaceVariant),
-              onSelected: (value) {
-                if (value == 'delete') _confirmDeletePost();
-              },
-              itemBuilder: (context) => [
-                PopupMenuItem(
-                    value: 'delete',
-                    child: Row(children: [
-                      Icon(Icons.delete_outline_rounded,
-                          color: theme.colorScheme.error, size: 20),
-                      const SizedBox(width: 8),
-                      Text('Delete Post',
-                          style: textTheme.bodyMedium
-                              ?.copyWith(color: theme.colorScheme.error)),
-                    ])),
-              ],
-            ),
+            _buildMoreOptionsButton(context,
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
         ],
       ),
     );
   }
 
-  Widget _buildContent(
-      BuildContext context, ThemeData theme, TextTheme textTheme) {
+  Widget _buildHikeStats(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(widget.post.title,
-              style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 20,
-                  height: 1.3,
-                  color: theme.colorScheme.onSurface)),
-          if (widget.post.caption.isNotEmpty) ...[
-            const SizedBox(height: 6.0),
-            Text(widget.post.caption,
-                style: textTheme.bodyLarge?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant, height: 1.55)),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPostImage(BuildContext context, ThemeData theme) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-      child: GestureDetector(
-        onDoubleTap: _toggleLike,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16.0),
-          child: CachedNetworkImage(
-            imageUrl: widget.post.postImageUrl!,
-            fit: BoxFit.cover,
-            width: double.infinity,
-            placeholder: (context, url) => Container(
-                height: 300,
-                color: theme.colorScheme.surfaceContainerLowest,
-                child: Center(
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2.0, color: theme.colorScheme.primary))),
-            errorWidget: (context, url, error) => Container(
-              height: 300,
-              color: theme.colorScheme.errorContainer.withOpacity(0.2),
-              child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.broken_image_outlined,
-                        color: theme.colorScheme.onErrorContainer, size: 50),
-                    const SizedBox(height: 10),
-                    Text("Image failed to load",
-                        style: GoogleFonts.lato(
-                            color: theme.colorScheme.onErrorContainer)),
-                  ]),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionButtonsFooter(BuildContext context, ThemeData theme) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8.0, 0, 16.0, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: <Widget>[
-          Row(
-            children: [
-              _buildFooterButton(
-                  theme,
-                  _isLiked
-                      ? Icons.favorite_rounded
-                      : Icons.favorite_border_rounded,
-                  _isLiked
-                      ? theme.colorScheme.error
-                      : theme.colorScheme.onSurfaceVariant,
-                  _likeCount > 0 ? '$_likeCount' : '',
-                  _toggleLike),
-              _buildFooterButton(
-                  theme,
-                  Icons.mode_comment_outlined,
-                  theme.colorScheme.onSurfaceVariant,
-                  widget.post.commentCount > 0
-                      ? '${widget.post.commentCount}'
-                      : '',
-                  () => _showFeatureComingSoon(context, "Comments")),
-            ],
-          ),
-          _buildFooterButton(
-              theme,
-              Icons.share_outlined,
-              theme.colorScheme.onSurfaceVariant,
-              null,
-              () => _showFeatureComingSoon(context, "Share")),
+        children: [
+          _buildStatItem(
+              context, Icons.pin_drop_outlined, widget.post.location),
+          _buildStatItem(context, Icons.hiking_rounded,
+              '${widget.post.distanceKm.toStringAsFixed(1)} km'),
+          _buildStatItem(context, Icons.night_shelter_outlined,
+              '${widget.post.nights} nights'),
         ],
       ),
     );
   }
 
-  Widget _buildFooterButton(ThemeData theme, IconData icon, Color iconColor,
-      String? label, VoidCallback onPressed) {
-    return TextButton.icon(
-      style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-          foregroundColor: iconColor,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12.0))),
-      icon: Icon(icon, size: 22.0),
-      label: Text(label ?? "",
-          style: GoogleFonts.poppins(
-              fontWeight: FontWeight.w600, color: iconColor, fontSize: 14)),
-      onPressed: onPressed,
+  Widget _buildStatItem(BuildContext context, IconData icon, String text) {
+    final theme = Theme.of(context);
+    return Expanded(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: theme.colorScheme.secondary),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              text,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(fontWeight: FontWeight.bold),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  String _getTimeAgo(DateTime dateTime) {
-    final Duration diff = DateTime.now().difference(dateTime);
-    if (diff.inDays >= 7) {
-      return DateFormat('d MMM', _currentLocale).format(dateTime);
-    }
-    if (diff.inDays > 1) {
-      return '${diff.inDays} days ago';
-    }
-    if (diff.inDays == 1) {
-      return 'Yesterday';
-    }
-    if (diff.inHours >= 1) {
-      return '${diff.inHours}h ago';
-    }
-    if (diff.inMinutes >= 1) {
-      return '${diff.inMinutes}m ago';
-    }
-    return 'Just now';
+  Widget _buildActionButtons(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              IconButton(
+                icon: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  transitionBuilder: (child, anim) =>
+                      ScaleTransition(scale: anim, child: child),
+                  child: Icon(
+                    _isLiked
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_border_rounded,
+                    key: ValueKey(_isLiked),
+                    color: _isLiked
+                        ? theme.colorScheme.error
+                        : theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                tooltip: "Like",
+                onPressed: _toggleLike,
+              ),
+              Text('$_likeCount',
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(fontWeight: FontWeight.bold)),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.mode_comment_outlined),
+                tooltip: "Comment",
+                onPressed: () {},
+              ),
+              Text('${widget.post.commentCount}',
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          IconButton(
+            icon: const Icon(Icons.share_outlined),
+            tooltip: "Share",
+            onPressed: () {},
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMoreOptionsButton(BuildContext context, {Color? color}) {
+    final theme = Theme.of(context);
+    return PopupMenuButton<String>(
+      icon: Icon(Icons.more_horiz, color: color ?? Colors.white),
+      onSelected: (value) {
+        if (value == 'delete') _confirmDeletePost();
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          value: 'delete',
+          child: Row(children: [
+            Icon(Icons.delete_outline_rounded,
+                color: theme.colorScheme.error, size: 20),
+            const SizedBox(width: 8),
+            Text('Delete Post',
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: theme.colorScheme.error)),
+          ]),
+        ),
+      ],
+    );
   }
 }

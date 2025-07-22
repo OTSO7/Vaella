@@ -28,13 +28,14 @@ class MainScaffoldWithBottomNav extends StatelessWidget {
           BottomNavigationBarItem(
             icon: Icon(Icons.home_outlined),
             activeIcon: Icon(Icons.home),
-            label: 'Feed', // Muutettu suomeksi, jos sovellus on suomenkielinen
+            label:
+                'Explore', // Muutettu suomeksi, jos sovellus on suomenkielinen
             // tooltip: 'Koti', // Varmistetaan, ettei tooltip-attribuuttia ole tässä
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.list_alt_outlined),
             activeIcon: Icon(Icons.list_alt),
-            label: 'Your plans', // Muutettu suomeksi
+            label: 'Planner', // Muutettu suomeksi
             // tooltip: 'Omat suunnitelmat', // Varmistetaan, ettei tooltip-attribuuttia ole tässä
           ),
           BottomNavigationBarItem(
