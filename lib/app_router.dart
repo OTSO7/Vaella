@@ -5,10 +5,10 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'providers/auth_provider.dart';
-import 'models/post_model.dart'; // For PostVisibility enum
-import 'models/user_profile_model.dart'; // For UserProfile in EditProfilePage
+import 'models/post_model.dart';
+import 'models/user_profile_model.dart';
+import 'models/hike_plan_model.dart';
 
-// Pages
 import 'pages/login_page.dart';
 import 'pages/home_page.dart';
 import 'pages/notes_page.dart';
@@ -20,9 +20,8 @@ import 'pages/user_posts_list_page.dart';
 import 'pages/weather_page.dart';
 import 'pages/hike_plan_hub_page.dart';
 import 'pages/packing_list_page.dart';
-import 'models/hike_plan_model.dart';
+import 'pages/route_planner_page.dart'; // UUSI
 
-// Widgets
 import 'widgets/main_scaffold.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
@@ -126,6 +125,21 @@ class AppRouter extends StatelessWidget {
             return PackingListPage(planId: planId, initialPlan: hikePlan);
           },
         ),
+        // UUSI REITTI
+        GoRoute(
+          path: '/hike-plan/:planId/route-planner',
+          name: 'routePlannerPage',
+          parentNavigatorKey: _rootNavigatorKey,
+          builder: (context, state) {
+            final hikePlan = state.extra as HikePlan?;
+            if (hikePlan == null) {
+              return Scaffold(
+                  appBar: AppBar(title: const Text('Error')),
+                  body: const Center(child: Text('Hike Plan data missing.')));
+            }
+            return RoutePlannerPage(plan: hikePlan);
+          },
+        ),
         StatefulShellRoute.indexedStack(
           builder: (BuildContext context, GoRouterState state,
               StatefulNavigationShell navigationShell) {
@@ -169,9 +183,8 @@ class AppRouter extends StatelessWidget {
                             return Scaffold(
                               appBar: AppBar(title: const Text('Error')),
                               body: const Center(
-                                child:
-                                    Text("Profile data not found for editing."),
-                              ),
+                                  child: Text(
+                                      "Profile data not found for editing.")),
                             );
                           }
                           return EditProfilePage(initialProfile: userProfile);
@@ -348,41 +361,41 @@ class AppRouter extends StatelessWidget {
           backgroundColor: const Color(0xFF2C2C2C),
           headerBackgroundColor: Colors.teal.shade700,
           headerForegroundColor: Colors.white,
-          dayForegroundColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) return Colors.white;
-            if (states.contains(WidgetState.disabled)) {
+          dayForegroundColor: MaterialStateProperty.resolveWith((states) {
+            if (states.contains(MaterialState.selected)) return Colors.white;
+            if (states.contains(MaterialState.disabled)) {
               return Colors.grey.shade700;
             }
             return Colors.white.withOpacity(0.8);
           }),
-          dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) {
+          dayBackgroundColor: MaterialStateProperty.resolveWith((states) {
+            if (states.contains(MaterialState.selected)) {
               return Colors.teal.shade500;
             }
             return Colors.transparent;
           }),
-          todayForegroundColor: WidgetStateProperty.all(Colors.orange.shade300),
+          todayForegroundColor:
+              MaterialStateProperty.all(Colors.orange.shade300),
           todayBorder:
               BorderSide(color: Colors.orange.shade300.withOpacity(0.5)),
           yearForegroundColor:
-              WidgetStateProperty.all(Colors.white.withOpacity(0.8)),
+              MaterialStateProperty.all(Colors.white.withOpacity(0.8)),
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           elevation: 4,
         ),
         checkboxTheme: CheckboxThemeData(
-          fillColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) {
+          fillColor: MaterialStateProperty.resolveWith((states) {
+            if (states.contains(MaterialState.selected)) {
               return Colors.teal.shade400;
             }
             return Colors.transparent;
           }),
-          checkColor: WidgetStateProperty.all(Colors.black),
-          overlayColor: WidgetStateProperty.all(Colors.teal.withOpacity(0.1)),
+          checkColor: MaterialStateProperty.all(Colors.black),
+          overlayColor: MaterialStateProperty.all(Colors.teal.withOpacity(0.1)),
           side: BorderSide(color: Colors.white.withOpacity(0.4), width: 1.5),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
         ),
-        // FIXED: Changed DialogTheme to DialogThemeData
         dialogTheme: DialogThemeData(
           backgroundColor: const Color(0xFF2C2C2C),
           shape:

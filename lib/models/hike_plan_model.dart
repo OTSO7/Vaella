@@ -1,9 +1,10 @@
-// lib/models/hike_plan_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
-import 'packing_list_item.dart'; // Import the new model
+import 'packing_list_item.dart';
+import 'daily_route_model.dart';
 
+// Enums and Extensions (HikeStatus, HikeDifficulty, PrepItemKeys) remain the same...
 // Enum for Hike Status
 enum HikeStatus { planned, upcoming, ongoing, completed, cancelled }
 
@@ -29,20 +30,18 @@ extension HikeDifficultyExtension on HikeDifficulty {
   }
 
   Color getColor(BuildContext context) {
-    // These colors align with a dark theme where primary/accent are vivid
     switch (this) {
       case HikeDifficulty.easy:
-        return Colors.green.shade400; // Bright green for easy
+        return Colors.green.shade400;
       case HikeDifficulty.moderate:
-        return Colors.blue.shade300; // Muted blue for moderate
+        return Colors.blue.shade300;
       case HikeDifficulty.challenging:
-        return Colors.orange.shade400; // Orange for challenging
+        return Colors.orange.shade400;
       case HikeDifficulty.expert:
-        return Colors.red.shade400; // Red for expert
+        return Colors.red.shade400;
       case HikeDifficulty.unknown:
       default:
-        return Colors.white
-            .withOpacity(0.6); // Subtle for unknown (like hintColor)
+        return Colors.white.withOpacity(0.6);
     }
   }
 }
@@ -87,7 +86,8 @@ class HikePlan {
   final Map<String, bool> preparationItems;
   final String? imageUrl;
   final HikeDifficulty difficulty;
-  final List<PackingListItem> packingList; // ADDED: Packing list items
+  final List<PackingListItem> packingList;
+  final List<DailyRoute> dailyRoutes;
 
   HikePlan({
     String? id,
@@ -103,7 +103,8 @@ class HikePlan {
     Map<String, bool>? preparationItems,
     this.imageUrl,
     this.difficulty = HikeDifficulty.unknown,
-    List<PackingListItem>? packingList, // ADDED
+    List<PackingListItem>? packingList,
+    List<DailyRoute>? dailyRoutes,
   })  : id = id ?? const Uuid().v4(),
         status = status ?? _calculateStatus(startDate, endDate, null),
         preparationItems = preparationItems ??
@@ -113,7 +114,8 @@ class HikePlan {
               PrepItemKeys.foodPlanner: false,
               PrepItemKeys.packingList: false,
             },
-        packingList = packingList ?? []; // Initialize with empty list
+        packingList = packingList ?? [],
+        dailyRoutes = dailyRoutes ?? [];
 
   static HikeStatus _calculateStatus(
       DateTime startDate, DateTime? endDate, HikeStatus? currentStatusIfAny) {
@@ -171,11 +173,18 @@ class HikePlan {
       });
     }
 
-    // Parse packing list
     List<PackingListItem> packingListFromDb = [];
     if (data['packingList'] != null && data['packingList'] is List) {
       packingListFromDb = (data['packingList'] as List)
           .map((item) => PackingListItem.fromMap(item as Map<String, dynamic>))
+          .toList();
+    }
+
+    List<DailyRoute> routesFromDb = [];
+    if (data['dailyRoutes'] != null && data['dailyRoutes'] is List) {
+      routesFromDb = (data['dailyRoutes'] as List)
+          .map((routeData) =>
+              DailyRoute.fromMap(routeData as Map<String, dynamic>))
           .toList();
     }
 
@@ -214,7 +223,8 @@ class HikePlan {
       preparationItems: prepItemsFromDb,
       imageUrl: data['imageUrl'] as String?,
       difficulty: difficulty,
-      packingList: packingListFromDb, // ADDED
+      packingList: packingListFromDb,
+      dailyRoutes: routesFromDb,
     );
   }
 
@@ -232,7 +242,8 @@ class HikePlan {
       'preparationItems': preparationItems,
       'imageUrl': imageUrl,
       'difficulty': difficulty.toString().split('.').last,
-      'packingList': packingList.map((item) => item.toMap()).toList(), // ADDED
+      'packingList': packingList.map((item) => item.toMap()).toList(),
+      'dailyRoutes': dailyRoutes.map((route) => route.toMap()).toList(),
     };
   }
 
@@ -256,7 +267,8 @@ class HikePlan {
     String? imageUrl,
     bool setImageUrlToNull = false,
     HikeDifficulty? difficulty,
-    List<PackingListItem>? packingList, // ADDED
+    List<PackingListItem>? packingList,
+    List<DailyRoute>? dailyRoutes,
   }) {
     HikeStatus newStatus;
     if (status != null) {
@@ -285,7 +297,8 @@ class HikePlan {
       preparationItems: preparationItems ?? this.preparationItems,
       imageUrl: setImageUrlToNull ? null : (imageUrl ?? this.imageUrl),
       difficulty: difficulty ?? this.difficulty,
-      packingList: packingList ?? this.packingList, // ADDED
+      packingList: packingList ?? this.packingList,
+      dailyRoutes: dailyRoutes ?? this.dailyRoutes,
     );
   }
 }

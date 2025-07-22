@@ -1,4 +1,3 @@
-// lib/pages/hike_plan_hub_page.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -11,7 +10,6 @@ import '../widgets/preparation_progress_modal.dart';
 import '../services/hike_plan_service.dart';
 import '../utils/app_colors.dart';
 
-// UUTTA: Käytetään samaa delegaattia kuin PackingListPage-sivulla
 class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   _SliverAppBarDelegate(this._tabBar);
   final TabBar _tabBar;
@@ -53,7 +51,6 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
   void initState() {
     super.initState();
     _currentPlan = widget.initialPlan;
-    // MUUTETTU: TabController kahdelle välilehdelle: "Hub" ja "Details"
     _tabController = TabController(length: 2, vsync: this);
   }
 
@@ -64,7 +61,6 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
     super.dispose();
   }
 
-  // Aputoiminnot ja logiikka pysyvät pääosin ennallaan.
   TextTheme _getAppTextTheme(BuildContext context) {
     final currentTheme = Theme.of(context);
     return GoogleFonts.latoTextTheme(currentTheme.textTheme).copyWith(
@@ -136,7 +132,6 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      // MUUTETTU: Koko runko on nyt Tab-pohjainen
       body: DefaultTabController(
         length: 2,
         child: CustomScrollView(
@@ -177,7 +172,6 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
     );
   }
 
-  // UUTTA: Päänäkymä, joka sisältää tärkeimmät toiminnot
   Widget _buildHubTab(BuildContext context, TextTheme appTextTheme) {
     bool isPreparationRelevant = _currentPlan.status == HikeStatus.planned ||
         _currentPlan.status == HikeStatus.upcoming ||
@@ -203,7 +197,6 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
     );
   }
 
-  // UUTTA: Yksityiskohtien sivu
   Widget _buildDetailsTab(BuildContext context, TextTheme appTextTheme) {
     final content = <Widget>[
       const SizedBox(height: 24),
@@ -244,8 +237,6 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
       children: content,
     );
   }
-
-  // --- UUDELLEENJÄRJESTELLYT JA HIENOSÄÄDETYT ALKUPEÄISET WIDGETIT ---
 
   Widget _buildSectionTitle(
       BuildContext context, String title, IconData icon, TextTheme appTextTheme,
@@ -306,21 +297,22 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
                         size: 20, color: AppColors.accentColor(context)),
                     const SizedBox(width: 12),
                     Expanded(
-                        child: RichText(
-                      text: TextSpan(
-                          style: appTextTheme.bodyLarge?.copyWith(
-                              color: AppColors.textColor(context)
-                                  .withOpacity(0.9)),
-                          children: [
-                            const TextSpan(text: 'Difficulty: '),
-                            TextSpan(
-                                text: _currentPlan.difficulty.toShortString(),
-                                style: TextStyle(
-                                    color: _currentPlan.difficulty
-                                        .getColor(context),
-                                    fontWeight: FontWeight.bold)),
-                          ]),
-                    )),
+                      child: RichText(
+                        text: TextSpan(
+                            style: appTextTheme.bodyLarge?.copyWith(
+                                color: AppColors.textColor(context)
+                                    .withOpacity(0.9)),
+                            children: [
+                              const TextSpan(text: 'Difficulty: '),
+                              TextSpan(
+                                  text: _currentPlan.difficulty.toShortString(),
+                                  style: TextStyle(
+                                      color: _currentPlan.difficulty
+                                          .getColor(context),
+                                      fontWeight: FontWeight.bold)),
+                            ]),
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -464,7 +456,6 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
     );
   }
 
-  // UUTTA: Muutettu teemaa ja värejä vastaamaan muiden sivujen ilmettä
   Widget _buildPlannerActionsGrid(BuildContext context) {
     final theme = Theme.of(context);
     final actions = [
@@ -494,8 +485,13 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
       {
         'title': "Route Plan",
         'icon': Icons.map_outlined,
-        'onPressed': () => ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Route Plan: Coming soon!")))
+        'onPressed': () {
+          GoRouter.of(context).pushNamed(
+            'routePlannerPage',
+            pathParameters: {'planId': _currentPlan.id},
+            extra: _currentPlan,
+          );
+        },
       },
       {
         'title': "Meal Plan",
@@ -556,7 +552,6 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
     );
   }
 
-  // UUTTA: Lasimainen SliverAppBar, joka on linjassa PackingListPage-näkymän kanssa
   SliverAppBar _buildHubSliverAppBar(
       BuildContext context, TextTheme appTextTheme) {
     final theme = Theme.of(context);
@@ -569,7 +564,7 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
       pinned: true,
       stretch: true,
       elevation: 0,
-      backgroundColor: Colors.transparent, // Tärkeä lasimaisuudelle
+      backgroundColor: Colors.transparent,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded),
         onPressed: () => GoRouter.of(context).pop(),
@@ -582,7 +577,6 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
         background: Stack(
           fit: StackFit.expand,
           children: [
-            // Taustakuva tai gradientti
             if (hasImage)
               CachedNetworkImage(
                 imageUrl: _currentPlan.imageUrl!,
@@ -594,8 +588,6 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
               )
             else
               Container(color: theme.colorScheme.surface),
-
-            // Tumma gradientti kuvan päällä luettavuuden parantamiseksi
             Container(
               decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -608,18 +600,14 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
                       end: Alignment.bottomCenter,
                       stops: const [0.0, 0.5, 1.0])),
             ),
-
-            // Lasimainen sumennus skrollatessa
             ClipRect(
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 2, sigmaY: 2),
                 child: Container(color: Colors.black.withOpacity(0.1)),
               ),
             ),
-
-            // Sisältö (Otsikko, sijainti, päivämäärä)
             Positioned(
-              bottom: 65, // Jättää tilaa TabBarille
+              bottom: 65,
               left: 20,
               right: 20,
               child: Column(
