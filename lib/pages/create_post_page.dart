@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -25,6 +26,7 @@ class CreatePostPage extends StatefulWidget {
 }
 
 class _CreatePostPageState extends State<CreatePostPage> {
+  // --- STATE VARIABLES ---
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _captionController = TextEditingController();
@@ -39,17 +41,17 @@ class _CreatePostPageState extends State<CreatePostPage> {
   DateTime? _endDate;
   late PostVisibility _selectedVisibility;
   final List<String> _selectedSharedData = [];
-
   double? _latitude;
   double? _longitude;
+  bool _isLoading = false;
 
+  // --- LOCATION SEARCH STATE ---
   List<Map<String, dynamic>> _locationSuggestions = [];
   Timer? _debounce;
   final ValueNotifier<bool> _isSearchingLocation = ValueNotifier(false);
   final FocusNode _locationFocusNode = FocusNode();
   String _currentSearchQuery = '';
-
-  bool _isLoading = false;
+  Position? _currentPosition;
 
   @override
   void initState() {
@@ -57,6 +59,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
     _selectedVisibility = widget.initialVisibility;
     _locationController.addListener(_onLocationChanged);
     _locationFocusNode.addListener(_onFocusChanged);
+    _getCurrentLocation();
   }
 
   @override
@@ -76,12 +79,31 @@ class _CreatePostPageState extends State<CreatePostPage> {
     super.dispose();
   }
 
+  // --- LOCATION SEARCH LOGIC ---
+
+  Future<void> _getCurrentLocation() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return;
+      }
+      if (permission == LocationPermission.deniedForever) return;
+
+      _currentPosition = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high);
+    } catch (e) {
+      print("Could not get location: $e");
+    }
+  }
+
   void _onFocusChanged() {
     if (!mounted) return;
     if (!_locationFocusNode.hasFocus && _locationSuggestions.isNotEmpty) {
-      setState(() {
-        _locationSuggestions = [];
-      });
+      setState(() => _locationSuggestions = []);
     }
   }
 
@@ -89,7 +111,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
     final query = _locationController.text.trim();
     if (query == _currentSearchQuery) return;
 
-    // Kun käyttäjä alkaa kirjoittaa uudelleen, nollaa koordinaatit
     if (_latitude != null) {
       setState(() {
         _latitude = null;
@@ -99,7 +120,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
     _currentSearchQuery = query;
 
     if (_debounce?.isActive ?? false) _debounce!.cancel();
-    _debounce = Timer(const Duration(milliseconds: 400), () {
+    _debounce = Timer(const Duration(milliseconds: 500), () {
       if (query == _locationController.text.trim() && query.length > 2) {
         _searchLocationSuggestions(query);
       } else if (query.isEmpty) {
@@ -111,20 +132,43 @@ class _CreatePostPageState extends State<CreatePostPage> {
   Future<void> _searchLocationSuggestions(String query) async {
     if (!mounted) return;
     _isSearchingLocation.value = true;
-    final url = Uri.parse(
-        'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=json&limit=5&addressdetails=1&countrycodes=fi&accept-language=fi');
 
     try {
-      final response =
-          await http.get(url, headers: {'User-Agent': 'TrekNoteApp/1.0'});
+      final natureQuery = '$query hiking national park luontokohde';
+      final priorityUrl = _buildSearchUrl(natureQuery, limit: 7);
+      final priorityResponse = await http
+          .get(priorityUrl, headers: {'User-Agent': 'TrekNoteApp/1.0'});
+
+      final generalUrl = _buildSearchUrl(query, limit: 3);
+      final generalResponse = await http
+          .get(generalUrl, headers: {'User-Agent': 'TrekNoteApp/1.0'});
+
       if (!mounted) return;
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        setState(() {
-          _locationSuggestions =
-              data.map((item) => item as Map<String, dynamic>).toList();
-        });
+
+      List<Map<String, dynamic>> priorityResults = (priorityResponse
+                  .statusCode ==
+              200)
+          ? List<Map<String, dynamic>>.from(json.decode(priorityResponse.body))
+          : [];
+
+      List<Map<String, dynamic>> generalResults = (generalResponse.statusCode ==
+              200)
+          ? List<Map<String, dynamic>>.from(json.decode(generalResponse.body))
+          : [];
+
+      final combinedResults = <int, Map<String, dynamic>>{};
+      for (var result in [...priorityResults, ...generalResults]) {
+        if (priorityResults.any((p) => p['osm_id'] == result['osm_id'])) {
+          result['score_bonus'] = true;
+        }
+        combinedResults[result['osm_id']] = result;
       }
+
+      final sortedResults = combinedResults.values.toList();
+      sortedResults.sort((a, b) =>
+          _getRelevanceScore(b, query).compareTo(_getRelevanceScore(a, query)));
+
+      setState(() => _locationSuggestions = sortedResults);
     } catch (e) {
       print("Location search error: $e");
     } finally {
@@ -132,11 +176,48 @@ class _CreatePostPageState extends State<CreatePostPage> {
     }
   }
 
+  Uri _buildSearchUrl(String query, {int limit = 5}) {
+    String url =
+        'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=json&limit=$limit&addressdetails=1&extratags=1&namedetails=1&accept-language=fi,en';
+    if (_currentPosition != null) {
+      url +=
+          '&viewbox=${_currentPosition!.longitude - 1},${_currentPosition!.latitude - 1},${_currentPosition!.longitude + 1},${_currentPosition!.latitude + 1}&bounded=1';
+    }
+    return Uri.parse(url);
+  }
+
+  int _getRelevanceScore(Map<String, dynamic> suggestion, String query) {
+    int score = 0;
+    String? category = suggestion['category'];
+    String? type = suggestion['type'];
+    String displayName = (suggestion['display_name'] ?? '').toLowerCase();
+
+    if (suggestion['score_bonus'] == true) {
+      score += 200;
+    }
+
+    if (category == 'tourism' ||
+        category == 'natural' ||
+        category == 'leisure' ||
+        category == 'historic') {
+      score += 100;
+    } else if (category == 'boundary' && type == 'administrative') {
+      score += 10;
+    } else if (category == 'highway') {
+      score -= 50;
+    }
+
+    if (displayName.contains(query.toLowerCase())) {
+      score += 20;
+    }
+
+    return score;
+  }
+
   void _selectLocationSuggestion(Map<String, dynamic> suggestion) {
     if (!mounted) return;
-    String displayName = suggestion['display_name'] ?? 'Unknown Location';
     setState(() {
-      _locationController.text = displayName.split(',').take(2).join(',');
+      _locationController.text = _formatSuggestionName(suggestion);
       _latitude = double.tryParse(suggestion['lat'].toString());
       _longitude = double.tryParse(suggestion['lon'].toString());
       _locationSuggestions = [];
@@ -145,11 +226,72 @@ class _CreatePostPageState extends State<CreatePostPage> {
     _locationFocusNode.unfocus();
   }
 
+  String _formatSuggestionName(Map<String, dynamic> suggestion) {
+    final address = suggestion['address'] as Map<String, dynamic>? ?? {};
+    final namedetails =
+        suggestion['namedetails'] as Map<String, dynamic>? ?? {};
+
+    String? primaryName = namedetails['name'] ??
+        address['tourism'] ??
+        address['natural'] ??
+        address['historic'] ??
+        address['leisure'] ??
+        address['amenity'] ??
+        address['shop'];
+
+    primaryName ??= address['road'] ?? address['neighbourhood'];
+
+    String? contextName = address['city'] ??
+        address['town'] ??
+        address['village'] ??
+        address['municipality'];
+
+    if (primaryName != null &&
+        contextName != null &&
+        primaryName.toLowerCase() != contextName.toLowerCase()) {
+      return '$primaryName, $contextName';
+    } else if (primaryName != null) {
+      return (address['country'] != null &&
+              primaryName.toLowerCase() == contextName?.toLowerCase())
+          ? '$primaryName, ${address['country']}'
+          : primaryName;
+    } else if (contextName != null) {
+      return contextName;
+    }
+
+    return suggestion['display_name']?.toString().split(',').first ??
+        'Unknown Location';
+  }
+
+  IconData _getIconForSuggestionType(Map<String, dynamic> suggestion) {
+    String? category = suggestion['category'];
+    String? type = suggestion['type'];
+
+    switch (category) {
+      case 'natural':
+        return Icons.eco_outlined;
+      case 'tourism':
+        return Icons.attractions_outlined;
+      case 'boundary':
+        return Icons.public_outlined;
+      case 'highway':
+        return Icons.signpost_outlined;
+      case 'amenity':
+        return Icons.local_cafe_outlined;
+      case 'leisure':
+        return Icons.hiking_outlined;
+      case 'historic':
+        return Icons.museum_outlined;
+      default:
+        return Icons.location_on_outlined;
+    }
+  }
+
+  // --- POST CREATION & SAVING LOGIC ---
+
   Future<void> _createPost() async {
     final theme = Theme.of(context);
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
     if (_startDate == null || _endDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Please select the start and end dates for the hike.',
@@ -170,20 +312,16 @@ class _CreatePostPageState extends State<CreatePostPage> {
     setState(() => _isLoading = true);
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     if (authProvider.userProfile == null) {
-      setState(() => _isLoading = false);
-      _showOutcomeDialog(
-          isSuccess: false,
-          title: 'Error',
-          message: 'User profile not found.',
-          onDismissed: () {});
+      _showErrorDialog('User profile not found.');
       return;
     }
 
-    String? uploadedImageUrl;
     try {
+      String? uploadedImageUrl;
       if (_imageFile != null) {
         uploadedImageUrl = await _uploadImageInternal(_imageFile!);
       }
+
       final newPostRef = FirebaseFirestore.instance.collection('posts').doc();
       final newPost = Post(
         id: newPostRef.id,
@@ -214,35 +352,18 @@ class _CreatePostPageState extends State<CreatePostPage> {
         commentCount: 0,
         sharedData: _selectedSharedData,
       );
+
       await newPostRef.set(newPost.toFirestore());
       await authProvider.handlePostCreationSuccess();
-      if (mounted) {
-        _showOutcomeDialog(
-          isSuccess: true,
-          title: 'Success!',
-          message: 'New hike post created.',
-          onDismissed: () {
-            if (mounted) {
-              Navigator.of(context).pop();
-            }
-          },
-        );
-      }
+      _showSuccessDialog();
     } catch (e) {
-      if (mounted) {
-        _showOutcomeDialog(
-          isSuccess: false,
-          title: 'Error Creating Post',
-          message: e.toString().replaceFirst("Exception: ", ""),
-          onDismissed: () {},
-        );
-      }
+      _showErrorDialog(e.toString());
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
+
+  // --- UI & WIDGETS ---
 
   @override
   Widget build(BuildContext context) {
@@ -359,18 +480,16 @@ class _CreatePostPageState extends State<CreatePostPage> {
                             theme: theme,
                             suffixIcon: ValueListenableBuilder<bool>(
                               valueListenable: _isSearchingLocation,
-                              builder: (context, isSearching, child) {
-                                return isSearching
-                                    ? const Padding(
-                                        padding: EdgeInsets.all(12.0),
-                                        child: SizedBox(
-                                            height: 20,
-                                            width: 20,
-                                            child: CircularProgressIndicator(
-                                                strokeWidth: 2.0)),
-                                      )
-                                    : const SizedBox.shrink();
-                              },
+                              builder: (context, isSearching, child) =>
+                                  isSearching
+                                      ? const Padding(
+                                          padding: EdgeInsets.all(12.0),
+                                          child: SizedBox(
+                                              height: 20,
+                                              width: 20,
+                                              child: CircularProgressIndicator(
+                                                  strokeWidth: 2.0)))
+                                      : const SizedBox.shrink(),
                             ),
                           ),
                           validator: (value) {
@@ -383,7 +502,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                         ),
                         if (_locationSuggestions.isNotEmpty)
                           Container(
-                            constraints: const BoxConstraints(maxHeight: 160),
+                            constraints: const BoxConstraints(maxHeight: 200),
                             decoration: BoxDecoration(
                                 color: theme.cardColor,
                                 borderRadius: const BorderRadius.vertical(
@@ -396,7 +515,11 @@ class _CreatePostPageState extends State<CreatePostPage> {
                               itemBuilder: (context, index) {
                                 final suggestion = _locationSuggestions[index];
                                 return ListTile(
-                                  title: Text(suggestion['display_name'] ?? ''),
+                                  leading: Icon(
+                                      _getIconForSuggestionType(suggestion),
+                                      color: theme.colorScheme.secondary),
+                                  title:
+                                      Text(_formatSuggestionName(suggestion)),
                                   dense: true,
                                   onTap: () =>
                                       _selectLocationSuggestion(suggestion),
@@ -649,7 +772,32 @@ class _CreatePostPageState extends State<CreatePostPage> {
     );
   }
 
-  // Helper methods
+  // --- HELPER METHODS ---
+
+  void _showErrorDialog(String message) {
+    if (mounted) {
+      _showOutcomeDialog(
+        isSuccess: false,
+        title: 'Error',
+        message: message.replaceFirst("Exception: ", ""),
+        onDismissed: () {},
+      );
+    }
+  }
+
+  void _showSuccessDialog() {
+    if (mounted) {
+      _showOutcomeDialog(
+        isSuccess: true,
+        title: 'Success!',
+        message: 'New hike post created.',
+        onDismissed: () {
+          if (mounted) Navigator.of(context).pop();
+        },
+      );
+    }
+  }
+
   Future<void> _pickImage() async {
     if (_isLoading) return;
     final ImagePicker picker = ImagePicker();
@@ -660,22 +808,14 @@ class _CreatePostPageState extends State<CreatePostPage> {
           maxWidth: 1920,
           maxHeight: 1080);
       if (image != null) {
-        setState(() {
-          _imageFile = image;
-        });
+        setState(() => _imageFile = image);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to pick image: ${e.toString()}',
-                style: GoogleFonts.lato()),
-            backgroundColor: Theme.of(context).colorScheme.error,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            margin: const EdgeInsets.all(10),
-          ),
+              content: Text('Failed to pick image: ${e.toString()}',
+                  style: GoogleFonts.lato())),
         );
       }
     }
@@ -690,8 +830,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
       initialDate: isStart
           ? (_startDate ?? DateTime.now())
           : (_endDate ?? _startDate ?? DateTime.now()),
-      firstDate: DateTime(DateTime.now().year - 5),
-      lastDate: DateTime(DateTime.now().year + 5),
+      firstDate: DateTime(DateTime.now().year - 10),
+      lastDate: DateTime(DateTime.now().year + 10),
       builder: (context, child) {
         return Theme(
           data: theme.copyWith(
@@ -797,16 +937,10 @@ class _CreatePostPageState extends State<CreatePostPage> {
   }) async {
     if (!mounted) return;
     final theme = Theme.of(context);
-    return showDialog<void>(
+    await showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext dialogContext) {
-        Future.delayed(const Duration(seconds: 2, milliseconds: 500), () {
-          if (Navigator.of(dialogContext).canPop()) {
-            Navigator.of(dialogContext).pop();
-          }
-          onDismissed();
-        });
         return AlertDialog(
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -829,6 +963,11 @@ class _CreatePostPageState extends State<CreatePostPage> {
         );
       },
     );
+    await Future.delayed(const Duration(seconds: 2, milliseconds: 500));
+    if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
+    onDismissed();
   }
 
   Widget _buildSectionTitle(String title, IconData icon) {

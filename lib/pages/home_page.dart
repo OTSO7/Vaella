@@ -26,15 +26,14 @@ class _HomePageState extends State<HomePage> {
         .collection('posts')
         .where('visibility', isEqualTo: 'public')
         .where('latitude', isNotEqualTo: null)
+        // MUUTETTU: Lisätty vaaditut orderBy-ehdot. Tämä vaatii uuden Firestore-indeksin!
+        .orderBy('latitude')
+        .orderBy('timestamp', descending: true)
         .snapshots()
-        .map((snapshot) {
-      var posts = snapshot.docs
-          .map((doc) =>
-              Post.fromFirestore(doc as DocumentSnapshot<Map<String, dynamic>>))
-          .toList();
-      posts.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      return posts;
-    });
+        .map((snapshot) => snapshot.docs
+            .map((doc) => Post.fromFirestore(
+                doc as DocumentSnapshot<Map<String, dynamic>>))
+            .toList());
   }
 
   void _showRecentPostsList(BuildContext context, List<Post> posts) {
@@ -123,7 +122,8 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Image.asset('assets/images/white2.png', height: 60),
+        title: Image.asset('assets/images/white2.png',
+            height: 35, fit: BoxFit.contain),
         centerTitle: true,
         backgroundColor: theme.scaffoldBackgroundColor.withOpacity(0.85),
         elevation: 0,
@@ -161,8 +161,19 @@ class _HomePageState extends State<HomePage> {
             stream: _getPublicPostsStream(),
             builder: (context, snapshot) {
               if (snapshot.hasError) {
-                print("Map stream error: ${snapshot.error}");
-                return const SizedBox.shrink();
+                // Tämä printtaa virheen konsoliin, josta voit kopioida indeksin luontilinkin
+                print("⛔️ Firestore Query Error: ${snapshot.error}");
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(
+                      "Could not load posts. A Firestore index is likely required. Please check the console log for an error link.",
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(color: theme.colorScheme.error),
+                    ),
+                  ),
+                );
               }
               if (!snapshot.hasData || snapshot.data!.isEmpty) {
                 return const SizedBox.shrink();
