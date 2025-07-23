@@ -1,92 +1,133 @@
-// lib/models/daily_route_model.dart
-
-import 'package:flutter/material.dart'; // LISÄTTY
+import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
-import '../pages/route_planner_page.dart';
+import 'dart:convert';
+
+// TÄRKEÄÄ: RouteSummary-luokka on nyt määritelty tässä tiedostossa.
+class RouteSummary {
+  final double distance;
+  final double duration;
+  final double ascent;
+  final double descent;
+
+  RouteSummary({
+    this.distance = 0.0,
+    this.duration = 0.0,
+    this.ascent = 0.0,
+    this.descent = 0.0,
+  });
+
+  RouteSummary operator +(RouteSummary other) {
+    return RouteSummary(
+      distance: distance + other.distance,
+      duration: duration + other.duration,
+      ascent: ascent + other.ascent,
+      descent: descent + other.descent,
+    );
+  }
+
+  factory RouteSummary.fromMap(Map<String, dynamic> map) {
+    return RouteSummary(
+      distance: (map['distance'] as num?)?.toDouble() ?? 0.0,
+      duration: (map['duration'] as num?)?.toDouble() ?? 0.0,
+      ascent: (map['ascent'] as num?)?.toDouble() ?? 0.0,
+      descent: (map['descent'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'distance': distance,
+      'duration': duration,
+      'ascent': ascent,
+      'descent': descent,
+    };
+  }
+}
 
 class DailyRoute {
   final int dayIndex;
-  List<LatLng> points;
-  List<LatLng> userClickedPoints;
-  RouteSummary summary;
-  String notes;
-  int colorValue; // LISÄTTY: Tallenentaan värin arvo kokonaislukuna
+  final List<LatLng> points; // Reitityspalvelun palauttamat tarkat pisteet
+  final String? notes;
+  final int colorValue;
+  final RouteSummary summary;
 
-  // LISÄTTY: Kätevä getteri, joka muuntaa tallennetun luvun takaisin väriksi
-  Color get routeColor => Color(colorValue);
+  // MUUTOS: Lisätty lista käyttäjän klikkaamille pisteille.
+  // Tämä on väliaikaista dataa kartan muokkausta varten, EI tallenneta Firestoreen.
+  List<LatLng> userClickedPoints;
 
   DailyRoute({
     required this.dayIndex,
     required this.points,
-    List<LatLng>? userClickedPoints,
+    this.notes,
+    required this.colorValue,
     RouteSummary? summary,
-    this.notes = '',
-    int? colorValue, // LISÄTTY
-  })  : userClickedPoints = userClickedPoints ?? [],
-        summary = summary ?? RouteSummary(),
-        // LISÄTTY: Annetaan oletusväri, jos mitään ei ole määritelty
-        colorValue = colorValue ?? Colors.blue.value;
+    List<LatLng>? userClickedPoints,
+  })  : summary = summary ?? RouteSummary(),
+        userClickedPoints = userClickedPoints ?? [];
+
+  Color get routeColor => Color(colorValue);
+
+  DailyRoute copyWith({
+    int? dayIndex,
+    List<LatLng>? points,
+    String? notes,
+    int? colorValue,
+    RouteSummary? summary,
+    List<LatLng>? userClickedPoints,
+  }) {
+    return DailyRoute(
+      dayIndex: dayIndex ?? this.dayIndex,
+      points: points ?? List.from(this.points),
+      notes: notes ?? this.notes,
+      colorValue: colorValue ?? this.colorValue,
+      summary: summary ?? this.summary,
+      userClickedPoints: userClickedPoints ?? List.from(this.userClickedPoints),
+    );
+  }
 
   factory DailyRoute.fromFirestore(Map<String, dynamic> data) {
-    List<dynamic> pointsData = data['points'] ?? [];
-    List<dynamic> userClickedPointsData = data['userClickedPoints'] ?? [];
+    List<LatLng> points = [];
+    if (data['points'] != null && data['points'] is String) {
+      final decoded = json.decode(data['points']) as List;
+      points =
+          decoded.map((p) => LatLng(p[0] as double, p[1] as double)).toList();
+    }
+
+    // userClickedPoints ladataan samoista pisteistä aluksi, jotta muokkaus voi alkaa
+    List<LatLng> userPoints = [];
+    if (data['userClickedPoints'] != null &&
+        data['userClickedPoints'] is String) {
+      final decoded = json.decode(data['userClickedPoints']) as List;
+      userPoints =
+          decoded.map((p) => LatLng(p[0] as double, p[1] as double)).toList();
+    }
 
     return DailyRoute(
       dayIndex: data['dayIndex'] ?? 0,
-      points:
-          pointsData.map((p) => LatLng(p['latitude'], p['longitude'])).toList(),
-      userClickedPoints: userClickedPointsData
-          .map((p) => LatLng(p['latitude'], p['longitude']))
-          .toList(),
+      points: points,
       summary: data['summary'] != null
-          ? RouteSummary(
-              distance:
-                  (data['summary']['distance'] as num?)?.toDouble() ?? 0.0,
-              duration:
-                  (data['summary']['duration'] as num?)?.toDouble() ?? 0.0,
-              ascent: (data['summary']['ascent'] as num?)?.toDouble() ?? 0.0,
-              descent: (data['summary']['descent'] as num?)?.toDouble() ?? 0.0,
-            )
+          ? RouteSummary.fromMap(data['summary'])
           : RouteSummary(),
-      notes: data['notes'] ?? '',
-      colorValue: data['colorValue'] as int?, // LISÄTTY
+      notes: data['notes'],
+      colorValue: data['colorValue'] ?? Colors.blue.value,
+      userClickedPoints: userPoints,
     );
   }
 
   Map<String, dynamic> toFirestore() {
+    final encodedPoints =
+        json.encode(points.map((p) => [p.latitude, p.longitude]).toList());
+    final encodedUserPoints = json.encode(
+        userClickedPoints.map((p) => [p.latitude, p.longitude]).toList());
+
     return {
       'dayIndex': dayIndex,
-      'points': points
-          .map((p) => {'latitude': p.latitude, 'longitude': p.longitude})
-          .toList(),
-      'userClickedPoints': userClickedPoints
-          .map((p) => {'latitude': p.latitude, 'longitude': p.longitude})
-          .toList(),
-      'summary': {
-        'distance': summary.distance,
-        'duration': summary.duration,
-        'ascent': summary.ascent,
-        'descent': summary.descent,
-      },
+      'points': encodedPoints,
+      'summary': summary.toMap(),
       'notes': notes,
-      'colorValue': colorValue, // LISÄTTY
+      'colorValue': colorValue,
+      'userClickedPoints':
+          encodedUserPoints, // Tallenetaan myös klikatut pisteet
     };
-  }
-
-  DailyRoute copyWith({
-    List<LatLng>? points,
-    List<LatLng>? userClickedPoints,
-    RouteSummary? summary,
-    String? notes,
-    int? colorValue, // LISÄTTY
-  }) {
-    return DailyRoute(
-      dayIndex: dayIndex,
-      points: points ?? List.from(this.points),
-      userClickedPoints: userClickedPoints ?? List.from(this.userClickedPoints),
-      summary: summary ?? this.summary,
-      notes: notes ?? this.notes,
-      colorValue: colorValue ?? this.colorValue, // LISÄTTY
-    );
   }
 }

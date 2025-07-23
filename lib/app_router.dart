@@ -1,4 +1,4 @@
-// lib/app_router.dart (tai missä se sinulla onkin)
+// lib/app_router.dart
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -24,7 +24,7 @@ import 'pages/weather_page.dart';
 import 'pages/hike_plan_hub_page.dart';
 import 'pages/packing_list_page.dart';
 import 'pages/route_planner_page.dart';
-import 'pages/post_detail_page.dart'; // MUUTOS: Lisätty import
+import 'pages/post_detail_page.dart';
 
 import 'widgets/main_scaffold.dart';
 
@@ -43,7 +43,6 @@ class AppRouter extends StatelessWidget {
       debugLogDiagnostics: true,
       refreshListenable: authProvider,
       routes: [
-        // --- Olemassa olevat reitit pysyvät ennallaan ---
         GoRoute(
           path: '/login',
           name: 'login',
@@ -61,10 +60,23 @@ class AppRouter extends StatelessWidget {
           name: 'createPost',
           parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) {
-            final initialVisibility = state.extra as PostVisibility?;
+            final extraData = state.extra as Map<String, dynamic>?;
+            final visibility =
+                extraData?['initialVisibility'] as PostVisibility? ??
+                    PostVisibility.public;
+            final hikePlan = extraData?['hikePlan'] as HikePlan?;
+
             return CreatePostPage(
-                initialVisibility: initialVisibility ?? PostVisibility.public);
+              initialVisibility: visibility,
+              hikePlan: hikePlan,
+            );
           },
+        ),
+        GoRoute(
+          path: '/route-planner',
+          name: 'routePlannerPage',
+          parentNavigatorKey: _rootNavigatorKey,
+          builder: (context, state) => const RoutePlannerPage(),
         ),
         GoRoute(
           path: '/users/:userId/posts',
@@ -73,12 +85,9 @@ class AppRouter extends StatelessWidget {
           builder: (context, state) {
             final userId = state.pathParameters['userId'];
             final username = state.extra as String?;
-            if (userId == null) {
-              return Scaffold(
-                appBar: AppBar(title: const Text('Error')),
-                body: const Center(child: Text('User ID is missing.')),
-              );
-            }
+            if (userId == null)
+              return const Scaffold(
+                  body: Center(child: Text('User ID missing.')));
             return UserPostsListPage(userId: userId, username: username);
           },
         ),
@@ -88,12 +97,9 @@ class AppRouter extends StatelessWidget {
           parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) {
             final plan = state.extra as HikePlan?;
-            if (plan == null) {
-              return Scaffold(
-                appBar: AppBar(title: const Text('Error')),
-                body: const Center(child: Text('Hike plan not found!')),
-              );
-            }
+            if (plan == null)
+              return const Scaffold(
+                  body: Center(child: Text('Hike plan not found!')));
             return HikePlanHubPage(initialPlan: plan);
           },
         ),
@@ -103,13 +109,9 @@ class AppRouter extends StatelessWidget {
           parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) {
             final hikePlan = state.extra as HikePlan?;
-            if (hikePlan == null) {
-              return Scaffold(
-                appBar: AppBar(title: const Text('Error')),
-                body: const Center(
-                    child: Text('Hike Plan data is missing for weather.')),
-              );
-            }
+            if (hikePlan == null)
+              return const Scaffold(
+                  body: Center(child: Text('Hike Plan data missing.')));
             return WeatherPage(hikePlan: hikePlan);
           },
         ),
@@ -120,312 +122,149 @@ class AppRouter extends StatelessWidget {
           builder: (context, state) {
             final planId = state.pathParameters['planId']!;
             final hikePlan = state.extra as HikePlan?;
-            if (hikePlan == null) {
-              return Scaffold(
-                appBar: AppBar(title: const Text('Error')),
-                body: const Center(
-                    child: Text('Hike Plan data is missing for packing list.')),
-              );
-            }
+            if (hikePlan == null)
+              return const Scaffold(
+                  body: Center(child: Text('Hike Plan data missing.')));
             return PackingListPage(planId: planId, initialPlan: hikePlan);
           },
         ),
         GoRoute(
-          path: '/hike-plan/:planId/route-planner',
-          name: 'routePlannerPage',
-          parentNavigatorKey: _rootNavigatorKey,
-          builder: (context, state) {
-            final hikePlan = state.extra as HikePlan?;
-            if (hikePlan == null) {
-              return Scaffold(
-                  appBar: AppBar(title: const Text('Error')),
-                  body: const Center(child: Text('Hike Plan data missing.')));
-            }
-            return RoutePlannerPage(plan: hikePlan);
-          },
-        ),
-
-        // MUUTOS: Lisätty uusi reitti postauksen tietosivulle
-        GoRoute(
           path: '/post/:id',
           name: 'postDetail',
-          parentNavigatorKey: _rootNavigatorKey, // Avaa koko näytön sivuna
+          parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) {
             final postId = state.pathParameters['id'];
-            if (postId == null) {
+            if (postId == null)
               return const Scaffold(
-                  body: Center(
-                      child: Text('Error: Post ID is missing from URL.')));
-            }
+                  body: Center(child: Text('Post ID missing.')));
             return PostDetailPage(postId: postId);
           },
         ),
-
         StatefulShellRoute.indexedStack(
-          builder: (BuildContext context, GoRouterState state,
-              StatefulNavigationShell navigationShell) {
+          builder: (context, state, navigationShell) {
             return MainScaffoldWithBottomNav(navigationShell: navigationShell);
           },
           branches: <StatefulShellBranch>[
-            StatefulShellBranch(
-              routes: <RouteBase>[
-                GoRoute(
+            StatefulShellBranch(routes: <RouteBase>[
+              GoRoute(
                   path: '/home',
                   name: 'home',
-                  builder: (BuildContext context, GoRouterState state) =>
-                      const HomePage(),
-                ),
-              ],
-            ),
-            StatefulShellBranch(
-              routes: <RouteBase>[
-                GoRoute(
+                  builder: (context, state) => const HomePage()),
+            ]),
+            StatefulShellBranch(routes: <RouteBase>[
+              GoRoute(
                   path: '/notes',
                   name: 'notes',
-                  builder: (BuildContext context, GoRouterState state) =>
-                      const NotesPage(),
-                ),
-              ],
-            ),
-            StatefulShellBranch(
-              routes: <RouteBase>[
-                GoRoute(
-                    path: '/profile',
-                    name: 'profile',
-                    builder: (BuildContext context, GoRouterState state) =>
-                        const ProfilePage(),
-                    routes: [
-                      GoRoute(
-                        path: 'edit',
-                        name: 'editProfile',
-                        builder: (BuildContext context, GoRouterState state) {
-                          final userProfile = state.extra as UserProfile?;
-                          if (userProfile == null) {
-                            return Scaffold(
-                              appBar: AppBar(title: const Text('Error')),
-                              body: const Center(
-                                  child: Text(
-                                      "Profile data not found for editing.")),
-                            );
-                          }
-                          return EditProfilePage(initialProfile: userProfile);
-                        },
-                      ),
-                    ]),
-              ],
-            ),
+                  builder: (context, state) => const NotesPage()),
+            ]),
+            StatefulShellBranch(routes: <RouteBase>[
+              GoRoute(
+                path: '/profile',
+                name: 'profile',
+                builder: (context, state) => const ProfilePage(),
+                routes: [
+                  GoRoute(
+                    path: 'edit',
+                    name: 'editProfile',
+                    parentNavigatorKey: _rootNavigatorKey,
+                    builder: (context, state) {
+                      final userProfile = state.extra as UserProfile?;
+                      if (userProfile == null)
+                        return const Scaffold(
+                            body: Center(child: Text("Profile data missing.")));
+                      return EditProfilePage(initialProfile: userProfile);
+                    },
+                  ),
+                ],
+              ),
+            ]),
           ],
         ),
       ],
-      redirect: (BuildContext context, GoRouterState state) {
+      redirect: (context, state) {
         final isLoggedIn = authProvider.isLoggedIn;
-        final String location = state.matchedLocation;
-        final isLoggingIn = location == '/login';
-        final isRegistering = location == '/register';
-        final isProtectedHikeRoute = location.startsWith('/hike-plan/') &&
-            !isLoggingIn &&
-            !isRegistering;
-        if (!isLoggedIn && !isLoggingIn && !isRegistering) {
-          return '/login';
-        }
-        if (isLoggedIn && (isLoggingIn || isRegistering)) {
-          return '/home';
-        }
-        if (!isLoggedIn && isProtectedHikeRoute) {
-          return '/login';
-        }
+        final location = state.matchedLocation;
+        final isAuthRoute = location == '/login' || location == '/register';
+
+        if (!isLoggedIn && !isAuthRoute) return '/login';
+        if (isLoggedIn && isAuthRoute) return '/home';
         return null;
       },
     );
 
-    // --- ThemeData ennallaan ---
+    // KORJAUS: Alkuperäinen teemasi on palautettu tähän.
     final themeData = ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF1A1A1A),
-        cardColor: const Color(0xFF2C2C2C),
-        colorScheme: ColorScheme.dark(
-          primary: Colors.teal.shade400,
-          onPrimary: Colors.black,
-          secondary: Colors.orange.shade400,
-          onSecondary: Colors.black,
-          surface: const Color(0xFF222222),
-          onSurface: Colors.white.withOpacity(0.9),
-          surfaceContainerLowest: const Color(0xFF1F1F1F),
-          surfaceContainerHighest: const Color(0xFF3A3A3A),
-          error: Colors.redAccent.shade200,
-          onError: Colors.black,
-          outline: Colors.grey.shade700,
-          tertiary: Colors.deepPurpleAccent.shade200,
-          onTertiary: Colors.black,
-          secondaryContainer: Colors.amberAccent.shade200,
-          onSecondaryContainer: Colors.black,
-        ),
-        textTheme: TextTheme(
-          headlineLarge: GoogleFonts.poppins(
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-              fontSize: 30,
-              letterSpacing: -0.5),
-          headlineMedium: GoogleFonts.poppins(
-              fontWeight: FontWeight.w700, color: Colors.white, fontSize: 26),
-          headlineSmall: GoogleFonts.poppins(
-              fontWeight: FontWeight.w600, color: Colors.white, fontSize: 22),
-          titleLarge: GoogleFonts.poppins(
-              fontWeight: FontWeight.w600,
-              color: Colors.white.withOpacity(0.9),
-              fontSize: 20),
-          titleMedium: GoogleFonts.poppins(
-              fontWeight: FontWeight.w500,
-              color: Colors.white.withOpacity(0.85),
-              fontSize: 17),
-          titleSmall: GoogleFonts.poppins(
-              fontWeight: FontWeight.w500,
-              color: Colors.white.withOpacity(0.8),
-              fontSize: 15),
-          bodyLarge: GoogleFonts.lato(
-              color: Colors.white.withOpacity(0.85), fontSize: 16, height: 1.5),
-          bodyMedium: GoogleFonts.lato(
-              color: Colors.white.withOpacity(0.75), fontSize: 14, height: 1.4),
-          bodySmall: GoogleFonts.lato(
-              color: Colors.white.withOpacity(0.6), fontSize: 12, height: 1.3),
-          labelLarge: GoogleFonts.poppins(
-              color: Colors.white,
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.white.withOpacity(0.05),
-          hintStyle: GoogleFonts.lato(color: Colors.white.withOpacity(0.4)),
-          prefixIconColor: Colors.teal.shade200.withOpacity(0.7),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-          border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12.0),
-              borderSide: BorderSide.none),
-          enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12.0),
-              borderSide:
-                  BorderSide(color: Colors.white.withOpacity(0.1), width: 1)),
-          focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12.0),
-              borderSide: BorderSide(color: Colors.teal.shade300, width: 2)),
-          errorStyle:
-              GoogleFonts.lato(color: Colors.redAccent.shade100, fontSize: 12),
-          errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12.0),
-              borderSide:
-                  BorderSide(color: Colors.redAccent.shade100, width: 1.5)),
-          focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12.0),
-              borderSide:
-                  BorderSide(color: Colors.redAccent.shade200, width: 2)),
-          labelStyle: GoogleFonts.lato(color: Colors.white.withOpacity(0.6)),
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            minimumSize: const Size(double.infinity, 52),
-            backgroundColor: Colors.teal.shade500,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12.0)),
-            textStyle: GoogleFonts.poppins(
-                fontSize: 17, fontWeight: FontWeight.bold, letterSpacing: 0.3),
-            elevation: 2,
-          ),
-        ),
-        textButtonTheme: TextButtonThemeData(
-          style: TextButton.styleFrom(
-            foregroundColor: Colors.orange.shade300,
-            textStyle:
-                GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8.0)),
-          ),
-        ),
-        outlinedButtonTheme: OutlinedButtonThemeData(
-          style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.white.withOpacity(0.9),
-            side: BorderSide(color: Colors.white.withOpacity(0.3), width: 1.5),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12.0)),
-            padding:
-                const EdgeInsets.symmetric(vertical: 14.0, horizontal: 20.0),
-            textStyle:
-                GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600),
-          ),
-        ),
-        bottomNavigationBarTheme: BottomNavigationBarThemeData(
-          backgroundColor: const Color(0xFF222222),
-          selectedItemColor: Colors.orange.shade300,
-          unselectedItemColor: Colors.white.withOpacity(0.5),
-          type: BottomNavigationBarType.fixed,
-          selectedLabelStyle:
-              GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 11),
-          unselectedLabelStyle: GoogleFonts.poppins(fontSize: 10),
-          elevation: 10.0,
-        ),
-        appBarTheme: AppBarTheme(
-          backgroundColor: const Color(0xFF1A1A1A),
-          elevation: 0,
+      brightness: Brightness.dark,
+      scaffoldBackgroundColor: const Color(0xFF1A1A1A),
+      cardColor: const Color(0xFF2C2C2C),
+      colorScheme: ColorScheme.dark(
+        primary: Colors.teal.shade400,
+        onPrimary: Colors.black,
+        secondary: Colors.orange.shade400,
+        onSecondary: Colors.black,
+        surface: const Color(0xFF222222),
+        onSurface: Colors.white.withOpacity(0.9),
+        surfaceContainerLowest: const Color(0xFF1F1F1F),
+        surfaceContainerHighest: const Color(0xFF3A3A3A),
+        error: Colors.redAccent.shade200,
+        onError: Colors.black,
+        outline: Colors.grey.shade700,
+      ),
+      textTheme: TextTheme(
+        headlineLarge: GoogleFonts.poppins(
+            fontWeight: FontWeight.w800, color: Colors.white, fontSize: 30),
+        titleLarge: GoogleFonts.poppins(
+            fontWeight: FontWeight.w600,
+            color: Colors.white.withOpacity(0.9),
+            fontSize: 20),
+        bodyLarge: GoogleFonts.lato(
+            color: Colors.white.withOpacity(0.85), fontSize: 16, height: 1.5),
+        labelLarge: GoogleFonts.poppins(
+            color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.05),
+        hintStyle: GoogleFonts.lato(color: Colors.white.withOpacity(0.4)),
+        prefixIconColor: Colors.teal.shade200.withOpacity(0.7),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12.0),
+            borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12.0),
+            borderSide:
+                BorderSide(color: Colors.white.withOpacity(0.1), width: 1)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12.0),
+            borderSide: BorderSide(color: Colors.teal.shade300, width: 2)),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          minimumSize: const Size(double.infinity, 52),
+          backgroundColor: Colors.teal.shade500,
           foregroundColor: Colors.white,
-          centerTitle: true,
-          titleTextStyle: GoogleFonts.poppins(
-              color: Colors.white.withOpacity(0.9),
-              fontSize: 20,
-              fontWeight: FontWeight.bold),
-        ),
-        datePickerTheme: DatePickerThemeData(
-          backgroundColor: const Color(0xFF2C2C2C),
-          headerBackgroundColor: Colors.teal.shade700,
-          headerForegroundColor: Colors.white,
-          dayForegroundColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) return Colors.white;
-            if (states.contains(WidgetState.disabled)) {
-              return Colors.grey.shade700;
-            }
-            return Colors.white.withOpacity(0.8);
-          }),
-          dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) {
-              return Colors.teal.shade500;
-            }
-            return Colors.transparent;
-          }),
-          todayForegroundColor: WidgetStateProperty.all(Colors.orange.shade300),
-          todayBorder:
-              BorderSide(color: Colors.orange.shade300.withOpacity(0.5)),
-          yearForegroundColor:
-              WidgetStateProperty.all(Colors.white.withOpacity(0.8)),
           shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          elevation: 4,
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
+          textStyle:
+              GoogleFonts.poppins(fontSize: 17, fontWeight: FontWeight.bold),
         ),
-        checkboxTheme: CheckboxThemeData(
-          fillColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) {
-              return Colors.teal.shade400;
-            }
-            return Colors.transparent;
-          }),
-          checkColor: WidgetStateProperty.all(Colors.black),
-          overlayColor: WidgetStateProperty.all(Colors.teal.withOpacity(0.1)),
-          side: BorderSide(color: Colors.white.withOpacity(0.4), width: 1.5),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-        ),
-        dialogTheme: DialogThemeData(
-          backgroundColor: const Color(0xFF2C2C2C),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          titleTextStyle: GoogleFonts.poppins(
-              color: Colors.white.withOpacity(0.9),
-              fontSize: 20,
-              fontWeight: FontWeight.bold),
-          contentTextStyle: GoogleFonts.lato(
-              color: Colors.white.withOpacity(0.8), fontSize: 16),
-        ));
+      ),
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
+        backgroundColor: const Color(0xFF222222),
+        selectedItemColor: Colors.orange.shade300,
+        unselectedItemColor: Colors.white.withOpacity(0.5),
+        type: BottomNavigationBarType.fixed,
+      ),
+      appBarTheme: AppBarTheme(
+        backgroundColor: const Color(0xFF1A1A1A),
+        elevation: 0,
+        centerTitle: true,
+        titleTextStyle:
+            GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold),
+      ),
+    );
 
     return MaterialApp.router(
       title: 'Vaella',

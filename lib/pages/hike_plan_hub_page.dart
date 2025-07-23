@@ -4,11 +4,13 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:ui';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart'; // LISÄTTY IMPORT
 
 import '../models/hike_plan_model.dart';
 import '../widgets/preparation_progress_modal.dart';
 import '../services/hike_plan_service.dart';
 import '../utils/app_colors.dart';
+import '../providers/route_planner_provider.dart'; // LISÄTTY IMPORT
 
 class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   _SliverAppBarDelegate(this._tabBar);
@@ -78,12 +80,6 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
           ?.copyWith(fontFamily: GoogleFonts.poppins().fontFamily),
       labelLarge: currentTheme.textTheme.labelLarge
           ?.copyWith(fontFamily: GoogleFonts.poppins().fontFamily),
-      bodyLarge: currentTheme.textTheme.bodyLarge
-          ?.copyWith(fontFamily: GoogleFonts.lato().fontFamily),
-      bodyMedium: currentTheme.textTheme.bodyMedium
-          ?.copyWith(fontFamily: GoogleFonts.lato().fontFamily),
-      bodySmall: currentTheme.textTheme.bodySmall
-          ?.copyWith(fontFamily: GoogleFonts.lato().fontFamily),
     );
   }
 
@@ -238,6 +234,87 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
     );
   }
 
+  Widget _buildPlannerActionsGrid(BuildContext context) {
+    final theme = Theme.of(context);
+    final actions = [
+      {
+        'title': "Weather",
+        'icon': Icons.thermostat_auto_rounded,
+        'onPressed': () {
+          if (_currentPlan.latitude != null && _currentPlan.longitude != null) {
+            GoRouter.of(context).pushNamed('weatherPage',
+                pathParameters: {'planId': _currentPlan.id},
+                extra: _currentPlan);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content:
+                  const Text('Location coordinates are required for weather.'),
+              backgroundColor: AppColors.errorColor(context),
+            ));
+          }
+        }
+      },
+      {
+        'title': "Packing List",
+        'icon': Icons.backpack_outlined,
+        'onPressed': () => GoRouter.of(context).pushNamed('packingListPage',
+            pathParameters: {'planId': _currentPlan.id}, extra: _currentPlan)
+      },
+      {
+        'title': "Route Plan",
+        'icon': Icons.map_outlined,
+        // KORJAUS TÄSSÄ:
+        'onPressed': () {
+          // 1. Ladataan nykyinen suunnitelma Provideriin
+          context.read<RoutePlannerProvider>().loadPlan(_currentPlan);
+
+          // 2. Navigoidaan uuteen, yksinkertaiseen polkuun
+          context.push('/route-planner').then((_) {
+            // Kun plannerista palataan, päivitetään tämä näkymä providerin datalla
+            // varmistaaksemme, että muutokset näkyvät heti.
+            if (mounted) {
+              setState(() {
+                _currentPlan = context.read<RoutePlannerProvider>().plan;
+              });
+            }
+          });
+        },
+      },
+      {
+        'title': "Meal Plan",
+        'icon': Icons.restaurant_menu_outlined,
+        'onPressed': () => ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Meal Plan: Coming soon!")))
+      },
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          childAspectRatio: 1.25,
+        ),
+        itemCount: actions.length,
+        itemBuilder: (context, index) {
+          final action = actions[index];
+          return _buildPlannerGridItem(
+              context,
+              action['title'] as String,
+              action['icon'] as IconData,
+              action['onPressed'] as VoidCallback,
+              theme);
+        },
+      ),
+    );
+  }
+
+  // Kaikki loput build-metodit pysyvät ennallaan.
+  // ...
   Widget _buildSectionTitle(
       BuildContext context, String title, IconData icon, TextTheme appTextTheme,
       {Color? iconColor}) {
@@ -456,76 +533,6 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
     );
   }
 
-  Widget _buildPlannerActionsGrid(BuildContext context) {
-    final theme = Theme.of(context);
-    final actions = [
-      {
-        'title': "Weather",
-        'icon': Icons.thermostat_auto_rounded,
-        'onPressed': () {
-          if (_currentPlan.latitude != null && _currentPlan.longitude != null) {
-            GoRouter.of(context).pushNamed('weatherPage',
-                pathParameters: {'planId': _currentPlan.id},
-                extra: _currentPlan);
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content:
-                  const Text('Location coordinates are required for weather.'),
-              backgroundColor: AppColors.errorColor(context),
-            ));
-          }
-        }
-      },
-      {
-        'title': "Packing List",
-        'icon': Icons.backpack_outlined,
-        'onPressed': () => GoRouter.of(context).pushNamed('packingListPage',
-            pathParameters: {'planId': _currentPlan.id}, extra: _currentPlan)
-      },
-      {
-        'title': "Route Plan",
-        'icon': Icons.map_outlined,
-        'onPressed': () {
-          GoRouter.of(context).pushNamed(
-            'routePlannerPage',
-            pathParameters: {'planId': _currentPlan.id},
-            extra: _currentPlan,
-          );
-        },
-      },
-      {
-        'title': "Meal Plan",
-        'icon': Icons.restaurant_menu_outlined,
-        'onPressed': () => ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Meal Plan: Coming soon!")))
-      },
-    ];
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          childAspectRatio: 1.25,
-        ),
-        itemCount: actions.length,
-        itemBuilder: (context, index) {
-          final action = actions[index];
-          return _buildPlannerGridItem(
-              context,
-              action['title'] as String,
-              action['icon'] as IconData,
-              action['onPressed'] as VoidCallback,
-              theme);
-        },
-      ),
-    );
-  }
-
   Widget _buildPlannerGridItem(BuildContext context, String title,
       IconData icon, VoidCallback onPressed, ThemeData theme) {
     return Card(
@@ -592,20 +599,21 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
               decoration: BoxDecoration(
                   gradient: LinearGradient(
                       colors: [
-                        Colors.teal.shade500,
-                        Colors.teal.shade700.withOpacity(0.8),
-                        Colors.black.withOpacity(0.6)
+                        theme.scaffoldBackgroundColor.withOpacity(0),
+                        theme.scaffoldBackgroundColor.withOpacity(0.8),
+                        theme.scaffoldBackgroundColor,
                       ],
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      stops: const [0.0, 0.5, 1.0])),
+                      stops: const [0.0, 0.6, 1.0])),
             ),
-            ClipRect(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 2, sigmaY: 2),
-                child: Container(color: Colors.black.withOpacity(0.1)),
+            if (hasImage)
+              ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 1.5, sigmaY: 1.5),
+                  child: Container(color: Colors.black.withOpacity(0.2)),
+                ),
               ),
-            ),
             Positioned(
               bottom: 65,
               left: 20,
@@ -619,21 +627,25 @@ class _HikePlanHubPageState extends State<HikePlanHubPage>
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                         shadows: [
-                          const Shadow(blurRadius: 2, color: Colors.black54)
+                          const Shadow(
+                              blurRadius: 4,
+                              offset: Offset(1, 2),
+                              color: Colors.black54)
                         ]),
                   ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      const Icon(Icons.pin_drop_outlined,
-                          color: Colors.white70, size: 18),
+                      Icon(Icons.fmd_good_outlined,
+                          color: Colors.white.withOpacity(0.8), size: 18),
                       const SizedBox(width: 8),
                       Text(
                         _currentPlan.location,
                         style: appTextTheme.bodyLarge?.copyWith(
-                            color: Colors.orange.shade300,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
                             shadows: [
-                              const Shadow(blurRadius: 1, color: Colors.black54)
+                              const Shadow(blurRadius: 2, color: Colors.black87)
                             ]),
                       )
                     ],

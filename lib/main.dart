@@ -11,6 +11,7 @@ import 'package:intl/date_symbol_data_local.dart';
 // Sovelluksesi omat importit
 import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
+import 'providers/route_planner_provider.dart'; // LISÄYS: Tuo uusi provider
 import 'app_router.dart';
 
 void main() async {
@@ -22,10 +23,19 @@ void main() async {
 
   await initializeDateFormatting('fi_FI', null);
 
+  // KORJAUS: Vaihdetaan ChangeNotifierProvider MultiProvideriksi,
+  // jotta voimme tarjota useita providereita.
   runApp(
-    ChangeNotifierProvider(
-      create: (_) =>
-          AuthProvider(), // Tarjoaa AuthProviderin koko widget-puulle
+    MultiProvider(
+      providers: [
+        // 1. Olemassa oleva AuthProvider
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+
+        // 2. LISÄYS: Uusi RoutePlannerProvider
+        ChangeNotifierProvider(create: (_) => RoutePlannerProvider()),
+
+        // Voit lisätä tulevaisuudessa lisää providereita tähän listaan...
+      ],
       child: const MyApp(),
     ),
   );

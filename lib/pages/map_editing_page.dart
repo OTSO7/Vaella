@@ -1,5 +1,3 @@
-// lib/pages/map_editing_page.dart
-
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,10 +5,9 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
-import 'package:go_router/go_router.dart';
 
+// KORJATTU: Tuodaan mallit suoraan, ei koko route_planner_pagea.
 import '../models/daily_route_model.dart';
-import 'route_planner_page.dart';
 
 class MapEditingPage extends StatefulWidget {
   final List<DailyRoute> allDailyRoutes;
@@ -36,11 +33,13 @@ class _MapEditingPageState extends State<MapEditingPage> {
   final String _orsApiKey =
       'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImRjNTNkYjcxNWYwYTQ0YjA4NzdhM2JjODc5ZmQ5ZDE5IiwiaCI6Im11cm11cjY0In0=';
 
+  // KORJATTU: Varmistetaan, että aktiivinen reitti on aina ajan tasalla.
   DailyRoute get _activeRoute => _modifiedRoutes[widget.editingDayIndex];
 
   @override
   void initState() {
     super.initState();
+    // Luodaan syvä kopio, jotta emme muokkaa alkuperäistä listaa vahingossa.
     _modifiedRoutes =
         widget.allDailyRoutes.map((route) => route.copyWith()).toList();
     _autoContinueRouteIfNeeded();
@@ -54,28 +53,35 @@ class _MapEditingPageState extends State<MapEditingPage> {
       final previousRoute = _modifiedRoutes[widget.editingDayIndex - 1];
       if (previousRoute.userClickedPoints.isNotEmpty) {
         final lastPoint = previousRoute.userClickedPoints.last;
-        _activeRoute.userClickedPoints = [lastPoint];
-        _activeRoute.points = [lastPoint];
+        // KORJATTU: Muokataan listaa oikein
+        setState(() {
+          _activeRoute.userClickedPoints = [lastPoint];
+          _activeRoute.points.clear();
+          _activeRoute.points.add(lastPoint);
+        });
       }
     }
   }
 
   void _fitMapToRoute() {
     if (!mounted) return;
-    if (_activeRoute.userClickedPoints.length > 1) {
+    final pointsToFit = _activeRoute.points.isNotEmpty
+        ? _activeRoute.points
+        : _activeRoute.userClickedPoints;
+
+    if (pointsToFit.length > 1) {
       _mapController.fitCamera(
         CameraFit.bounds(
-            bounds: LatLngBounds.fromPoints(_activeRoute.userClickedPoints),
+            bounds: LatLngBounds.fromPoints(pointsToFit),
             padding: const EdgeInsets.all(50.0)),
       );
-    } else if (_activeRoute.userClickedPoints.length == 1) {
-      _mapController.move(_activeRoute.userClickedPoints.first, 13.0);
+    } else if (pointsToFit.isNotEmpty) {
+      _mapController.move(pointsToFit.first, 13.0);
     } else if (widget.planLocation != null) {
       _mapController.move(widget.planLocation!, 10.0);
     }
   }
 
-  // ... (kaikki logiikkafunktiot, kuten _handleLongPress, _recalculate, _addPoint jne. pysyvät ennallaan)
   void _handleLongPress(LatLng point) {
     HapticFeedback.mediumImpact();
     _addPointToRoute(point);
@@ -83,9 +89,6 @@ class _MapEditingPageState extends State<MapEditingPage> {
 
   Future<(List<LatLng>, RouteSummary)?> _fetchRouteFromORS(
       LatLng start, LatLng end) async {
-    if (_orsApiKey.contains('YOUR_') || _orsApiKey.isEmpty) {
-      return null;
-    }
     final url = Uri.parse(
         'https://api.openrouteservice.org/v2/directions/foot-hiking/geojson');
     final headers = {
@@ -97,16 +100,17 @@ class _MapEditingPageState extends State<MapEditingPage> {
         [start.longitude, start.latitude],
         [end.longitude, end.latitude]
       ],
-      "extra_info": ["steepness"],
       "elevation": true
     });
+
     try {
       final response = await http.post(url, headers: headers, body: body);
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final coords = data['features'][0]['geometry']['coordinates'] as List;
         final summaryData = data['features'][0]['properties']['summary'];
-        final points = coords.map((c) => LatLng(c[1], c[0])).toList();
+        final points =
+            coords.map((c) => LatLng(c[1] as double, c[0] as double)).toList();
         final summary = RouteSummary(
           distance: (summaryData['distance'] as num?)?.toDouble() ?? 0.0,
           duration: (summaryData['duration'] as num?)?.toDouble() ?? 0.0,
@@ -120,46 +124,54 @@ class _MapEditingPageState extends State<MapEditingPage> {
         return (points, summary);
       }
     } catch (e) {
-      print("ORS Exception: $e");
+      debugPrint("ORS Exception: $e");
     }
     return null;
   }
 
   Future<void> _recalculateCurrentDayRoute() async {
     setState(() => _isLoading = true);
-    _activeRoute.points.clear();
-    _activeRoute.summary = RouteSummary();
+
+    // Käytetään paikallisia muuttujia, jotta vältetään setState-ongelmat
+    final newPoints = <LatLng>[];
+    var newSummary = RouteSummary();
+
     if (_activeRoute.userClickedPoints.length < 2) {
-      _activeRoute.points.addAll(_activeRoute.userClickedPoints);
-      if (mounted) setState(() => _isLoading = false);
-      return;
-    }
-    for (int i = 0; i < _activeRoute.userClickedPoints.length - 1; i++) {
-      final start = _activeRoute.userClickedPoints[i];
-      final end = _activeRoute.userClickedPoints[i + 1];
-      final result = await _fetchRouteFromORS(start, end);
-      if (result != null) {
-        final (points, summary) = result;
-        if (_activeRoute.points.isEmpty) {
-          _activeRoute.points.addAll(points);
+      newPoints.addAll(_activeRoute.userClickedPoints);
+    } else {
+      for (int i = 0; i < _activeRoute.userClickedPoints.length - 1; i++) {
+        final start = _activeRoute.userClickedPoints[i];
+        final end = _activeRoute.userClickedPoints[i + 1];
+        final result = await _fetchRouteFromORS(start, end);
+
+        if (result != null) {
+          final (points, summary) = result;
+          if (newPoints.isNotEmpty) points.removeAt(0);
+          newPoints.addAll(points);
+          newSummary += summary;
         } else {
-          points.removeAt(0);
-          _activeRoute.points.addAll(points);
+          if (newPoints.isEmpty) newPoints.add(start);
+          newPoints.add(end);
         }
-        _activeRoute.summary += summary;
-      } else {
-        if (_activeRoute.points.isEmpty) _activeRoute.points.add(start);
-        _activeRoute.points.add(end);
       }
     }
+
     if (mounted) {
-      setState(() => _isLoading = false);
+      setState(() {
+        _modifiedRoutes[widget.editingDayIndex] = _activeRoute.copyWith(
+          points: newPoints,
+          summary: newSummary,
+        );
+        _isLoading = false;
+      });
       _fitMapToRoute();
     }
   }
 
   void _addPointToRoute(LatLng point) {
-    setState(() => _activeRoute.userClickedPoints.add(point));
+    setState(() {
+      _activeRoute.userClickedPoints.add(point);
+    });
     _recalculateCurrentDayRoute();
   }
 
@@ -167,6 +179,7 @@ class _MapEditingPageState extends State<MapEditingPage> {
     setState(() {
       if (widget.editingDayIndex > 0 &&
           _modifiedRoutes[widget.editingDayIndex - 1].points.isNotEmpty) {
+        // Säilytetään vain ensimmäinen piste, jos jatketaan edellisestä
         _activeRoute.userClickedPoints
             .removeRange(1, _activeRoute.userClickedPoints.length);
       } else {
@@ -178,12 +191,15 @@ class _MapEditingPageState extends State<MapEditingPage> {
 
   void _undoLastPoint() {
     if (_activeRoute.userClickedPoints.isNotEmpty) {
+      // Estetään edellisen päivän päätepisteen poistaminen
       if (widget.editingDayIndex > 0 &&
           _activeRoute.userClickedPoints.length == 1 &&
           _modifiedRoutes[widget.editingDayIndex - 1].points.isNotEmpty) {
         return;
       }
-      setState(() => _activeRoute.userClickedPoints.removeLast());
+      setState(() {
+        _activeRoute.userClickedPoints.removeLast();
+      });
       _recalculateCurrentDayRoute();
     }
   }
@@ -200,7 +216,7 @@ class _MapEditingPageState extends State<MapEditingPage> {
           IconButton(
             icon: const Icon(Icons.check_rounded),
             tooltip: 'Confirm Changes',
-            onPressed: () => context.pop(_modifiedRoutes),
+            onPressed: () => Navigator.of(context).pop(_modifiedRoutes),
           ),
         ],
       ),
@@ -209,7 +225,6 @@ class _MapEditingPageState extends State<MapEditingPage> {
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
-              onMapReady: () => _fitMapToRoute(),
               initialCenter: widget.planLocation ?? const LatLng(65.0, 25.5),
               initialZoom: 5.0,
               onLongPress: (_, point) => _handleLongPress(point),
@@ -219,6 +234,7 @@ class _MapEditingPageState extends State<MapEditingPage> {
                 urlTemplate:
                     'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
                 subdomains: const ['a', 'b', 'c', 'd'],
+                retinaMode: RetinaMode.isHighDensity(context),
               ),
               PolylineLayer(
                 polylines: _modifiedRoutes.asMap().entries.map((entry) {
@@ -228,7 +244,6 @@ class _MapEditingPageState extends State<MapEditingPage> {
                   return Polyline(
                     points: route.points,
                     strokeWidth: isActive ? 6.0 : 4.0,
-                    // MUUTOS: Käytetään reitille tallennettua väriä
                     color: isActive
                         ? route.routeColor
                         : route.routeColor.withOpacity(0.5),
@@ -238,29 +253,40 @@ class _MapEditingPageState extends State<MapEditingPage> {
                 }).toList(),
               ),
               MarkerLayer(
-                markers: _activeRoute.userClickedPoints.map((point) {
-                  bool isFirst = _activeRoute.userClickedPoints.first == point;
-                  bool isLast = _activeRoute.userClickedPoints.length > 1 &&
-                      _activeRoute.userClickedPoints.last == point;
+                markers:
+                    _activeRoute.userClickedPoints.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final point = entry.value;
                   return Marker(
                     width: 24.0,
                     height: 24.0,
                     point: point,
-                    child: Container(
-                      decoration: BoxDecoration(
-                          // MUUTOS: Käytetään reitin omaa väriä myös markkereissa
-                          color: isLast ? theme.colorScheme.secondary : _activeRoute.routeColor,
+                    child: GestureDetector(
+                      onTap: () {
+                        // Mahdollisuus poistaa pisteitä klikkaamalla
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color:
+                              index == _activeRoute.userClickedPoints.length - 1
+                                  ? theme.colorScheme.secondary
+                                  : _activeRoute.routeColor,
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 2.0),
                           boxShadow: [
                             BoxShadow(
                                 color: Colors.black.withOpacity(0.3),
                                 blurRadius: 4)
-                          ]),
-                      child: isFirst
-                          ? Icon(Icons.flag,
-                              size: 12, color: theme.colorScheme.onPrimary)
-                          : null,
+                          ],
+                        ),
+                        child: Center(
+                          child: Text((index + 1).toString(),
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold)),
+                        ),
+                      ),
                     ),
                   );
                 }).toList(),
@@ -275,14 +301,14 @@ class _MapEditingPageState extends State<MapEditingPage> {
               child: _buildStatsBar(theme, _activeRoute.summary)),
           if (_isLoading)
             Container(
-                color: Colors.black.withOpacity(0.5),
-                child: const Center(child: CircularProgressIndicator())),
+              color: Colors.black.withOpacity(0.5),
+              child: const Center(child: CircularProgressIndicator()),
+            ),
         ],
       ),
     );
   }
 
-  // ... (muut apuwidgetit ennallaan)
   Widget _buildActionButtons(ThemeData theme) {
     return Column(
       children: [
@@ -323,14 +349,15 @@ class _MapEditingPageState extends State<MapEditingPage> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-            color: theme.cardColor.withOpacity(0.9),
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 8,
-                  spreadRadius: 2)
-            ]),
+          color: theme.cardColor.withOpacity(0.9),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 8,
+                spreadRadius: 2)
+          ],
+        ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
