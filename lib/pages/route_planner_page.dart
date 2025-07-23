@@ -408,7 +408,7 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Plan a route below to see it here',
+                'Plan a route below to see an overview',
                 style: theme.textTheme.bodySmall,
               ),
             ],
