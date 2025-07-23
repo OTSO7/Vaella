@@ -6,7 +6,6 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -15,19 +14,26 @@ import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:syncfusion_flutter_datepicker/datepicker.dart';
 
+import '../models/hike_plan_model.dart';
 import '../models/post_model.dart';
 import '../providers/auth_provider.dart';
 
 class CreatePostPage extends StatefulWidget {
   final PostVisibility initialVisibility;
-  const CreatePostPage({super.key, required this.initialVisibility});
+  final HikePlan? hikePlan; // LISÄTTY: Voi ottaa vastaan suunnitelman
+
+  const CreatePostPage({
+    super.key,
+    required this.initialVisibility,
+    this.hikePlan, // LISÄTTY
+  });
 
   @override
   State<CreatePostPage> createState() => _CreatePostPageState();
 }
 
 class _CreatePostPageState extends State<CreatePostPage> {
-  // --- STATE-MUUTTUJAT ---
+  // ... (Kaikki controllerit ja state-muuttujat ennallaan)
   int _currentStep = 0;
   final PageController _pageController = PageController();
   final List<GlobalKey<FormState>> _formKeys = [
@@ -35,15 +41,12 @@ class _CreatePostPageState extends State<CreatePostPage> {
     GlobalKey<FormState>(),
     GlobalKey<FormState>()
   ];
-
-  // --- CONTROLLERIT ---
   final _titleController = TextEditingController();
   final _captionController = TextEditingController();
   final _locationController = TextEditingController();
   final _distanceController = TextEditingController();
   final _nightsController = TextEditingController();
   final _weightController = TextEditingController();
-
   XFile? _imageFile;
   DateTime? _startDate;
   DateTime? _endDate;
@@ -51,21 +54,15 @@ class _CreatePostPageState extends State<CreatePostPage> {
   double? _latitude;
   double? _longitude;
   bool _isLoading = false;
-
   bool _showPackWeightField = false;
-
   double _weatherRating = 0.0;
   double _difficultyRating = 0.0;
   double _experienceRating = 0.0;
-
-  // --- SIJAINNIN HAUN STATE ---
   List<Map<String, dynamic>> _locationSuggestions = [];
   Timer? _debounce;
   final ValueNotifier<bool> _isSearchingLocation = ValueNotifier(false);
   final FocusNode _locationFocusNode = FocusNode();
   String _currentSearchQuery = '';
-
-  // lista suosituimmista paikoista
   final List<Map<String, dynamic>> _popularDestinations = const [
     {
       'name': 'Karhunkierros',
@@ -125,14 +122,45 @@ class _CreatePostPageState extends State<CreatePostPage> {
     },
   ];
 
+  // LISÄTTY: State-muuttujat suunnitelman linkittämiseen
+  bool _linkPlanData = true;
+  bool _includeRouteOnMap = true;
+
   @override
   void initState() {
     super.initState();
     _selectedVisibility = widget.initialVisibility;
     _locationController.addListener(_onLocationChanged);
     _locationFocusNode.addListener(_onFocusChanged);
+    _prefillFieldsFromPlan(); // LISÄTTY
   }
 
+  // LISÄTTY: Uusi metodi, joka esitäyttää kentät
+  void _prefillFieldsFromPlan() {
+    if (widget.hikePlan != null) {
+      final plan = widget.hikePlan!;
+      _titleController.text = plan.hikeName;
+      _locationController.text = plan.location;
+      _startDate = plan.startDate;
+      _endDate = plan.endDate;
+      _latitude = plan.latitude;
+      _longitude = plan.longitude;
+
+      // Lasketaan kokonaismatka ja yöt reiteistä
+      double totalDistance = 0;
+      plan.dailyRoutes.forEach((route) {
+        totalDistance += route.summary.distance;
+      });
+      _distanceController.text = (totalDistance / 1000).toStringAsFixed(1);
+      _nightsController.text =
+          (plan.endDate?.difference(plan.startDate).inDays ?? 0).toString();
+
+      // Esitäytetään myös muistiinpanot kuvaukseksi
+      _captionController.text = plan.notes ?? '';
+    }
+  }
+
+  // ... (kaikki muut metodit, kuten dispose, _onNextPressed jne. pysyvät ennallaan)
   @override
   void dispose() {
     _titleController.dispose();
@@ -173,19 +201,14 @@ class _CreatePostPageState extends State<CreatePostPage> {
     });
   }
 
-  // MUUTOS: Koko hakulogiikka on uusittu älykkäämmäksi
   Future<void> _searchLocations(String query) async {
     final normalizedQuery = query.toLowerCase();
-
-    // 1. Suodata paikalliset suosikit
     final popularResults = _popularDestinations.where((dest) {
       final nameMatch = dest['name'].toLowerCase().contains(normalizedQuery);
       final keywordMatch = (dest['keywords'] as List<String>)
           .any((k) => k.contains(normalizedQuery));
       return nameMatch || keywordMatch;
     }).toList();
-
-    // 2. Hae tulokset API:sta (keskittyen Suomeen)
     final uri = Uri.parse(
         'https://nominatim.openstreetmap.org/search?q=$query&format=json&addressdetails=1&limit=5&countrycodes=fi');
     List<Map<String, dynamic>> apiResults = [];
@@ -199,18 +222,12 @@ class _CreatePostPageState extends State<CreatePostPage> {
     } catch (e) {
       print("Location search failed: $e");
     }
-
-    // 3. Yhdistä ja poista duplikaatit
     final combinedResults = <Map<String, dynamic>>[];
     final addedNames = <String>{};
-
-    // Lisää suosikit ensin
     for (var dest in popularResults) {
       combinedResults.add(dest);
       addedNames.add(dest['name'].toLowerCase());
     }
-
-    // Lisää API-tulokset, jos ne eivät ole jo listalla
     for (var result in apiResults) {
       final displayName =
           (result['display_name'] as String?)?.toLowerCase() ?? '';
@@ -218,7 +235,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
         combinedResults.add(result);
       }
     }
-
     if (mounted) {
       setState(() {
         _locationSuggestions = combinedResults;
@@ -227,13 +243,11 @@ class _CreatePostPageState extends State<CreatePostPage> {
     }
   }
 
-  // MUUTOS: Päivitetty käsittelemään kahta erilaista tulostyyppiä (suosikki vs. API)
   void _selectLocationSuggestion(Map<String, dynamic> suggestion) {
     final bool isPopular = suggestion['isPopular'] ?? false;
     String displayName;
     double lat;
     double lon;
-
     if (isPopular) {
       displayName = '${suggestion['name']}, ${suggestion['area']}';
       lat = suggestion['lat'];
@@ -243,7 +257,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
       lat = double.tryParse(suggestion['lat'].toString()) ?? 0.0;
       lon = double.tryParse(suggestion['lon'].toString()) ?? 0.0;
     }
-
     setState(() {
       _locationController.text = displayName;
       _latitude = lat;
@@ -252,47 +265,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
       _currentSearchQuery = displayName;
     });
     FocusScope.of(context).unfocus();
-  }
-
-  // --- BUILD-METODIT JA MUU UI-LOGIIKKA (pääosin ennallaan) ---
-
-  // ... (Kaikki muu koodi, kuten _onNextPressed, _createPost, _buildStepOne, _buildStepTwo, _buildStepThree, jne. on ennallaan)
-  // ... (Täydellisyyden vuoksi liitän ne alle, mutta muutokset ovat yllä olevissa funktioissa ja sijainnin `_buildLocationField`-widgetissä)
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Create Post (${_currentStep + 1}/3)',
-            style: GoogleFonts.poppins()),
-        backgroundColor: theme.scaffoldBackgroundColor,
-        elevation: 0,
-        leading: _currentStep > 0
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                onPressed: _onBackPressed)
-            : null,
-      ),
-      backgroundColor: theme.scaffoldBackgroundColor,
-      body: Column(
-        children: [
-          _buildProgressIndicator(),
-          Expanded(
-            child: PageView(
-              controller: _pageController,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [
-                _buildStepOne(context),
-                _buildStepTwo(context),
-                _buildStepThree(context),
-              ],
-            ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: _buildBottomNavBar(context),
-    );
   }
 
   void _onNextPressed() {
@@ -321,6 +293,98 @@ class _CreatePostPageState extends State<CreatePostPage> {
       _pageController.animateToPage(_currentStep,
           duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
     }
+  }
+
+  Future<String?> _uploadImageInternal(XFile imageFile) async {
+    try {
+      final String fileName =
+          '${DateTime.now().millisecondsSinceEpoch}_${p.basename(imageFile.path)}';
+      final Reference storageRef =
+          FirebaseStorage.instance.ref().child('post_images/$fileName');
+      final metadata = SettableMetadata(contentType: 'image/jpeg');
+      await storageRef.putFile(File(imageFile.path), metadata);
+      return await storageRef.getDownloadURL();
+    } catch (e) {
+      throw Exception('Failed to upload image. Please try again.');
+    }
+  }
+
+  void _showErrorDialog(String message) {
+    if (mounted) {
+      _showOutcomeDialog(
+          isSuccess: false,
+          title: 'Error',
+          message: message.replaceFirst("Exception: ", ""),
+          onDismissed: () {});
+    }
+  }
+
+  void _showSuccessDialog() {
+    if (mounted) {
+      _showOutcomeDialog(
+        isSuccess: true,
+        title: 'Success!',
+        message: 'New hike post created. You earned 50 XP!',
+        onDismissed: () {
+          if (mounted) Navigator.of(context).pop();
+        },
+      );
+    }
+  }
+
+  Future<void> _showOutcomeDialog(
+      {required bool isSuccess,
+      required String title,
+      required String message,
+      required VoidCallback onDismissed}) async {
+    if (!mounted) return;
+    final theme = Theme.of(context);
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        Future.delayed(const Duration(seconds: 2, milliseconds: 500), () {
+          if (Navigator.of(dialogContext).canPop()) {
+            Navigator.of(dialogContext).pop();
+          }
+          onDismissed();
+        });
+        return AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: theme.cardColor,
+          contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            _buildAnimatedIcon(isSuccess),
+            const SizedBox(height: 20),
+            Text(title,
+                style: GoogleFonts.poppins(
+                    fontSize: 20, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 12),
+            Text(message,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.lato(fontSize: 15)),
+          ]),
+        );
+      },
+    );
+  }
+
+  Widget _buildAnimatedIcon(bool isSuccess) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      transitionBuilder: (Widget child, Animation<double> animation) =>
+          ScaleTransition(scale: animation, child: child),
+      child: isSuccess
+          ? Icon(Icons.check_circle_outline_rounded,
+              key: const ValueKey('success_icon'),
+              color: Colors.green.shade500,
+              size: 64)
+          : Icon(Icons.error_outline_rounded,
+              key: const ValueKey('error_icon'),
+              color: Colors.red.shade500,
+              size: 64),
+    );
   }
 
   Future<void> _createPost() async {
@@ -355,12 +419,18 @@ class _CreatePostPageState extends State<CreatePostPage> {
                 _weightController.text.trim().replaceAll(',', '.'))
             : null,
         visibility: _selectedVisibility,
-        planId: null,
         ratings: {
           'weather': _weatherRating,
           'difficulty': _difficultyRating,
-          'experience': _experienceRating,
+          'experience': _experienceRating
         },
+        // LISÄTTY: Linkitetään suunnitelma ja reitti dataan, jos käyttäjä niin valitsi
+        planId: widget.hikePlan != null && _linkPlanData
+            ? widget.hikePlan!.id
+            : null,
+        dailyRoutes: widget.hikePlan != null && _includeRouteOnMap
+            ? widget.hikePlan!.dailyRoutes
+            : null,
       );
       await newPostRef.set(newPost.toFirestore());
       await authProvider.handlePostCreationSuccess();
@@ -370,6 +440,41 @@ class _CreatePostPageState extends State<CreatePostPage> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    /* ... build-metodi ja sen apumetodit ennallaan PAITSI _buildStepThree ... */ return Scaffold(
+      appBar: AppBar(
+        title: Text('Create Post (${_currentStep + 1}/3)',
+            style: GoogleFonts.poppins()),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        elevation: 0,
+        leading: _currentStep > 0
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                onPressed: _onBackPressed)
+            : null,
+      ),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: Column(
+        children: [
+          _buildProgressIndicator(),
+          Expanded(
+            child: PageView(
+              controller: _pageController,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                _buildStepOne(context),
+                _buildStepTwo(context),
+                _buildStepThree(context),
+              ],
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: _buildBottomNavBar(context),
+    );
   }
 
   Widget _buildProgressIndicator() {
@@ -435,98 +540,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
                 style: GoogleFonts.lato())));
       }
     }
-  }
-
-  Future<String?> _uploadImageInternal(XFile imageFile) async {
-    try {
-      final String fileName =
-          '${DateTime.now().millisecondsSinceEpoch}_${p.basename(imageFile.path)}';
-      final Reference storageRef =
-          FirebaseStorage.instance.ref().child('post_images/$fileName');
-      final metadata = SettableMetadata(contentType: 'image/jpeg');
-      await storageRef.putFile(File(imageFile.path), metadata);
-      return await storageRef.getDownloadURL();
-    } catch (e) {
-      throw Exception('Failed to upload image. Please try again.');
-    }
-  }
-
-  void _showErrorDialog(String message) {
-    if (mounted) {
-      _showOutcomeDialog(
-          isSuccess: false,
-          title: 'Error',
-          message: message.replaceFirst("Exception: ", ""),
-          onDismissed: () {});
-    }
-  }
-
-  void _showSuccessDialog() {
-    if (mounted) {
-      _showOutcomeDialog(
-        isSuccess: true,
-        title: 'Success!',
-        message: 'New hike post created. You earned 50 XP!',
-        onDismissed: () {
-          if (mounted) Navigator.of(context).pop();
-        },
-      );
-    }
-  }
-
-  Widget _buildAnimatedIcon(bool isSuccess) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 300),
-      transitionBuilder: (Widget child, Animation<double> animation) =>
-          ScaleTransition(scale: animation, child: child),
-      child: isSuccess
-          ? Icon(Icons.check_circle_outline_rounded,
-              key: const ValueKey('success_icon'),
-              color: Colors.green.shade500,
-              size: 64)
-          : Icon(Icons.error_outline_rounded,
-              key: const ValueKey('error_icon'),
-              color: Colors.red.shade500,
-              size: 64),
-    );
-  }
-
-  Future<void> _showOutcomeDialog(
-      {required bool isSuccess,
-      required String title,
-      required String message,
-      required VoidCallback onDismissed}) async {
-    if (!mounted) return;
-    final theme = Theme.of(context);
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
-        Future.delayed(const Duration(seconds: 2, milliseconds: 500), () {
-          if (Navigator.of(dialogContext).canPop()) {
-            Navigator.of(dialogContext).pop();
-          }
-          onDismissed();
-        });
-        return AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          backgroundColor: theme.cardColor,
-          contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
-          content: Column(mainAxisSize: MainAxisSize.min, children: [
-            _buildAnimatedIcon(isSuccess),
-            const SizedBox(height: 20),
-            Text(title,
-                style: GoogleFonts.poppins(
-                    fontSize: 20, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 12),
-            Text(message,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.lato(fontSize: 15)),
-          ]),
-        );
-      },
-    );
   }
 
   Widget _buildStyledTextFormField({
@@ -767,19 +780,85 @@ class _CreatePostPageState extends State<CreatePostPage> {
     );
   }
 
-  Widget _buildStepThree(BuildContext context) {
-    return Form(
-      key: _formKeys[2],
-      child: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        children: [
-          _buildSectionHeader(context, "3. Final Touches"),
-          const SizedBox(height: 24),
-          _buildOptionalFields(context),
-          const SizedBox(height: 24),
-          _buildRatingsSection(context),
-        ],
-      ),
+  Widget _buildLocationField(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        _buildStyledTextFormField(
+          controller: _locationController,
+          focusNode: _locationFocusNode,
+          labelText: "Location*",
+          hintText: "Search for a trail or area...",
+          icon: Icons.location_on_outlined,
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return 'Location is required';
+            }
+            if (_latitude == null || _longitude == null) {
+              return 'Please select a valid location from suggestions';
+            }
+            return null;
+          },
+        ),
+        if (_locationSuggestions.isNotEmpty)
+          Container(
+            constraints: const BoxConstraints(maxHeight: 220),
+            margin: const EdgeInsets.only(top: 4),
+            decoration: BoxDecoration(
+              color: theme.cardColor,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                )
+              ],
+              border: Border.all(color: theme.dividerColor.withOpacity(0.5)),
+            ),
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 4.0),
+              shrinkWrap: true,
+              itemCount: _locationSuggestions.length,
+              itemBuilder: (context, index) {
+                final suggestion = _locationSuggestions[index];
+                final bool isPopular = suggestion['isPopular'] ?? false;
+                if (isPopular) {
+                  return ListTile(
+                    leading: Icon(Icons.star_rounded,
+                        color: Colors.amber.shade600, size: 24),
+                    title: Text(suggestion['name'],
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text(suggestion['area']),
+                    trailing: Chip(
+                      label: const Text('POPULAR',
+                          style: TextStyle(
+                              fontSize: 10, fontWeight: FontWeight.bold)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 0),
+                      backgroundColor:
+                          theme.colorScheme.primaryContainer.withOpacity(0.5),
+                      side: BorderSide.none,
+                    ),
+                    onTap: () => _selectLocationSuggestion(suggestion),
+                  );
+                } else {
+                  return ListTile(
+                    leading: Icon(Icons.pin_drop_outlined,
+                        color: theme.colorScheme.secondary),
+                    title: Text(
+                      suggestion['display_name'] ?? 'N/A',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    dense: true,
+                    onTap: () => _selectLocationSuggestion(suggestion),
+                  );
+                }
+              },
+            ),
+          ),
+      ],
     );
   }
 
@@ -812,6 +891,38 @@ class _CreatePostPageState extends State<CreatePostPage> {
                       const TextInputType.numberWithOptions(decimal: true),
                 )
               : const SizedBox.shrink(key: ValueKey('weight_empty')),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRatingBar({
+    required String title,
+    required double currentRating,
+    required ValueChanged<double> onRatingChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title,
+            style: GoogleFonts.lato(fontSize: 16, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 4),
+        Row(
+          children: List.generate(5, (index) {
+            final starNumber = index + 1.0;
+            return IconButton(
+              onPressed: () => onRatingChanged(starNumber),
+              icon: Icon(
+                starNumber <= currentRating
+                    ? Icons.star_rounded
+                    : Icons.star_border_rounded,
+                color: Colors.amber.shade600,
+                size: 32,
+              ),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            );
+          }),
         ),
       ],
     );
@@ -859,121 +970,73 @@ class _CreatePostPageState extends State<CreatePostPage> {
     );
   }
 
-  Widget _buildRatingBar({
-    required String title,
-    required double currentRating,
-    required ValueChanged<double> onRatingChanged,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title,
-            style: GoogleFonts.lato(fontSize: 16, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 4),
-        Row(
-          children: List.generate(5, (index) {
-            final starNumber = index + 1.0;
-            return IconButton(
-              onPressed: () => onRatingChanged(starNumber),
-              icon: Icon(
-                starNumber <= currentRating
-                    ? Icons.star_rounded
-                    : Icons.star_border_rounded,
-                color: Colors.amber.shade600,
-                size: 32,
-              ),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-            );
-          }),
-        ),
-      ],
+  // MUUTOS: Uusi build-metodi kolmannelle sivulle
+  Widget _buildStepThree(BuildContext context) {
+    return Form(
+      key: _formKeys[2],
+      child: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        children: [
+          _buildSectionHeader(context, "3. Final Touches"),
+          const SizedBox(height: 24),
+          // Näytetään linkitysosio vain, jos tultiin suunnitelmasta
+          if (widget.hikePlan != null) ...[
+            _buildLinkPlanSection(context),
+            const SizedBox(height: 24),
+          ],
+          _buildOptionalFields(context),
+          const SizedBox(height: 24),
+          _buildRatingsSection(context),
+        ],
+      ),
     );
   }
 
-  // MUUTOS: Tämä on tärkein UI-muutos sijainnin haulle
-  Widget _buildLocationField(BuildContext context) {
+  // LISÄTTY: Uusi widget suunnitelman tietojen linkittämiseen
+  Widget _buildLinkPlanSection(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
-      children: [
-        _buildStyledTextFormField(
-          controller: _locationController,
-          focusNode: _locationFocusNode,
-          labelText: "Location*",
-          hintText: "Search for a trail or area...",
-          icon: Icons.location_on_outlined,
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Location is required';
-            }
-            if (_latitude == null || _longitude == null) {
-              return 'Please select a valid location from suggestions';
-            }
-            return null;
-          },
-        ),
-        if (_locationSuggestions.isNotEmpty)
-          Container(
-            constraints: const BoxConstraints(maxHeight: 220),
-            margin: const EdgeInsets.only(top: 4),
-            decoration: BoxDecoration(
-              color: theme.cardColor,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                )
-              ],
-              border: Border.all(color: theme.dividerColor.withOpacity(0.5)),
-            ),
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 4.0),
-              shrinkWrap: true,
-              itemCount: _locationSuggestions.length,
-              itemBuilder: (context, index) {
-                final suggestion = _locationSuggestions[index];
-                final bool isPopular = suggestion['isPopular'] ?? false;
-
-                if (isPopular) {
-                  // Tyylitelty ListTile suosituille kohteille
-                  return ListTile(
-                    leading: Icon(Icons.star_rounded,
-                        color: Colors.amber.shade600, size: 24),
-                    title: Text(suggestion['name'],
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text(suggestion['area']),
-                    trailing: Chip(
-                      label: const Text('POPULAR',
-                          style: TextStyle(
-                              fontSize: 10, fontWeight: FontWeight.bold)),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 0),
-                      backgroundColor:
-                          theme.colorScheme.primaryContainer.withOpacity(0.5),
-                      side: BorderSide.none,
-                    ),
-                    onTap: () => _selectLocationSuggestion(suggestion),
-                  );
-                } else {
-                  // Normaali ListTile API-tuloksille
-                  return ListTile(
-                    leading: Icon(Icons.pin_drop_outlined,
-                        color: theme.colorScheme.secondary),
-                    title: Text(
-                      suggestion['display_name'] ?? 'N/A',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    dense: true,
-                    onTap: () => _selectLocationSuggestion(suggestion),
-                  );
-                }
+    return Card(
+      elevation: 0,
+      color: theme.colorScheme.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Link Plan Data", style: theme.textTheme.titleMedium),
+            const SizedBox(height: 8),
+            SwitchListTile(
+              title: const Text("Show my route on map"),
+              subtitle: const Text(
+                  "Allows others to see your planned route on the map."),
+              value: _includeRouteOnMap,
+              onChanged: (value) {
+                setState(() {
+                  _includeRouteOnMap = value;
+                });
               },
+              secondary: Icon(Icons.route_outlined,
+                  color: theme.colorScheme.secondary),
+              contentPadding: EdgeInsets.zero,
             ),
-          ),
-      ],
+            SwitchListTile(
+              title: const Text("Link original hike plan"),
+              subtitle:
+                  const Text("Adds a link to your full plan in the post."),
+              value: _linkPlanData,
+              onChanged: (value) {
+                setState(() {
+                  _linkPlanData = value;
+                });
+              },
+              secondary:
+                  Icon(Icons.link_rounded, color: theme.colorScheme.secondary),
+              contentPadding: EdgeInsets.zero,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

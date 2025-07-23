@@ -1,6 +1,6 @@
 // lib/models/daily_route_model.dart
 
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart'; // LISÄTTY
 import 'package:latlong2/latlong.dart';
 import '../pages/route_planner_page.dart';
 
@@ -9,16 +9,23 @@ class DailyRoute {
   List<LatLng> points;
   List<LatLng> userClickedPoints;
   RouteSummary summary;
-  String notes; // LISÄTTY: Kenttä päiväkohtaisille muistiinpanoille
+  String notes;
+  int colorValue; // LISÄTTY: Tallenentaan värin arvo kokonaislukuna
+
+  // LISÄTTY: Kätevä getteri, joka muuntaa tallennetun luvun takaisin väriksi
+  Color get routeColor => Color(colorValue);
 
   DailyRoute({
     required this.dayIndex,
     required this.points,
     List<LatLng>? userClickedPoints,
     RouteSummary? summary,
-    this.notes = '', // LISÄTTY: Oletusarvo
+    this.notes = '',
+    int? colorValue, // LISÄTTY
   })  : userClickedPoints = userClickedPoints ?? [],
-        summary = summary ?? RouteSummary();
+        summary = summary ?? RouteSummary(),
+        // LISÄTTY: Annetaan oletusväri, jos mitään ei ole määritelty
+        colorValue = colorValue ?? Colors.blue.value;
 
   factory DailyRoute.fromFirestore(Map<String, dynamic> data) {
     List<dynamic> pointsData = data['points'] ?? [];
@@ -41,7 +48,8 @@ class DailyRoute {
               descent: (data['summary']['descent'] as num?)?.toDouble() ?? 0.0,
             )
           : RouteSummary(),
-      notes: data['notes'] ?? '', // LISÄTTY
+      notes: data['notes'] ?? '',
+      colorValue: data['colorValue'] as int?, // LISÄTTY
     );
   }
 
@@ -60,23 +68,25 @@ class DailyRoute {
         'ascent': summary.ascent,
         'descent': summary.descent,
       },
-      'notes': notes, // LISÄTTY
+      'notes': notes,
+      'colorValue': colorValue, // LISÄTTY
     };
   }
 
-  // Apumetodi kopiointiin
   DailyRoute copyWith({
     List<LatLng>? points,
     List<LatLng>? userClickedPoints,
     RouteSummary? summary,
     String? notes,
+    int? colorValue, // LISÄTTY
   }) {
     return DailyRoute(
       dayIndex: dayIndex,
-      points: points ?? this.points,
-      userClickedPoints: userClickedPoints ?? this.userClickedPoints,
+      points: points ?? List.from(this.points),
+      userClickedPoints: userClickedPoints ?? List.from(this.userClickedPoints),
       summary: summary ?? this.summary,
       notes: notes ?? this.notes,
+      colorValue: colorValue ?? this.colorValue, // LISÄTTY
     );
   }
 }

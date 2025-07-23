@@ -1,6 +1,8 @@
 // lib/models/post_model.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:latlong2/latlong.dart';
+import 'daily_route_model.dart'; // Varmista, että tämä on importattu
 
 enum PostVisibility { public, friends, private }
 
@@ -21,12 +23,14 @@ class Post {
   final double distanceKm;
   final int nights;
   final double? weightKg;
-  final String? planId;
   final PostVisibility visibility;
   final List<String> likes;
   final int commentCount;
   final List<String> sharedData;
   final Map<String, double> ratings;
+  // LISÄTTY: Kentät suunnitelman linkkaamiseen ja reitin tallentamiseen
+  final String? planId;
+  final List<DailyRoute>? dailyRoutes;
 
   Post({
     required this.id,
@@ -45,27 +49,34 @@ class Post {
     required this.distanceKm,
     required this.nights,
     this.weightKg,
-    this.planId,
     this.visibility = PostVisibility.public,
     this.likes = const [],
     this.commentCount = 0,
     this.sharedData = const [],
     required this.ratings,
+    this.planId, // LISÄTTY
+    this.dailyRoutes, // LISÄTTY
   });
 
-  // LISÄTTY: Getter, joka laskee arvostelujen keskiarvon.
-  // Tämä on helppo tapa saada keskiarvo missä tahansa sovelluksessa.
   double get averageRating {
     if (ratings.isEmpty) return 0.0;
-    // Varmistetaan, että kaikki avaimet ovat olemassa (fromFirestore hoitaa oletusarvot)
     final double total = (ratings['weather'] ?? 0) +
         (ratings['difficulty'] ?? 0) +
         (ratings['experience'] ?? 0);
-    return total / 3.0;
+    return total > 0 ? total / 3.0 : 0.0;
   }
 
   factory Post.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+
+    // LISÄTTY: Reittien lukeminen tietokannasta
+    List<DailyRoute>? routesFromDb;
+    if (data['dailyRoutes'] != null && data['dailyRoutes'] is List) {
+      routesFromDb = (data['dailyRoutes'] as List)
+          .map((routeData) =>
+              DailyRoute.fromFirestore(routeData as Map<String, dynamic>))
+          .toList();
+    }
 
     final ratingsData = data['ratings'] as Map<String, dynamic>?;
     final Map<String, double> ratingsMap = ratingsData != null
@@ -88,9 +99,8 @@ class Post {
       startDate: (data['startDate'] as Timestamp).toDate(),
       endDate: (data['endDate'] as Timestamp).toDate(),
       distanceKm: (data['distanceKm'] as num?)?.toDouble() ?? 0.0,
-      nights: (data['nights'] as int?)?.toInt() ?? 0,
+      nights: data['nights'] as int? ?? 0,
       weightKg: (data['weightKg'] as num?)?.toDouble(),
-      planId: data['planId'],
       visibility: PostVisibility.values.firstWhere(
           (e) => e.toString().split('.').last == data['visibility'],
           orElse: () => PostVisibility.public),
@@ -98,6 +108,8 @@ class Post {
       commentCount: data['commentCount'] as int? ?? 0,
       sharedData: List<String>.from(data['sharedData'] ?? []),
       ratings: ratingsMap,
+      planId: data['planId'] as String?, // LISÄTTY
+      dailyRoutes: routesFromDb, // LISÄTTY
     );
   }
 
@@ -118,12 +130,14 @@ class Post {
       'distanceKm': distanceKm,
       'nights': nights,
       'weightKg': weightKg,
-      'planId': planId,
       'visibility': visibility.toString().split('.').last,
       'likes': likes,
       'commentCount': commentCount,
       'sharedData': sharedData,
       'ratings': ratings,
+      // LISÄTTY: Reittien kirjoittaminen tietokantaan
+      'planId': planId,
+      'dailyRoutes': dailyRoutes?.map((route) => route.toFirestore()).toList(),
     };
   }
 }

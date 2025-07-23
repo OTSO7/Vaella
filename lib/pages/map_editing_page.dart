@@ -10,11 +10,19 @@ import 'package:latlong2/latlong.dart';
 import 'package:go_router/go_router.dart';
 
 import '../models/daily_route_model.dart';
-import 'route_planner_page.dart'; // Tarvitaan RouteSummary-luokkaa varten
+import 'route_planner_page.dart';
 
 class MapEditingPage extends StatefulWidget {
-  final DailyRoute initialRoute;
-  const MapEditingPage({super.key, required this.initialRoute});
+  final List<DailyRoute> allDailyRoutes;
+  final int editingDayIndex;
+  final LatLng? planLocation;
+
+  const MapEditingPage({
+    super.key,
+    required this.allDailyRoutes,
+    required this.editingDayIndex,
+    this.planLocation,
+  });
 
   @override
   State<MapEditingPage> createState() => _MapEditingPageState();
@@ -22,18 +30,52 @@ class MapEditingPage extends StatefulWidget {
 
 class _MapEditingPageState extends State<MapEditingPage> {
   final MapController _mapController = MapController();
-  late DailyRoute _currentRoute;
+  late List<DailyRoute> _modifiedRoutes;
   bool _isLoading = false;
 
-  final String _orsApiKey = 'LIITÄ_OMA_OPENROUTESERVICE_API_AVAIMESI_TÄHÄN';
+  final String _orsApiKey =
+      'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImRjNTNkYjcxNWYwYTQ0YjA4NzdhM2JjODc5ZmQ5ZDE5IiwiaCI6Im11cm11cjY0In0=';
+
+  DailyRoute get _activeRoute => _modifiedRoutes[widget.editingDayIndex];
 
   @override
   void initState() {
     super.initState();
-    // Tehdään kopio, jotta alkuperäinen ei muutu ennen tallennusta
-    _currentRoute = widget.initialRoute.copyWith();
+    _modifiedRoutes =
+        widget.allDailyRoutes.map((route) => route.copyWith()).toList();
+    _autoContinueRouteIfNeeded();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fitMapToRoute();
+    });
   }
 
+  void _autoContinueRouteIfNeeded() {
+    if (widget.editingDayIndex > 0 && _activeRoute.userClickedPoints.isEmpty) {
+      final previousRoute = _modifiedRoutes[widget.editingDayIndex - 1];
+      if (previousRoute.userClickedPoints.isNotEmpty) {
+        final lastPoint = previousRoute.userClickedPoints.last;
+        _activeRoute.userClickedPoints = [lastPoint];
+        _activeRoute.points = [lastPoint];
+      }
+    }
+  }
+
+  void _fitMapToRoute() {
+    if (!mounted) return;
+    if (_activeRoute.userClickedPoints.length > 1) {
+      _mapController.fitCamera(
+        CameraFit.bounds(
+            bounds: LatLngBounds.fromPoints(_activeRoute.userClickedPoints),
+            padding: const EdgeInsets.all(50.0)),
+      );
+    } else if (_activeRoute.userClickedPoints.length == 1) {
+      _mapController.move(_activeRoute.userClickedPoints.first, 13.0);
+    } else if (widget.planLocation != null) {
+      _mapController.move(widget.planLocation!, 10.0);
+    }
+  }
+
+  // ... (kaikki logiikkafunktiot, kuten _handleLongPress, _recalculate, _addPoint jne. pysyvät ennallaan)
   void _handleLongPress(LatLng point) {
     HapticFeedback.mediumImpact();
     _addPointToRoute(point);
@@ -58,7 +100,6 @@ class _MapEditingPageState extends State<MapEditingPage> {
       "extra_info": ["steepness"],
       "elevation": true
     });
-
     try {
       final response = await http.post(url, headers: headers, body: body);
       if (response.statusCode == 200) {
@@ -86,52 +127,63 @@ class _MapEditingPageState extends State<MapEditingPage> {
 
   Future<void> _recalculateCurrentDayRoute() async {
     setState(() => _isLoading = true);
-    _currentRoute.points.clear();
-    _currentRoute.summary = RouteSummary();
-
-    if (_currentRoute.userClickedPoints.length < 2) {
-      _currentRoute.points.addAll(_currentRoute.userClickedPoints);
+    _activeRoute.points.clear();
+    _activeRoute.summary = RouteSummary();
+    if (_activeRoute.userClickedPoints.length < 2) {
+      _activeRoute.points.addAll(_activeRoute.userClickedPoints);
       if (mounted) setState(() => _isLoading = false);
       return;
     }
-
-    for (int i = 0; i < _currentRoute.userClickedPoints.length - 1; i++) {
-      final start = _currentRoute.userClickedPoints[i];
-      final end = _currentRoute.userClickedPoints[i + 1];
+    for (int i = 0; i < _activeRoute.userClickedPoints.length - 1; i++) {
+      final start = _activeRoute.userClickedPoints[i];
+      final end = _activeRoute.userClickedPoints[i + 1];
       final result = await _fetchRouteFromORS(start, end);
       if (result != null) {
         final (points, summary) = result;
-        if (_currentRoute.points.isEmpty) {
-          _currentRoute.points.addAll(points);
+        if (_activeRoute.points.isEmpty) {
+          _activeRoute.points.addAll(points);
         } else {
           points.removeAt(0);
-          _currentRoute.points.addAll(points);
+          _activeRoute.points.addAll(points);
         }
-        _currentRoute.summary += summary;
+        _activeRoute.summary += summary;
       } else {
-        if (_currentRoute.points.isEmpty) _currentRoute.points.add(start);
-        _currentRoute.points.add(end);
+        if (_activeRoute.points.isEmpty) _activeRoute.points.add(start);
+        _activeRoute.points.add(end);
       }
     }
-    if (mounted) setState(() => _isLoading = false);
+    if (mounted) {
+      setState(() => _isLoading = false);
+      _fitMapToRoute();
+    }
   }
 
   void _addPointToRoute(LatLng point) {
-    setState(() => _currentRoute.userClickedPoints.add(point));
+    setState(() => _activeRoute.userClickedPoints.add(point));
     _recalculateCurrentDayRoute();
   }
 
   void _clearCurrentDayRoute() {
     setState(() {
-      _currentRoute.points.clear();
-      _currentRoute.userClickedPoints.clear();
-      _currentRoute.summary = RouteSummary();
+      if (widget.editingDayIndex > 0 &&
+          _modifiedRoutes[widget.editingDayIndex - 1].points.isNotEmpty) {
+        _activeRoute.userClickedPoints
+            .removeRange(1, _activeRoute.userClickedPoints.length);
+      } else {
+        _activeRoute.userClickedPoints.clear();
+      }
     });
+    _recalculateCurrentDayRoute();
   }
 
   void _undoLastPoint() {
-    if (_currentRoute.userClickedPoints.isNotEmpty) {
-      setState(() => _currentRoute.userClickedPoints.removeLast());
+    if (_activeRoute.userClickedPoints.isNotEmpty) {
+      if (widget.editingDayIndex > 0 &&
+          _activeRoute.userClickedPoints.length == 1 &&
+          _modifiedRoutes[widget.editingDayIndex - 1].points.isNotEmpty) {
+        return;
+      }
+      setState(() => _activeRoute.userClickedPoints.removeLast());
       _recalculateCurrentDayRoute();
     }
   }
@@ -139,16 +191,16 @@ class _MapEditingPageState extends State<MapEditingPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('Editing Day ${widget.initialRoute.dayIndex + 1}',
+        title: Text('Editing Day ${widget.editingDayIndex + 1}',
             style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-        // MUUTOS: Tallennusnappi on nyt "Done"-nappi, joka palauttaa datan
         actions: [
           IconButton(
             icon: const Icon(Icons.check_rounded),
             tooltip: 'Confirm Changes',
-            onPressed: () => context.pop(_currentRoute),
+            onPressed: () => context.pop(_modifiedRoutes),
           ),
         ],
       ),
@@ -157,10 +209,9 @@ class _MapEditingPageState extends State<MapEditingPage> {
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
-              initialCenter: _currentRoute.points.isNotEmpty
-                  ? _currentRoute.points.first
-                  : const LatLng(65.0, 25.5),
-              initialZoom: 10.0,
+              onMapReady: () => _fitMapToRoute(),
+              initialCenter: widget.planLocation ?? const LatLng(65.0, 25.5),
+              initialZoom: 5.0,
               onLongPress: (_, point) => _handleLongPress(point),
             ),
             children: [
@@ -170,30 +221,35 @@ class _MapEditingPageState extends State<MapEditingPage> {
                 subdomains: const ['a', 'b', 'c', 'd'],
               ),
               PolylineLayer(
-                polylines: [
-                  Polyline(
-                    points: _currentRoute.points,
-                    strokeWidth: 6.0,
-                    color: theme.colorScheme.primary,
+                polylines: _modifiedRoutes.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final route = entry.value;
+                  final bool isActive = index == widget.editingDayIndex;
+                  return Polyline(
+                    points: route.points,
+                    strokeWidth: isActive ? 6.0 : 4.0,
+                    // MUUTOS: Käytetään reitille tallennettua väriä
+                    color: isActive
+                        ? route.routeColor
+                        : route.routeColor.withOpacity(0.5),
                     borderStrokeWidth: 1.0,
                     borderColor: Colors.black.withOpacity(0.2),
-                  ),
-                ],
+                  );
+                }).toList(),
               ),
               MarkerLayer(
-                markers: _currentRoute.userClickedPoints.map((point) {
-                  bool isFirst = _currentRoute.userClickedPoints.first == point;
-                  bool isLast = _currentRoute.userClickedPoints.length > 1 &&
-                      _currentRoute.userClickedPoints.last == point;
+                markers: _activeRoute.userClickedPoints.map((point) {
+                  bool isFirst = _activeRoute.userClickedPoints.first == point;
+                  bool isLast = _activeRoute.userClickedPoints.length > 1 &&
+                      _activeRoute.userClickedPoints.last == point;
                   return Marker(
                     width: 24.0,
                     height: 24.0,
                     point: point,
                     child: Container(
                       decoration: BoxDecoration(
-                          color: isLast
-                              ? theme.colorScheme.secondary
-                              : theme.colorScheme.primary,
+                          // MUUTOS: Käytetään reitin omaa väriä myös markkereissa
+                          color: isLast ? theme.colorScheme.secondary : _activeRoute.routeColor,
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 2.0),
                           boxShadow: [
@@ -216,7 +272,7 @@ class _MapEditingPageState extends State<MapEditingPage> {
               bottom: 20,
               left: 20,
               right: 100,
-              child: _buildStatsBar(theme, _currentRoute.summary)),
+              child: _buildStatsBar(theme, _activeRoute.summary)),
           if (_isLoading)
             Container(
                 color: Colors.black.withOpacity(0.5),
@@ -226,7 +282,7 @@ class _MapEditingPageState extends State<MapEditingPage> {
     );
   }
 
-  // Apumetodit pysyvät samoina
+  // ... (muut apuwidgetit ennallaan)
   Widget _buildActionButtons(ThemeData theme) {
     return Column(
       children: [
@@ -264,39 +320,56 @@ class _MapEditingPageState extends State<MapEditingPage> {
     }
 
     return IgnorePointer(
-        child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-                color: theme.cardColor.withOpacity(0.9),
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
-                      blurRadius: 8,
-                      spreadRadius: 2)
-                ]),
-            child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildStatItem(Icons.route_outlined,
-                      formatDistance(summary.distance), theme),
-                  _buildStatItem(Icons.timer_outlined,
-                      formatDuration(summary.duration), theme),
-                  _buildStatItem(Icons.arrow_upward_rounded,
-                      '${summary.ascent.toStringAsFixed(0)} m', theme),
-                  _buildStatItem(Icons.arrow_downward_rounded,
-                      '${summary.descent.toStringAsFixed(0)} m', theme)
-                ])));
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+            color: theme.cardColor.withOpacity(0.9),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 8,
+                  spreadRadius: 2)
+            ]),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            Flexible(
+                child: _buildStatItem(Icons.route_outlined,
+                    formatDistance(summary.distance), theme)),
+            Flexible(
+                child: _buildStatItem(Icons.timer_outlined,
+                    formatDuration(summary.duration), theme)),
+            Flexible(
+                child: _buildStatItem(Icons.arrow_upward_rounded,
+                    '${summary.ascent.toStringAsFixed(0)} m', theme)),
+            Flexible(
+                child: _buildStatItem(Icons.arrow_downward_rounded,
+                    '${summary.descent.toStringAsFixed(0)} m', theme)),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildStatItem(IconData icon, String value, ThemeData theme) {
-    return Flexible(
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(icon, color: theme.colorScheme.secondary, size: 18),
-      const SizedBox(width: 6),
-      Text(value,
-          style: GoogleFonts.lato(
-              color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold))
-    ]));
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: theme.colorScheme.secondary, size: 18),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            value,
+            style: GoogleFonts.lato(
+                color: theme.colorScheme.onSurface,
+                fontWeight: FontWeight.bold),
+            overflow: TextOverflow.ellipsis,
+            softWrap: false,
+          ),
+        ),
+      ],
+    );
   }
 }
