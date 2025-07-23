@@ -1,19 +1,18 @@
+// lib/models/hike_plan_model.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import 'packing_list_item.dart';
 import 'daily_route_model.dart';
 
-// Enums and Extensions (HikeStatus, HikeDifficulty, PrepItemKeys) remain the same...
-// Enum for Hike Status
+// Enums and Extensions... (koodi ennallaan)
 enum HikeStatus { planned, upcoming, ongoing, completed, cancelled }
 
-// Enum for Hike Difficulty
 enum HikeDifficulty { unknown, easy, moderate, challenging, expert }
 
-// Extension for HikeDifficulty to get a user-friendly string and color
 extension HikeDifficultyExtension on HikeDifficulty {
-  String toShortString() {
+  /* ... */ String toShortString() {
     switch (this) {
       case HikeDifficulty.easy:
         return 'Easy';
@@ -46,16 +45,13 @@ extension HikeDifficultyExtension on HikeDifficulty {
   }
 }
 
-// Keys for preparation items
 class PrepItemKeys {
   static const String weather = 'weather';
   static const String dayPlanner = 'day_planner';
   static const String foodPlanner = 'food_planner';
   static const String packingList = 'packing_list';
-
   static List<String> get allKeys =>
       [weather, dayPlanner, foodPlanner, packingList];
-
   static String getDisplayName(String key) {
     switch (key) {
       case weather:
@@ -88,6 +84,7 @@ class HikePlan {
   final HikeDifficulty difficulty;
   final List<PackingListItem> packingList;
   final List<DailyRoute> dailyRoutes;
+  final int? overallRating; // LISÄTTY: Kenttä yleisarvosanalle (1-5)
 
   HikePlan({
     String? id,
@@ -105,6 +102,7 @@ class HikePlan {
     this.difficulty = HikeDifficulty.unknown,
     List<PackingListItem>? packingList,
     List<DailyRoute>? dailyRoutes,
+    this.overallRating, // LISÄTTY
   })  : id = id ?? const Uuid().v4(),
         status = status ?? _calculateStatus(startDate, endDate, null),
         preparationItems = preparationItems ??
@@ -117,18 +115,17 @@ class HikePlan {
         packingList = packingList ?? [],
         dailyRoutes = dailyRoutes ?? [];
 
+  // ... (muut metodit, kuten _calculateStatus, getters, pysyvät ennallaan)
   static HikeStatus _calculateStatus(
       DateTime startDate, DateTime? endDate, HikeStatus? currentStatusIfAny) {
     if (currentStatusIfAny == HikeStatus.cancelled) return HikeStatus.cancelled;
     if (currentStatusIfAny == HikeStatus.completed) return HikeStatus.completed;
-
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final sDate = DateTime(startDate.year, startDate.month, startDate.day);
     final eDate = endDate != null
         ? DateTime(endDate.year, endDate.month, endDate.day)
         : null;
-
     if (eDate != null && eDate.isBefore(today)) {
       return HikeStatus.completed;
     }
@@ -157,6 +154,7 @@ class HikePlan {
   factory HikePlan.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
 
+    // ... (muu fromFirestore-logiikka pysyy ennallaan)
     Map<String, bool> prepItemsFromDb = {
       PrepItemKeys.weather: false,
       PrepItemKeys.dayPlanner: false,
@@ -172,22 +170,19 @@ class HikePlan {
         }
       });
     }
-
     List<PackingListItem> packingListFromDb = [];
     if (data['packingList'] != null && data['packingList'] is List) {
       packingListFromDb = (data['packingList'] as List)
           .map((item) => PackingListItem.fromMap(item as Map<String, dynamic>))
           .toList();
     }
-
     List<DailyRoute> routesFromDb = [];
     if (data['dailyRoutes'] != null && data['dailyRoutes'] is List) {
       routesFromDb = (data['dailyRoutes'] as List)
           .map((routeData) =>
-              DailyRoute.fromMap(routeData as Map<String, dynamic>))
+              DailyRoute.fromFirestore(routeData as Map<String, dynamic>))
           .toList();
     }
-
     HikeStatus status;
     if (data['status'] != null) {
       status = HikeStatus.values.firstWhere(
@@ -201,7 +196,6 @@ class HikePlan {
       status = _calculateStatus((data['startDate'] as Timestamp).toDate(),
           (data['endDate'] as Timestamp?)?.toDate(), null);
     }
-
     HikeDifficulty difficulty = HikeDifficulty.unknown;
     if (data['difficulty'] != null && data['difficulty'] is String) {
       difficulty = HikeDifficulty.values.firstWhere(
@@ -225,6 +219,7 @@ class HikePlan {
       difficulty: difficulty,
       packingList: packingListFromDb,
       dailyRoutes: routesFromDb,
+      overallRating: data['overallRating'] as int?, // LISÄTTY
     );
   }
 
@@ -243,7 +238,8 @@ class HikePlan {
       'imageUrl': imageUrl,
       'difficulty': difficulty.toString().split('.').last,
       'packingList': packingList.map((item) => item.toMap()).toList(),
-      'dailyRoutes': dailyRoutes.map((route) => route.toMap()).toList(),
+      'dailyRoutes': dailyRoutes.map((route) => route.toFirestore()).toList(),
+      'overallRating': overallRating, // LISÄTTY
     };
   }
 
@@ -269,7 +265,10 @@ class HikePlan {
     HikeDifficulty? difficulty,
     List<PackingListItem>? packingList,
     List<DailyRoute>? dailyRoutes,
+    int? overallRating, // LISÄTTY
+    bool setOverallRatingToNull = false, // LISÄTTY
   }) {
+    // ... (copyWith-metodin alkuosa pysyy ennallaan)
     HikeStatus newStatus;
     if (status != null) {
       newStatus = status;
@@ -299,6 +298,9 @@ class HikePlan {
       difficulty: difficulty ?? this.difficulty,
       packingList: packingList ?? this.packingList,
       dailyRoutes: dailyRoutes ?? this.dailyRoutes,
+      overallRating: setOverallRatingToNull
+          ? null
+          : (overallRating ?? this.overallRating), // LISÄTTY
     );
   }
 }

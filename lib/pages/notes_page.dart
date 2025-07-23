@@ -1,3 +1,5 @@
+// lib/pages/notes_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
@@ -6,8 +8,10 @@ import '../widgets/hike_plan_card.dart';
 import '../widgets/add_hike_plan_form.dart';
 import '../services/hike_plan_service.dart';
 import '../providers/auth_provider.dart';
-import './hike_plan_hub_page.dart';
+import 'hike_plan_hub_page.dart';
 import '../widgets/preparation_progress_modal.dart';
+import '../widgets/complete_hike_dialog.dart';
+import '../widgets/review_hike_card.dart';
 
 class NotesPage extends StatefulWidget {
   const NotesPage({super.key});
@@ -34,15 +38,11 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _slideAnimationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.05),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-        parent: _slideAnimationController, curve: Curves.easeOutQuart));
-
+        vsync: this, duration: const Duration(milliseconds: 600));
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero).animate(
+            CurvedAnimation(
+                parent: _slideAnimationController, curve: Curves.easeOutQuart));
     _tabController = TabController(length: _tabs.length, vsync: this);
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -87,6 +87,36 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
     super.dispose();
   }
 
+  // MUUTOS: Uusi metodi, joka näyttää kuittausdialogin
+  Future<void> _showCompleteHikeDialog(HikePlan plan) async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => CompleteHikeDialog(plan: plan),
+    );
+
+    if (result != null && mounted) {
+      final updatedPlan = plan.copyWith(
+        status: HikeStatus.completed,
+        notes: result['notes'],
+        overallRating: result['rating'],
+      );
+      try {
+        await _hikePlanService.updateHikePlan(updatedPlan);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Congratulations on completing "${plan.hikeName}"!'),
+            backgroundColor: Colors.green.shade700,
+          ),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      }
+    }
+  }
+
+  // ... (muut apumetodit, kuten _openAddHikePlanModal ja _deleteHikePlan, pysyvät ennallaan)
   Future<void> _openAddHikePlanModal({HikePlan? existingPlan}) async {
     final newOrUpdatedPlanData = await showModalBottomSheet<HikePlan>(
       context: context,
@@ -125,7 +155,6 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
         );
       },
     );
-
     if (newOrUpdatedPlanData != null && mounted) {
       try {
         if (existingPlan == null) {
@@ -180,7 +209,6 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
         );
       },
     );
-
     if (confirm == true) {
       try {
         await _hikePlanService.deleteHikePlan(planId);
@@ -206,7 +234,6 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
     if (!mounted) return;
     final updatedItemsMap =
         await showPreparationProgressModal(context, planToUpdate);
-
     if (updatedItemsMap != null && mounted) {
       final updatedPlan =
           planToUpdate.copyWith(preparationItems: updatedItemsMap);
@@ -234,10 +261,10 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    // ... (build-metodin alku pysyy ennallaan)
     final theme = Theme.of(context);
     final authProvider = Provider.of<AuthProvider>(context);
     final userId = authProvider.user?.uid;
-
     if (_tabController == null && userId != null) {
       _tabController = TabController(length: _tabs.length, vsync: this);
       _loadStreams();
@@ -245,6 +272,7 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
 
     return Scaffold(
       appBar: AppBar(
+        // ... (AppBar ennallaan)
         leading: IconButton(
           icon: const Icon(Icons.logout),
           tooltip: 'Log out',
@@ -285,12 +313,14 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
               controller: _tabController,
               children: [
                 _buildPlansList(context, theme,
-                    _activePlansStream ?? Stream.value([]), "No active plans."),
+                    _activePlansStream ?? Stream.value([]), "No active plans.",
+                    isCompletedList: false),
                 _buildPlansList(
                     context,
                     theme,
                     _completedPlansStream ?? Stream.value([]),
-                    "No completed hikes yet."),
+                    "No completed hikes yet.",
+                    isCompletedList: true),
               ],
             ),
       floatingActionButton: userId == null
@@ -308,26 +338,23 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
     );
   }
 
+  // MUUTOS: Lisätty `isCompletedList`-parametri ja logiikka kuittauskortin näyttämiseen
   Widget _buildPlansList(BuildContext context, ThemeData theme,
-      Stream<List<HikePlan>> stream, String emptyListMessage) {
+      Stream<List<HikePlan>> stream, String emptyListMessage,
+      {required bool isCompletedList}) {
     return SlideTransition(
       position: _slideAnimation,
       child: StreamBuilder<List<HikePlan>>(
         stream: stream,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting &&
-              !snapshot.hasData &&
-              !snapshot.hasError) {
+              !snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            print(
-                "Error in _buildPlansList StreamBuilder for '$emptyListMessage': ${snapshot.error}");
             return Center(
-                child: Text(
-              'Error loading plans.\n${snapshot.error}',
-              textAlign: TextAlign.center,
-            ));
+                child: Text('Error loading plans.\n${snapshot.error}',
+                    textAlign: TextAlign.center));
           }
           final List<HikePlan> hikePlans = snapshot.data ?? [];
 
@@ -336,26 +363,49 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
                 customMessage: emptyListMessage);
           }
 
+          // MUUTOS: Tarkistetaan, onko vaellus päättynyt mutta ei vielä kuitattu
+          // Järjestetään lista niin, että kuitattavat tulevat ensin
+          if (!isCompletedList) {
+            hikePlans.sort((a, b) {
+              bool aIsPast =
+                  a.endDate != null && a.endDate!.isBefore(DateTime.now());
+              bool bIsPast =
+                  b.endDate != null && b.endDate!.isBefore(DateTime.now());
+              if (aIsPast && !bIsPast) return -1; // a tulee ensin
+              if (!aIsPast && bIsPast) return 1; // b tulee ensin
+              return a.startDate.compareTo(
+                  b.startDate); // muuten järjestetään alkupäivän mukaan
+            });
+          }
+
           return ListView.builder(
             padding: const EdgeInsets.only(top: 12.0, bottom: 96.0),
             itemCount: hikePlans.length,
             itemBuilder: (context, index) {
               final plan = hikePlans[index];
+              final bool isPastDue = !isCompletedList &&
+                  plan.endDate != null &&
+                  plan.endDate!.isBefore(DateTime.now());
+
+              // MUUTOS: Näytetään erityinen kortti, jos vaellus odottaa kuittausta
+              if (isPastDue) {
+                return ReviewHikeCard(
+                  plan: plan,
+                  onComplete: () => _showCompleteHikeDialog(plan),
+                );
+              }
+
+              // Muuten näytetään normaali HikePlanCard
               return HikePlanCard(
                 key: ValueKey(plan.id),
                 plan: plan,
                 onTap: () async {
                   if (!mounted) return;
-                  final result = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => HikePlanHubPage(initialPlan: plan),
-                    ),
-                  );
-                  if (mounted && result != null) {
-                    print(
-                        "Returned from HikePlanHubPage, potential update needed.");
-                  }
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) =>
+                              HikePlanHubPage(initialPlan: plan)));
                 },
                 onEdit: () => _openAddHikePlanModal(existingPlan: plan),
                 onDelete: () => _deleteHikePlan(plan.id, plan.hikeName),
@@ -368,6 +418,7 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
     );
   }
 
+  // ... (muut build-metodit, kuten _buildLoginPromptState ja _buildEmptyState, pysyvät ennallaan)
   Widget _buildLoginPromptState(BuildContext context, ThemeData theme) {
     final textTheme = theme.textTheme;
     return Center(
