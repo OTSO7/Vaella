@@ -740,8 +740,9 @@ class _CreatePostPageState extends State<CreatePostPage> {
                     const TextInputType.numberWithOptions(decimal: true),
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return "Required";
-                  if (double.tryParse(v.replaceAll(',', '.')) == null)
+                  if (double.tryParse(v.replaceAll(',', '.')) == null) {
                     return 'Invalid';
+                  }
                   return null;
                 },
               )),
@@ -902,10 +903,12 @@ class _CreatePostPageState extends State<CreatePostPage> {
           hintText: "Search for a trail or area...",
           icon: Icons.location_on_outlined,
           validator: (value) {
-            if (value == null || value.trim().isEmpty)
+            if (value == null || value.trim().isEmpty) {
               return 'Location is required';
-            if (_latitude == null || _longitude == null)
+            }
+            if (_latitude == null || _longitude == null) {
               return 'Please select a valid location from suggestions';
+            }
             return null;
           },
         ),

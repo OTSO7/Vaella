@@ -31,13 +31,10 @@ class _HomePageState extends State<HomePage> {
   HomeView _currentView = HomeView.map;
   static const double _swipeVelocityThreshold = 300;
 
-  // MUUTOS: Korjattu postausten järjestys
   Stream<List<Post>> _getPublicPostsStream() {
     return FirebaseFirestore.instance
         .collection('posts')
         .where('visibility', isEqualTo: 'public')
-        // Järjestetään AINOASTAAN aikaleiman mukaan, uusin ensin.
-        // Tämä takaa oikean järjestyksen feed-näkymässä.
         .orderBy('timestamp', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs
@@ -46,7 +43,64 @@ class _HomePageState extends State<HomePage> {
             .toList());
   }
 
-  // --- KAIKKI MUUT METODIT OVAT TÄYSIN ENNALLAAN ---
+  Widget _buildMapView(BuildContext context, List<Post> posts) {
+    final markers = posts
+        .where((post) => post.latitude != null && post.longitude != null)
+        .map((post) => Marker(
+              point: LatLng(post.latitude!, post.longitude!),
+              width: 50,
+              height: 60,
+              child: _buildPostMarker(context, post),
+            ))
+        .toList();
+
+    return FlutterMap(
+      mapController: _mapController,
+      options: const MapOptions(
+        initialCenter: LatLng(65.0, 25.5),
+        initialZoom: 5.0,
+        maxZoom: 18.0,
+      ),
+      children: [
+        TileLayer(
+          urlTemplate:
+              'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+          subdomains: const ['a', 'b', 'c', 'd'],
+          userAgentPackageName: 'com.example.treknoteflutter',
+        ),
+        MarkerClusterLayerWidget(
+          options: MarkerClusterLayerOptions(
+            maxClusterRadius: 80,
+            size: const Size(50, 50),
+            markers: markers,
+            polygonOptions: const PolygonOptions(
+                borderColor: Colors.blueAccent,
+                color: Colors.black12,
+                borderStrokeWidth: 3),
+            builder: (context, markers) {
+              return _buildClusterMarker(context, markers.length);
+            },
+          ),
+        ),
+        RichAttributionWidget(
+          attributions: [
+            TextSourceAttribution(
+              'OpenStreetMap contributors',
+              onTap: () =>
+                  launchUrl(Uri.parse('https://openstreetmap.org/copyright')),
+            ),
+            TextSourceAttribution(
+              'CARTO',
+              onTap: () =>
+                  launchUrl(Uri.parse('https://carto.com/attributions')),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // --- MUUT METODIT OVAT ENNALLAAN ---
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
@@ -73,7 +127,7 @@ class _HomePageState extends State<HomePage> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            print(snapshot.error); // Hyvä lisätä debug-tuloste
+            print(snapshot.error);
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -206,90 +260,6 @@ class _HomePageState extends State<HomePage> {
           );
         },
       ),
-    );
-  }
-
-  Widget _buildMapView(BuildContext context, List<Post> posts) {
-    final markers = posts
-        .where((post) => post.latitude != null && post.longitude != null)
-        .map((post) => Marker(
-              point: LatLng(post.latitude!, post.longitude!),
-              width: 50,
-              height: 60,
-              child: _buildPostMarker(context, post),
-            ))
-        .toList();
-    const List<double> invertMatrix = [
-      -1,
-      0,
-      0,
-      0,
-      255,
-      0,
-      -1,
-      0,
-      0,
-      255,
-      0,
-      0,
-      -1,
-      0,
-      255,
-      0,
-      0,
-      0,
-      1,
-      0,
-    ];
-    return FlutterMap(
-      mapController: _mapController,
-      options: const MapOptions(
-        initialCenter: LatLng(65.0, 25.5),
-        initialZoom: 5.0,
-        maxZoom: 18.0,
-      ),
-      children: [
-        ColorFiltered(
-          colorFilter: const ColorFilter.matrix(invertMatrix),
-          child: TileLayer(
-            urlTemplate:
-                'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-            subdomains: const ['a', 'b', 'c', 'd'],
-            userAgentPackageName: 'com.example.treknoteflutter',
-          ),
-        ),
-        Container(
-          color: Colors.white.withOpacity(0.15),
-        ),
-        MarkerClusterLayerWidget(
-          options: MarkerClusterLayerOptions(
-            maxClusterRadius: 80,
-            size: const Size(50, 50),
-            markers: markers,
-            polygonOptions: const PolygonOptions(
-                borderColor: Colors.blueAccent,
-                color: Colors.black12,
-                borderStrokeWidth: 3),
-            builder: (context, markers) {
-              return _buildClusterMarker(context, markers.length);
-            },
-          ),
-        ),
-        RichAttributionWidget(
-          attributions: [
-            TextSourceAttribution(
-              'OpenStreetMap contributors',
-              onTap: () =>
-                  launchUrl(Uri.parse('https://openstreetmap.org/copyright')),
-            ),
-            TextSourceAttribution(
-              'CARTO',
-              onTap: () =>
-                  launchUrl(Uri.parse('https://carto.com/attributions')),
-            ),
-          ],
-        ),
-      ],
     );
   }
 
