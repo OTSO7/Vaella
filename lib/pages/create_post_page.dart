@@ -17,7 +17,7 @@ import 'package:syncfusion_flutter_datepicker/datepicker.dart';
 import '../models/hike_plan_model.dart';
 import '../models/post_model.dart';
 import '../providers/auth_provider.dart';
-import '../utils/rating_utils.dart'; // Varmista, että tämä tiedosto on olemassa
+import '../utils/rating_utils.dart';
 
 class CreatePostPage extends StatefulWidget {
   final PostVisibility initialVisibility;
@@ -528,7 +528,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
         labelText: labelText,
         hintText: hintText,
         prefixIcon: Icon(icon,
-            color: theme.colorScheme.primary.withOpacity(0.8), size: 20),
+            color: theme.colorScheme.primary.withAlpha((255 * 0.8).round()),
+            size: 20),
       ),
     );
   }
@@ -607,7 +608,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
         decoration: InputDecoration(
           labelText: "Hike Dates",
           prefixIcon: Icon(Icons.calendar_today_outlined,
-              color: theme.colorScheme.primary.withOpacity(0.8), size: 20),
+              color: theme.colorScheme.primary.withAlpha((255 * 0.8).round()),
+              size: 20),
         ),
         child: Text(dateText,
             style: GoogleFonts.lato(
@@ -771,12 +773,13 @@ class _CreatePostPageState extends State<CreatePostPage> {
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withAlpha((255 * 0.05).round()),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 )
               ],
-              border: Border.all(color: theme.dividerColor.withOpacity(0.5)),
+              border: Border.all(
+                  color: theme.dividerColor.withAlpha((255 * 0.5).round())),
             ),
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(vertical: 4.0),
@@ -798,8 +801,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
                               fontSize: 10, fontWeight: FontWeight.bold)),
                       padding: const EdgeInsets.symmetric(
                           horizontal: 6, vertical: 0),
-                      backgroundColor:
-                          theme.colorScheme.primaryContainer.withOpacity(0.5),
+                      backgroundColor: theme.colorScheme.primaryContainer
+                          .withAlpha((255 * 0.5).round()),
                       side: BorderSide.none,
                     ),
                     onTap: () => _selectLocationSuggestion(suggestion),
@@ -916,7 +919,17 @@ class _CreatePostPageState extends State<CreatePostPage> {
     );
   }
 
+  // KORJATTU METODI
   Widget _buildRatingsSection(BuildContext context) {
+    // Apufunktio, joka muuntaa Map<int, String> -> Map<double, String>
+    Map<double, String> _convertRatingLabels(dynamic labels) {
+      if (labels is Map<int, String>) {
+        return labels.map((key, value) => MapEntry(key.toDouble(), value));
+      }
+      // Palauttaa alkuperäisen, jos se on jo oikeaa tyyppiä, tai tyhjän varmuuden vuoksi
+      return (labels as Map<double, String>?) ?? {};
+    }
+
     return Card(
       elevation: 0,
       color: Theme.of(context).colorScheme.surface,
@@ -926,14 +939,15 @@ class _CreatePostPageState extends State<CreatePostPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Arvostele vaelluksesi",
+            Text("Rate your hike",
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 20),
             _buildRatingBar(
               title: getRatingData(RatingType.weather)['title'],
               icon: getRatingData(RatingType.weather)['icon'],
               currentRating: _weatherRating,
-              labels: getRatingData(RatingType.weather)['labels'],
+              labels: _convertRatingLabels(
+                  getRatingData(RatingType.weather)['labels']),
               onRatingChanged: (rating) {
                 setState(() => _weatherRating = rating);
               },
@@ -943,7 +957,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
               title: getRatingData(RatingType.difficulty)['title'],
               icon: getRatingData(RatingType.difficulty)['icon'],
               currentRating: _difficultyRating,
-              labels: getRatingData(RatingType.difficulty)['labels'],
+              labels: _convertRatingLabels(
+                  getRatingData(RatingType.difficulty)['labels']),
               onRatingChanged: (rating) {
                 setState(() => _difficultyRating = rating);
               },
@@ -953,7 +968,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
               title: getRatingData(RatingType.experience)['title'],
               icon: getRatingData(RatingType.experience)['icon'],
               currentRating: _experienceRating,
-              labels: getRatingData(RatingType.experience)['labels'],
+              labels: _convertRatingLabels(
+                  getRatingData(RatingType.experience)['labels']),
               onRatingChanged: (rating) {
                 setState(() => _experienceRating = rating);
               },
