@@ -1,3 +1,5 @@
+// lib/pages/route_planner_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -5,11 +7,23 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../models/daily_route_model.dart';
-import '../models/hike_plan_model.dart';
 import '../providers/route_planner_provider.dart';
+import '../utils/map_helpers.dart';
 import 'map_editing_page.dart';
 
 enum _ExitAction { save, discard, cancel }
+
+// Esimerkkivärit reiteille, voit muokata näitä
+const List<Color> kRouteColors = [
+  Colors.blue,
+  Colors.red,
+  Colors.green,
+  Colors.purple,
+  Colors.orange,
+  Colors.teal,
+  Colors.pink,
+  Colors.amber,
+];
 
 class RoutePlannerPage extends StatefulWidget {
   const RoutePlannerPage({super.key});
@@ -27,16 +41,16 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
     super.initState();
     _plannerProvider = context.read<RoutePlannerProvider>();
     _initializeNotesControllers();
-
-    // Kuunnellaan providerin muutoksia ja päivitetään controllerit tarvittaessa
     _plannerProvider.addListener(_onProviderUpdate);
   }
 
   void _onProviderUpdate() {
-    // Tällä varmistetaan, että jos reittien määrä muuttuu, controllerit luodaan uudelleen.
     if (_notesControllers.length != _plannerProvider.plan.dailyRoutes.length) {
       _disposeControllers();
       _initializeNotesControllers();
+      if (mounted) {
+        setState(() {});
+      }
     }
   }
 
@@ -330,27 +344,8 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
       List<LatLng> allPoints) {
     if (allPoints.isEmpty) return _buildMapPlaceholder(context);
 
-    final List<Marker> endpointMarkers = [];
-    for (final route in dailyRoutes) {
-      if (route.points.isNotEmpty) {
-        endpointMarkers.add(Marker(
-          point: route.points.first,
-          width: 12,
-          height: 12,
-          child:
-              _buildRouteEndpointMarker(color: route.routeColor, isStart: true),
-        ));
-        if (route.points.length > 1) {
-          endpointMarkers.add(Marker(
-            point: route.points.last,
-            width: 12,
-            height: 12,
-            child: _buildRouteEndpointMarker(
-                color: route.routeColor, isStart: false),
-          ));
-        }
-      }
-    }
+    // Käytetään keskitettyä funktiota.
+    final arrowMarkers = generateArrowMarkersForDays(dailyRoutes);
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
@@ -377,12 +372,16 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
               polylines: dailyRoutes.map((route) {
                 return Polyline(
                   points: route.points,
-                  strokeWidth: 5,
+                  // Yhtenäistetty tyyli.
+                  strokeWidth: 5.0,
                   color: route.routeColor.withOpacity(0.8),
+                  borderColor: Colors.black.withOpacity(0.2),
+                  borderStrokeWidth: 1.0,
                 );
               }).toList(),
             ),
-            MarkerLayer(markers: endpointMarkers),
+            // Lisätty MarkerLayer nuolille.
+            MarkerLayer(markers: arrowMarkers),
           ],
         ),
       ),
@@ -390,7 +389,6 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
   }
 
   Widget _buildTotalSummaryCard(BuildContext context, RouteSummary summary) {
-    final theme = Theme.of(context);
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
       elevation: 2,
@@ -427,20 +425,6 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
                   ?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 2),
           Text(label, style: theme.textTheme.bodySmall),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRouteEndpointMarker(
-      {required Color color, bool isStart = false}) {
-    return Container(
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: isStart ? Colors.white : color,
-        border: Border.all(color: color, width: 2.5),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 4)
         ],
       ),
     );
@@ -523,6 +507,9 @@ class _RoutePreviewMapState extends State<_RoutePreviewMap> {
 
   @override
   Widget build(BuildContext context) {
+    // Lisätty nuolten generointi myös esikatselukarttaan.
+    final arrowMarkers = generateArrowMarkersForDays([widget.dayRoute]);
+
     return AbsorbPointer(
       child: FlutterMap(
         mapController: _mapController,
@@ -540,11 +527,17 @@ class _RoutePreviewMapState extends State<_RoutePreviewMap> {
           PolylineLayer(
             polylines: [
               Polyline(
-                  points: widget.dayRoute.points,
-                  strokeWidth: 5,
-                  color: widget.dayRoute.routeColor),
+                points: widget.dayRoute.points,
+                // Yhtenäistetty tyyli.
+                strokeWidth: 5.0,
+                color: widget.dayRoute.routeColor.withOpacity(0.8),
+                borderColor: Colors.black.withOpacity(0.2),
+                borderStrokeWidth: 1.0,
+              ),
             ],
           ),
+          // Lisätty MarkerLayer nuolille.
+          MarkerLayer(markers: arrowMarkers),
         ],
       ),
     );

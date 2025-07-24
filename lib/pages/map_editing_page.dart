@@ -1,3 +1,5 @@
+// lib/pages/map_editing_page.dart
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,8 +8,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
-// KORJATTU: Tuodaan mallit suoraan, ei koko route_planner_pagea.
 import '../models/daily_route_model.dart';
+import '../utils/map_helpers.dart'; // LISÄTTY IMPORT
 
 class MapEditingPage extends StatefulWidget {
   final List<DailyRoute> allDailyRoutes;
@@ -33,13 +35,11 @@ class _MapEditingPageState extends State<MapEditingPage> {
   final String _orsApiKey =
       'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImRjNTNkYjcxNWYwYTQ0YjA4NzdhM2JjODc5ZmQ5ZDE5IiwiaCI6Im11cm11cjY0In0=';
 
-  // KORJATTU: Varmistetaan, että aktiivinen reitti on aina ajan tasalla.
   DailyRoute get _activeRoute => _modifiedRoutes[widget.editingDayIndex];
 
   @override
   void initState() {
     super.initState();
-    // Luodaan syvä kopio, jotta emme muokkaa alkuperäistä listaa vahingossa.
     _modifiedRoutes =
         widget.allDailyRoutes.map((route) => route.copyWith()).toList();
     _autoContinueRouteIfNeeded();
@@ -53,7 +53,6 @@ class _MapEditingPageState extends State<MapEditingPage> {
       final previousRoute = _modifiedRoutes[widget.editingDayIndex - 1];
       if (previousRoute.userClickedPoints.isNotEmpty) {
         final lastPoint = previousRoute.userClickedPoints.last;
-        // KORJATTU: Muokataan listaa oikein
         setState(() {
           _activeRoute.userClickedPoints = [lastPoint];
           _activeRoute.points.clear();
@@ -132,7 +131,6 @@ class _MapEditingPageState extends State<MapEditingPage> {
   Future<void> _recalculateCurrentDayRoute() async {
     setState(() => _isLoading = true);
 
-    // Käytetään paikallisia muuttujia, jotta vältetään setState-ongelmat
     final newPoints = <LatLng>[];
     var newSummary = RouteSummary();
 
@@ -179,7 +177,6 @@ class _MapEditingPageState extends State<MapEditingPage> {
     setState(() {
       if (widget.editingDayIndex > 0 &&
           _modifiedRoutes[widget.editingDayIndex - 1].points.isNotEmpty) {
-        // Säilytetään vain ensimmäinen piste, jos jatketaan edellisestä
         _activeRoute.userClickedPoints
             .removeRange(1, _activeRoute.userClickedPoints.length);
       } else {
@@ -191,7 +188,6 @@ class _MapEditingPageState extends State<MapEditingPage> {
 
   void _undoLastPoint() {
     if (_activeRoute.userClickedPoints.isNotEmpty) {
-      // Estetään edellisen päivän päätepisteen poistaminen
       if (widget.editingDayIndex > 0 &&
           _activeRoute.userClickedPoints.length == 1 &&
           _modifiedRoutes[widget.editingDayIndex - 1].points.isNotEmpty) {
@@ -207,6 +203,8 @@ class _MapEditingPageState extends State<MapEditingPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Luodaan nuolimerkit kaikille näkyvillä oleville reiteille.
+    final arrowMarkers = generateArrowMarkersForDays(_modifiedRoutes);
 
     return Scaffold(
       appBar: AppBar(
@@ -252,6 +250,8 @@ class _MapEditingPageState extends State<MapEditingPage> {
                   );
                 }).toList(),
               ),
+              // LISÄTTY: MarkerLayer nuolille.
+              MarkerLayer(markers: arrowMarkers),
               MarkerLayer(
                 markers:
                     _activeRoute.userClickedPoints.asMap().entries.map((entry) {
@@ -262,9 +262,7 @@ class _MapEditingPageState extends State<MapEditingPage> {
                     height: 24.0,
                     point: point,
                     child: GestureDetector(
-                      onTap: () {
-                        // Mahdollisuus poistaa pisteitä klikkaamalla
-                      },
+                      onTap: () {},
                       child: Container(
                         decoration: BoxDecoration(
                           color:

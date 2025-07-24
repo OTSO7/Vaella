@@ -10,6 +10,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../models/post_model.dart';
 import '../utils/rating_utils.dart';
+import '../utils/map_helpers.dart';
 import '../widgets/detailed_rating_display.dart';
 import 'full_screen_map_page.dart';
 
@@ -31,22 +32,29 @@ class PostDetailPage extends StatelessWidget {
           }
           if (!snapshot.hasData || !snapshot.data!.exists) {
             return Scaffold(
-                appBar: AppBar(),
-                body: const Center(child: Text('Postausta ei löytynyt.')));
+              appBar: AppBar(),
+              // KÄÄNNETTY
+              body: const Center(child: Text('Post not found.')),
+            );
           }
           if (snapshot.hasError) {
             return Scaffold(
-                appBar: AppBar(),
-                body: const Center(child: Text('Virhe ladatessa postausta.')));
+              appBar: AppBar(),
+              // KÄÄNNETTY
+              body: const Center(child: Text('Error loading post.')),
+            );
           }
 
           final post = Post.fromFirestore(snapshot.data!);
 
           if (post == null) {
             return Scaffold(
-                appBar: AppBar(),
-                body: const Center(
-                    child: Text('Postauksen tietoja ei voitu lukea.')));
+              appBar: AppBar(),
+              body: const Center(
+                // KÄÄNNETTY
+                child: Text('Could not read post data.'),
+              ),
+            );
           }
 
           return _buildPostContent(context, post);
@@ -85,10 +93,14 @@ class PostDetailPage extends StatelessWidget {
                         const Divider(height: 48, thickness: 0.5),
                         _buildSection(
                           context,
-                          title: "Tarinani",
+                          // KÄÄNNETTY
+                          title: "Story",
                           icon: Icons.article_outlined,
                           content: Text(
-                            post.caption.isEmpty ? "Ei tarinaa." : post.caption,
+                            // KÄÄNNETTY
+                            post.caption.isEmpty
+                                ? "No story available."
+                                : post.caption,
                             style: theme.textTheme.bodyLarge?.copyWith(
                               height: 1.6,
                               color: theme.textTheme.bodyLarge?.color
@@ -99,7 +111,8 @@ class PostDetailPage extends StatelessWidget {
                         const Divider(height: 48, thickness: 0.5),
                         _buildSection(
                           context,
-                          title: "Arvostelut",
+                          // KÄÄNNETTY
+                          title: "Ratings",
                           icon: Icons.star_half_rounded,
                           content: Column(
                             children: [
@@ -153,7 +166,8 @@ class PostDetailPage extends StatelessWidget {
                           const Divider(height: 48, thickness: 0.5),
                           _buildSection(
                             context,
-                            title: "Reitti",
+                            // KÄÄNNETTY
+                            title: "Route",
                             icon: Icons.route_outlined,
                             content: _buildRouteMap(context, post),
                           ),
@@ -241,7 +255,8 @@ class PostDetailPage extends StatelessWidget {
                   ?.copyWith(fontWeight: FontWeight.bold),
             ),
             Text(
-              'Julkaistu: ${DateFormat.yMMMd().format(post.timestamp)}',
+              // KÄÄNNETTY
+              'Published: ${DateFormat.yMMMd().format(post.timestamp)}',
               style:
                   theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
             ),
@@ -260,12 +275,15 @@ class PostDetailPage extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
+            // KÄÄNNETTY
             _buildStatItem(context, Icons.hiking_rounded,
-                '${post.distanceKm.toStringAsFixed(1)} km', 'Matka'),
+                '${post.distanceKm.toStringAsFixed(1)} km', 'Distance'),
+            // KÄÄNNETTY
             _buildStatItem(context, Icons.night_shelter_outlined,
-                '${post.nights} yötä', 'Kesto'),
+                '${post.nights} nights', 'Duration'),
+            // KÄÄNNETTY
             _buildStatItem(context, Icons.location_on_outlined,
-                post.location.split(',').first, 'Sijainti',
+                post.location.split(',').first, 'Location',
                 isLocation: true),
           ],
         ),
@@ -323,13 +341,12 @@ class PostDetailPage extends StatelessWidget {
   }
 
   Widget _buildRouteMap(BuildContext context, Post post) {
-    final List<LatLng> allPoints =
+    final allPoints =
         post.dailyRoutes!.expand((route) => route.points).toList();
-    final LatLngBounds bounds = LatLngBounds.fromPoints(allPoints);
+    final bounds = LatLngBounds.fromPoints(allPoints);
+    final arrowMarkers = generateArrowMarkersForDays(post.dailyRoutes!);
 
     return GestureDetector(
-      // KORJAUS TÄSSÄ: Tämä rivi pakottaa GestureDetectorin reagoimaan
-      // napautuksiin koko alueellaan, myös läpinäkyvissä kohdissa.
       behavior: HitTestBehavior.opaque,
       onTap: () {
         Navigator.of(context).push(
@@ -351,27 +368,26 @@ class PostDetailPage extends StatelessWidget {
                       bounds: bounds,
                       padding: const EdgeInsets.all(24.0),
                     ),
-                    interactionOptions: const InteractionOptions(
-                      flags: InteractiveFlag.none,
-                    ),
+                    interactionOptions:
+                        const InteractionOptions(flags: InteractiveFlag.none),
                   ),
                   children: [
                     TileLayer(
                       urlTemplate:
                           'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-                      subdomains: const ['a', 'b', 'c', 'd'],
                     ),
                     PolylineLayer(
                       polylines: post.dailyRoutes!
                           .map((route) => Polyline(
                                 points: route.points,
-                                color: route.routeColor,
-                                strokeWidth: 4.0,
-                                borderColor: Colors.black.withOpacity(0.4),
-                                borderStrokeWidth: 1.5,
+                                color: route.routeColor.withOpacity(0.8),
+                                strokeWidth: 5.0,
+                                borderColor: Colors.black.withOpacity(0.2),
+                                borderStrokeWidth: 1.0,
                               ))
                           .toList(),
                     ),
+                    MarkerLayer(markers: arrowMarkers),
                   ],
                 ),
               ),

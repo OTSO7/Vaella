@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/daily_route_model.dart';
+import '../utils/map_helpers.dart';
 
 class FullScreenMapPage extends StatelessWidget {
   final List<DailyRoute> routes;
@@ -12,19 +13,16 @@ class FullScreenMapPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    // Kerätään kaikki reittien pisteet yhteen listaan, jotta voimme sovittaa ne kartalle.
-    final List<LatLng> allPoints =
-        routes.expand((route) => route.points).toList();
-    final LatLngBounds bounds = LatLngBounds.fromPoints(allPoints);
+    final allPoints = routes.expand((route) => route.points).toList();
+    final bounds = LatLngBounds.fromPoints(allPoints);
+    // Käytetään keskitettyä funktiota nuolten luomiseen.
+    final arrowMarkers = generateArrowMarkersForDays(routes);
 
     return Scaffold(
-      // extendBodyBehindAppBar: true tekee AppBarista läpinäkyvän ja kelluvan kartan päällä.
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        // Lisätään musta, puoliläpinäkyvä tausta napille, jotta se näkyy aina.
         leading: Container(
           margin: const EdgeInsets.all(8.0),
           decoration: BoxDecoration(
@@ -42,11 +40,10 @@ class FullScreenMapPage extends StatelessWidget {
         options: MapOptions(
           initialCameraFit: CameraFit.bounds(
             bounds: bounds,
-            padding: const EdgeInsets.all(40.0), // Lisätään reunoille tilaa
+            padding: const EdgeInsets.all(40.0),
           ),
-          interactionOptions: const InteractionOptions(
-            flags: InteractiveFlag.all, // Sallitaan kaikki interaktiot
-          ),
+          interactionOptions:
+              const InteractionOptions(flags: InteractiveFlag.all),
         ),
         children: [
           TileLayer(
@@ -58,13 +55,16 @@ class FullScreenMapPage extends StatelessWidget {
             polylines: routes
                 .map((route) => Polyline(
                       points: route.points,
-                      color: route.routeColor,
+                      // Yhtenäistetty tyyli.
+                      color: route.routeColor.withOpacity(0.8),
                       strokeWidth: 5.0,
-                      borderColor: Colors.black.withOpacity(0.5),
-                      borderStrokeWidth: 1.5,
+                      borderColor: Colors.black.withOpacity(0.2),
+                      borderStrokeWidth: 1.0,
                     ))
                 .toList(),
           ),
+          // Lisätty MarkerLayer nuolille.
+          MarkerLayer(markers: arrowMarkers),
         ],
       ),
     );

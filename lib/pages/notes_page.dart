@@ -606,7 +606,7 @@ class CompletedHikeCard extends StatelessWidget {
                 child: ElevatedButton.icon(
                   onPressed: onCreatePost,
                   icon: const Icon(Icons.share_outlined),
-                  label: const Text('Share Your Experience'),
+                  label: const Text('Post Your Experience'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: theme.colorScheme.secondaryContainer,
                     foregroundColor: theme.colorScheme.onSecondaryContainer,

@@ -1,6 +1,7 @@
 // lib/pages/home_page.dart
 
 import 'dart:ui';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -8,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
+import 'package:flutter_map_marker_cluster/src/node/marker_node.dart';
 import 'package:latlong2/latlong.dart' hide Path;
 import 'package:url_launcher/url_launcher.dart';
 
@@ -16,9 +18,24 @@ import '../models/post_model.dart';
 import '../widgets/post_card.dart';
 import '../widgets/select_visibility_modal.dart';
 import '../widgets/star_rating_display.dart';
-import '../models/daily_route_model.dart'; // LISÄTTY
+import '../models/daily_route_model.dart';
+import '../utils/map_helpers.dart'; // UUSI IMPORT APUFUNKTIOLLE
 
 enum HomeView { map, feed }
+
+class PostMarker extends Marker {
+  final Post post;
+
+  PostMarker({
+    required this.post,
+    required Widget child,
+    super.width = 50,
+    super.height = 60,
+  }) : super(
+          point: LatLng(post.latitude!, post.longitude!),
+          child: child,
+        );
+}
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -32,9 +49,9 @@ class _HomePageState extends State<HomePage> {
   HomeView _currentView = HomeView.map;
   static const double _swipeVelocityThreshold = 300;
 
-  // MUUTOS: Lisätty tilamuuttujat valitulle postaukselle ja sen reitille
   Post? _selectedPost;
   final List<Polyline> _selectedRoutePolylines = [];
+  final List<Marker> _arrowMarkers = [];
 
   Stream<List<Post>> _getPublicPostsStream() {
     return FirebaseFirestore.instance
@@ -45,37 +62,132 @@ class _HomePageState extends State<HomePage> {
         .map((snapshot) => snapshot.docs
             .map((doc) => Post.fromFirestore(
                 doc as DocumentSnapshot<Map<String, dynamic>>))
+            .where((post) => post != null)
+            .cast<Post>()
             .toList());
   }
 
-  // MUUTOS: Metodi, joka päivittää kartalle piirrettävät reitit
-  void _updateSelectedRoutePolylines() {
+  // POISTETTU: Paikallinen _generateArrowMarkers-metodi on siirretty map_helpers.dart-tiedostoon.
+
+  void _updateSelectedRoute() {
     _selectedRoutePolylines.clear();
+    _arrowMarkers.clear();
+
     if (_selectedPost != null &&
         _selectedPost!.dailyRoutes != null &&
         _selectedPost!.dailyRoutes!.isNotEmpty) {
-      for (DailyRoute route in _selectedPost!.dailyRoutes!) {
-        _selectedRoutePolylines.add(
-          Polyline(
-            points: route.points,
-            color: route.routeColor.withOpacity(0.8),
-            strokeWidth: 5.0,
-            borderColor: Colors.black.withOpacity(0.2),
-            borderStrokeWidth: 1.0,
+      for (final route in _selectedPost!.dailyRoutes!) {
+        final polyline = Polyline(
+          points: route.points,
+          color: route.routeColor.withOpacity(0.8),
+          strokeWidth: 5.0,
+          borderColor: Colors.black.withOpacity(0.2),
+          borderStrokeWidth: 1.0,
+        );
+        _selectedRoutePolylines.add(polyline);
+      }
+      // KORJATTU: Käytetään keskitettyä apufunktiota.
+      _arrowMarkers
+          .addAll(generateArrowMarkersForDays(_selectedPost!.dailyRoutes!));
+    }
+  }
+
+  void _handlePostSelection(Post post) {
+    setState(() {
+      _selectedPost = post;
+      _updateSelectedRoute();
+    });
+
+    final bool hasRoute =
+        post.dailyRoutes != null && post.dailyRoutes!.isNotEmpty;
+    if (hasRoute) {
+      final allPoints =
+          post.dailyRoutes!.expand((route) => route.points).toList();
+      if (allPoints.length > 1) {
+        final bounds = LatLngBounds.fromPoints(allPoints);
+        _mapController.fitCamera(
+          CameraFit.bounds(
+            bounds: bounds,
+            padding: const EdgeInsets.all(50.0),
           ),
         );
       }
     }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _buildPostModal(context, post),
+    ).whenComplete(() {
+      setState(() {
+        _selectedPost = null;
+        _selectedRoutePolylines.clear();
+        _arrowMarkers.clear();
+      });
+    });
+  }
+
+  void _showPostSelectionSheet(BuildContext context, List<Post> posts) {
+    final theme = Theme.of(context);
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (builderContext) {
+        return Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Posts at this location',
+                style: theme.textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              const Divider(),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.4,
+                ),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: posts.length,
+                  itemBuilder: (ctx, index) {
+                    final post = posts[index];
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundImage: post.userAvatarUrl.isNotEmpty
+                            ? NetworkImage(post.userAvatarUrl)
+                            : null,
+                        child: post.userAvatarUrl.isEmpty
+                            ? const Icon(Icons.person, size: 20)
+                            : null,
+                      ),
+                      title: Text(post.title, style: theme.textTheme.bodyLarge),
+                      subtitle: Text("by @${post.username}"),
+                      onTap: () {
+                        Navigator.pop(builderContext);
+                        _handlePostSelection(post);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Widget _buildMapView(BuildContext context, List<Post> posts) {
-    final markers = posts
+    final postMarkers = posts
         .where((post) => post.latitude != null && post.longitude != null)
-        .map((post) => Marker(
-              point: LatLng(post.latitude!, post.longitude!),
-              width: 50,
-              height: 60,
-              child: _buildPostMarker(context, post),
+        .map((post) => PostMarker(
+              post: post,
+              child: _buildPostMarkerWidget(context, post),
             ))
         .toList();
 
@@ -91,21 +203,39 @@ class _HomePageState extends State<HomePage> {
           urlTemplate:
               'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
           subdomains: const ['a', 'b', 'c', 'd'],
-          userAgentPackageName: 'com.example.treknoteflutter',
         ),
-        // MUUTOS: Lisätty PolylineLayer näyttämään valitun reitin
         PolylineLayer(polylines: _selectedRoutePolylines),
+        MarkerLayer(markers: _arrowMarkers),
         MarkerClusterLayerWidget(
           options: MarkerClusterLayerOptions(
             maxClusterRadius: 80,
             size: const Size(50, 50),
-            markers: markers,
+            markers: postMarkers,
             polygonOptions: const PolygonOptions(
                 borderColor: Colors.blueAccent,
                 color: Colors.black12,
                 borderStrokeWidth: 3),
             builder: (context, markers) {
               return _buildClusterMarker(context, markers.length);
+            },
+            onClusterTap: (cluster) {
+              final firstPoint = cluster.markers.first.point;
+              final allSameLocation =
+                  cluster.markers.every((m) => m.point == firstPoint);
+
+              if (allSameLocation && cluster.markers.length > 1) {
+                final postsInCluster = cluster.markers
+                    .map((node) =>
+                        ((node as MarkerNode).marker as PostMarker).post)
+                    .toList();
+                _showPostSelectionSheet(context, postsInCluster);
+              } else {
+                _mapController.fitCamera(
+                  CameraFit.bounds(
+                      bounds: cluster.bounds,
+                      padding: const EdgeInsets.all(50)),
+                );
+              }
             },
           ),
         ),
@@ -191,7 +321,6 @@ class _HomePageState extends State<HomePage> {
           ? FloatingActionButton(
               onPressed: () {
                 showSelectVisibilityModal(context, (selectedVisibility) {
-                  // MUOKATTU: Välitetään Map, jossa visibility, mutta ei suunnitelmaa.
                   context.push('/create-post', extra: {
                     'visibility': selectedVisibility,
                     'plan': null,
@@ -293,31 +422,12 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // MUUTOS: Markerin painallus päivittää nyt valitun postauksen ja reitin,
-  // ja näyttää modaalin. Kun modaali suljetaan, valinta nollataan.
-  Widget _buildPostMarker(BuildContext context, Post post) {
+  Widget _buildPostMarkerWidget(BuildContext context, Post post) {
     final isSelected = _selectedPost?.id == post.id;
     final theme = Theme.of(context);
 
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedPost = post;
-          _updateSelectedRoutePolylines();
-        });
-
-        showModalBottomSheet(
-          context: context,
-          backgroundColor: Colors.transparent,
-          builder: (context) => _buildPostModal(context, post),
-        ).whenComplete(() {
-          // Kun modaali suljetaan, nollataan valinta ja poistetaan reitti kartalta
-          setState(() {
-            _selectedPost = null;
-            _selectedRoutePolylines.clear();
-          });
-        });
-      },
+      onTap: () => _handlePostSelection(post),
       child: Tooltip(
         message: post.title,
         child: Column(
