@@ -16,6 +16,7 @@ import '../models/post_model.dart';
 import '../widgets/post_card.dart';
 import '../widgets/select_visibility_modal.dart';
 import '../widgets/star_rating_display.dart';
+import '../models/daily_route_model.dart'; // LISÄTTY
 
 enum HomeView { map, feed }
 
@@ -31,6 +32,10 @@ class _HomePageState extends State<HomePage> {
   HomeView _currentView = HomeView.map;
   static const double _swipeVelocityThreshold = 300;
 
+  // MUUTOS: Lisätty tilamuuttujat valitulle postaukselle ja sen reitille
+  Post? _selectedPost;
+  final List<Polyline> _selectedRoutePolylines = [];
+
   Stream<List<Post>> _getPublicPostsStream() {
     return FirebaseFirestore.instance
         .collection('posts')
@@ -41,6 +46,26 @@ class _HomePageState extends State<HomePage> {
             .map((doc) => Post.fromFirestore(
                 doc as DocumentSnapshot<Map<String, dynamic>>))
             .toList());
+  }
+
+  // MUUTOS: Metodi, joka päivittää kartalle piirrettävät reitit
+  void _updateSelectedRoutePolylines() {
+    _selectedRoutePolylines.clear();
+    if (_selectedPost != null &&
+        _selectedPost!.dailyRoutes != null &&
+        _selectedPost!.dailyRoutes!.isNotEmpty) {
+      for (DailyRoute route in _selectedPost!.dailyRoutes!) {
+        _selectedRoutePolylines.add(
+          Polyline(
+            points: route.points,
+            color: route.routeColor.withOpacity(0.8),
+            strokeWidth: 5.0,
+            borderColor: Colors.black.withOpacity(0.2),
+            borderStrokeWidth: 1.0,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildMapView(BuildContext context, List<Post> posts) {
@@ -68,6 +93,8 @@ class _HomePageState extends State<HomePage> {
           subdomains: const ['a', 'b', 'c', 'd'],
           userAgentPackageName: 'com.example.treknoteflutter',
         ),
+        // MUUTOS: Lisätty PolylineLayer näyttämään valitun reitin
+        PolylineLayer(polylines: _selectedRoutePolylines),
         MarkerClusterLayerWidget(
           options: MarkerClusterLayerOptions(
             maxClusterRadius: 80,
@@ -100,7 +127,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // --- MUUT METODIT OVAT ENNALLAAN ---
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
@@ -165,7 +191,11 @@ class _HomePageState extends State<HomePage> {
           ? FloatingActionButton(
               onPressed: () {
                 showSelectVisibilityModal(context, (selectedVisibility) {
-                  context.push('/create-post', extra: selectedVisibility);
+                  // MUOKATTU: Välitetään Map, jossa visibility, mutta ei suunnitelmaa.
+                  context.push('/create-post', extra: {
+                    'visibility': selectedVisibility,
+                    'plan': null,
+                  });
                 });
               },
               backgroundColor: theme.colorScheme.primary,
@@ -263,27 +293,47 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // MUUTOS: Markerin painallus päivittää nyt valitun postauksen ja reitin,
+  // ja näyttää modaalin. Kun modaali suljetaan, valinta nollataan.
   Widget _buildPostMarker(BuildContext context, Post post) {
+    final isSelected = _selectedPost?.id == post.id;
+    final theme = Theme.of(context);
+
     return GestureDetector(
       onTap: () {
+        setState(() {
+          _selectedPost = post;
+          _updateSelectedRoutePolylines();
+        });
+
         showModalBottomSheet(
           context: context,
           backgroundColor: Colors.transparent,
           builder: (context) => _buildPostModal(context, post),
-        );
+        ).whenComplete(() {
+          // Kun modaali suljetaan, nollataan valinta ja poistetaan reitti kartalta
+          setState(() {
+            _selectedPost = null;
+            _selectedRoutePolylines.clear();
+          });
+        });
       },
       child: Tooltip(
         message: post.title,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Theme.of(context).cardColor,
+                color: theme.cardColor,
                 border: Border.all(
-                    color: Theme.of(context).colorScheme.primary, width: 2),
+                    color: isSelected
+                        ? theme.colorScheme.secondary
+                        : theme.colorScheme.primary,
+                    width: isSelected ? 3 : 2),
               ),
               child: CircleAvatar(
                 radius: 16,
@@ -297,8 +347,11 @@ class _HomePageState extends State<HomePage> {
             ),
             ClipPath(
               clipper: _TriangleClipper(),
-              child: Container(
-                color: Theme.of(context).colorScheme.primary,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                color: isSelected
+                    ? theme.colorScheme.secondary
+                    : theme.colorScheme.primary,
                 height: 8,
                 width: 16,
               ),

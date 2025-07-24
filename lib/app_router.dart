@@ -28,6 +28,7 @@ import 'pages/post_detail_page.dart';
 
 import 'widgets/main_scaffold.dart';
 
+// Päänavigaattorin avain, jota käytetään näyttämään sivuja pohjanavigaation päällä.
 final _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 
 class AppRouter extends StatelessWidget {
@@ -41,8 +42,13 @@ class AppRouter extends StatelessWidget {
       navigatorKey: _rootNavigatorKey,
       initialLocation: '/home',
       debugLogDiagnostics: true,
+      // Kuuntelee AuthProviderin muutoksia ja suorittaa uudelleenohjauksen tarvittaessa.
       refreshListenable: authProvider,
       routes: [
+        // --- Alaosan navigaatiopalkin ulkopuoliset reitit ---
+        // Nämä reitit käyttävät _rootNavigatorKey-avainta, jotta ne avautuvat
+        // koko näytön kokoisina päänavigaation päälle.
+
         GoRoute(
           path: '/login',
           name: 'login',
@@ -60,11 +66,21 @@ class AppRouter extends StatelessWidget {
           name: 'createPost',
           parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) {
-            final extraData = state.extra as Map<String, dynamic>?;
-            final visibility =
-                extraData?['initialVisibility'] as PostVisibility? ??
-                    PostVisibility.public;
-            final hikePlan = extraData?['hikePlan'] as HikePlan?;
+            // KORJATTU: Käsittelee 'extra'-parametrin dynaamisesti ja turvallisesti.
+            // Tämä reitti voidaan kutsua kahdella tavalla:
+            // 1. Pelkällä PostVisibility-oliolla (esim. etusivun FAB-napista).
+            // 2. Map-oliolla, joka sisältää sekä HikePlanin että PostVisibilityn (suoritetun vaelluksen jälkeen).
+            PostVisibility visibility = PostVisibility.public;
+            HikePlan? hikePlan;
+
+            if (state.extra is Map<String, dynamic>) {
+              final extraData = state.extra as Map<String, dynamic>;
+              visibility = extraData['visibility'] as PostVisibility? ??
+                  PostVisibility.public;
+              hikePlan = extraData['plan'] as HikePlan?;
+            } else if (state.extra is PostVisibility) {
+              visibility = state.extra as PostVisibility;
+            }
 
             return CreatePostPage(
               initialVisibility: visibility,
@@ -85,9 +101,10 @@ class AppRouter extends StatelessWidget {
           builder: (context, state) {
             final userId = state.pathParameters['userId'];
             final username = state.extra as String?;
-            if (userId == null)
+            if (userId == null) {
               return const Scaffold(
                   body: Center(child: Text('User ID missing.')));
+            }
             return UserPostsListPage(userId: userId, username: username);
           },
         ),
@@ -97,9 +114,10 @@ class AppRouter extends StatelessWidget {
           parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) {
             final plan = state.extra as HikePlan?;
-            if (plan == null)
+            if (plan == null) {
               return const Scaffold(
                   body: Center(child: Text('Hike plan not found!')));
+            }
             return HikePlanHubPage(initialPlan: plan);
           },
         ),
@@ -109,9 +127,10 @@ class AppRouter extends StatelessWidget {
           parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) {
             final hikePlan = state.extra as HikePlan?;
-            if (hikePlan == null)
+            if (hikePlan == null) {
               return const Scaffold(
                   body: Center(child: Text('Hike Plan data missing.')));
+            }
             return WeatherPage(hikePlan: hikePlan);
           },
         ),
@@ -122,9 +141,10 @@ class AppRouter extends StatelessWidget {
           builder: (context, state) {
             final planId = state.pathParameters['planId']!;
             final hikePlan = state.extra as HikePlan?;
-            if (hikePlan == null)
+            if (hikePlan == null) {
               return const Scaffold(
                   body: Center(child: Text('Hike Plan data missing.')));
+            }
             return PackingListPage(planId: planId, initialPlan: hikePlan);
           },
         ),
@@ -134,44 +154,55 @@ class AppRouter extends StatelessWidget {
           parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) {
             final postId = state.pathParameters['id'];
-            if (postId == null)
+            if (postId == null) {
               return const Scaffold(
                   body: Center(child: Text('Post ID missing.')));
+            }
             return PostDetailPage(postId: postId);
           },
         ),
+
+        // --- Alaosan navigaatiopalkin sisältävät reitit (Shell Route) ---
+        // Tämä luo pohjanavigaation, jossa jokaisella välilehdellä on oma navigaatiohistoriansa.
         StatefulShellRoute.indexedStack(
           builder: (context, state, navigationShell) {
             return MainScaffoldWithBottomNav(navigationShell: navigationShell);
           },
           branches: <StatefulShellBranch>[
+            // Branch for the Home tab
             StatefulShellBranch(routes: <RouteBase>[
               GoRoute(
-                  path: '/home',
-                  name: 'home',
-                  builder: (context, state) => const HomePage()),
+                path: '/home',
+                name: 'home',
+                builder: (context, state) => const HomePage(),
+              ),
             ]),
+            // Branch for the Notes tab
             StatefulShellBranch(routes: <RouteBase>[
               GoRoute(
-                  path: '/notes',
-                  name: 'notes',
-                  builder: (context, state) => const NotesPage()),
+                path: '/notes',
+                name: 'notes',
+                builder: (context, state) => const NotesPage(),
+              ),
             ]),
+            // Branch for the Profile tab
             StatefulShellBranch(routes: <RouteBase>[
               GoRoute(
                 path: '/profile',
                 name: 'profile',
                 builder: (context, state) => const ProfilePage(),
                 routes: [
+                  // Profiilin alireitti, joka avautuu koko näytölle
                   GoRoute(
                     path: 'edit',
                     name: 'editProfile',
                     parentNavigatorKey: _rootNavigatorKey,
                     builder: (context, state) {
                       final userProfile = state.extra as UserProfile?;
-                      if (userProfile == null)
+                      if (userProfile == null) {
                         return const Scaffold(
                             body: Center(child: Text("Profile data missing.")));
+                      }
                       return EditProfilePage(initialProfile: userProfile);
                     },
                   ),
@@ -181,18 +212,24 @@ class AppRouter extends StatelessWidget {
           ],
         ),
       ],
+      // Uudelleenohjauslogiikka, joka perustuu käyttäjän kirjautumistilaan.
       redirect: (context, state) {
         final isLoggedIn = authProvider.isLoggedIn;
         final location = state.matchedLocation;
         final isAuthRoute = location == '/login' || location == '/register';
 
+        // Jos käyttäjä ei ole kirjautunut EIKÄ ole menossa kirjautumis- tai rekisteröintisivulle, ohjataan kirjautumiseen.
         if (!isLoggedIn && !isAuthRoute) return '/login';
+
+        // Jos käyttäjä ON kirjautunut ja yrittää mennä kirjautumis- tai rekisteröintisivulle, ohjataan etusivulle.
         if (isLoggedIn && isAuthRoute) return '/home';
+
+        // Muissa tapauksissa navigointi sallitaan.
         return null;
       },
     );
 
-    // KORJAUS: Alkuperäinen teemasi on palautettu tähän.
+    // Sovelluksen teema pysyy ennallaan.
     final themeData = ThemeData(
       brightness: Brightness.dark,
       scaffoldBackgroundColor: const Color(0xFF1A1A1A),

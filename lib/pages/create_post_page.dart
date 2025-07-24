@@ -17,15 +17,16 @@ import 'package:syncfusion_flutter_datepicker/datepicker.dart';
 import '../models/hike_plan_model.dart';
 import '../models/post_model.dart';
 import '../providers/auth_provider.dart';
+import '../utils/rating_utils.dart'; // Varmista, että tämä tiedosto on olemassa
 
 class CreatePostPage extends StatefulWidget {
   final PostVisibility initialVisibility;
-  final HikePlan? hikePlan; // LISÄTTY: Voi ottaa vastaan suunnitelman
+  final HikePlan? hikePlan;
 
   const CreatePostPage({
     super.key,
     required this.initialVisibility,
-    this.hikePlan, // LISÄTTY
+    this.hikePlan,
   });
 
   @override
@@ -33,7 +34,6 @@ class CreatePostPage extends StatefulWidget {
 }
 
 class _CreatePostPageState extends State<CreatePostPage> {
-  // ... (Kaikki controllerit ja state-muuttujat ennallaan)
   int _currentStep = 0;
   final PageController _pageController = PageController();
   final List<GlobalKey<FormState>> _formKeys = [
@@ -55,9 +55,9 @@ class _CreatePostPageState extends State<CreatePostPage> {
   double? _longitude;
   bool _isLoading = false;
   bool _showPackWeightField = false;
-  double _weatherRating = 0.0;
-  double _difficultyRating = 0.0;
-  double _experienceRating = 0.0;
+  double _weatherRating = 3.0;
+  double _difficultyRating = 3.0;
+  double _experienceRating = 3.0;
   List<Map<String, dynamic>> _locationSuggestions = [];
   Timer? _debounce;
   final ValueNotifier<bool> _isSearchingLocation = ValueNotifier(false);
@@ -80,49 +80,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
       'lat': 68.1666654499649,
       'lon': 28.25000050929616,
     },
-    {
-      'name': 'Pallas-Yllästunturin kansallispuisto',
-      'area': 'Enontekiö, Kittilä, Kolari',
-      'isPopular': true,
-      'keywords': ['palla', 'pallas', 'ylläs', 'pallas-ylläs', 'hetta'],
-      'lat': 67.96666545447972,
-      'lon': 24.133333365079718,
-    },
-    {
-      'name': 'Nuuksion kansallispuisto',
-      'area': 'Espoo, Kirkkonummi',
-      'isPopular': true,
-      'keywords': ['nuuksio', 'nuuk'],
-      'lat': 60.29272641885399,
-      'lon': 24.55651004451601,
-    },
-    {
-      'name': 'Kolin kansallispuisto',
-      'area': 'Lieksa, Joensuu',
-      'isPopular': true,
-      'keywords': ['kol', 'koli', 'kolin'],
-      'lat': 63.096856314964896,
-      'lon': 29.806231767971884,
-    },
-    {
-      'name': 'Repoveden kansallispuisto',
-      'area': 'Kouvola, Mäntyharju',
-      'isPopular': true,
-      'keywords': ['repovesi', 'repo'],
-      'lat': 61.1879941764923,
-      'lon': 26.902363366617525,
-    },
-    {
-      'name': 'Kilpisjärvi',
-      'area': 'Enontekiö',
-      'isPopular': true,
-      'keywords': ['kilpis', 'kilpisjärvi'],
-      'lat': 69.04428710574022,
-      'lon': 20.803299621352853,
-    },
   ];
 
-  // LISÄTTY: State-muuttujat suunnitelman linkittämiseen
   bool _linkPlanData = true;
   bool _includeRouteOnMap = true;
 
@@ -132,35 +91,9 @@ class _CreatePostPageState extends State<CreatePostPage> {
     _selectedVisibility = widget.initialVisibility;
     _locationController.addListener(_onLocationChanged);
     _locationFocusNode.addListener(_onFocusChanged);
-    _prefillFieldsFromPlan(); // LISÄTTY
+    _prefillFieldsFromPlan();
   }
 
-  // LISÄTTY: Uusi metodi, joka esitäyttää kentät
-  void _prefillFieldsFromPlan() {
-    if (widget.hikePlan != null) {
-      final plan = widget.hikePlan!;
-      _titleController.text = plan.hikeName;
-      _locationController.text = plan.location;
-      _startDate = plan.startDate;
-      _endDate = plan.endDate;
-      _latitude = plan.latitude;
-      _longitude = plan.longitude;
-
-      // Lasketaan kokonaismatka ja yöt reiteistä
-      double totalDistance = 0;
-      plan.dailyRoutes.forEach((route) {
-        totalDistance += route.summary.distance;
-      });
-      _distanceController.text = (totalDistance / 1000).toStringAsFixed(1);
-      _nightsController.text =
-          (plan.endDate?.difference(plan.startDate).inDays ?? 0).toString();
-
-      // Esitäytetään myös muistiinpanot kuvaukseksi
-      _captionController.text = plan.notes ?? '';
-    }
-  }
-
-  // ... (kaikki muut metodit, kuten dispose, _onNextPressed jne. pysyvät ennallaan)
   @override
   void dispose() {
     _titleController.dispose();
@@ -175,6 +108,36 @@ class _CreatePostPageState extends State<CreatePostPage> {
     _isSearchingLocation.dispose();
     _locationFocusNode.dispose();
     super.dispose();
+  }
+
+  void _prefillFieldsFromPlan() {
+    if (widget.hikePlan != null) {
+      final plan = widget.hikePlan!;
+      _titleController.text = plan.hikeName;
+      _locationController.text = plan.location;
+      _startDate = plan.startDate;
+      _endDate = plan.endDate;
+      _latitude = plan.latitude;
+      _longitude = plan.longitude;
+
+      double totalDistance = 0;
+      if (plan.dailyRoutes.isNotEmpty) {
+        for (var route in plan.dailyRoutes) {
+          totalDistance += route.summary.distance;
+        }
+        _distanceController.text = (totalDistance / 1000).toStringAsFixed(1);
+      } else if (plan.lengthKm != null) {
+        _distanceController.text = plan.lengthKm!.toStringAsFixed(1);
+      }
+
+      if (plan.endDate != null) {
+        _nightsController.text =
+            plan.endDate!.difference(plan.startDate).inDays.toString();
+      } else {
+        _nightsController.text = '0';
+      }
+      _captionController.text = plan.notes ?? '';
+    }
   }
 
   void _onFocusChanged() {
@@ -220,7 +183,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
             List<Map<String, dynamic>>.from(json.decode(response.body));
       }
     } catch (e) {
-      print("Location search failed: $e");
+      debugPrint("Location search failed: $e");
     }
     final combinedResults = <Map<String, dynamic>>[];
     final addedNames = <String>{};
@@ -424,7 +387,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
           'difficulty': _difficultyRating,
           'experience': _experienceRating
         },
-        // LISÄTTY: Linkitetään suunnitelma ja reitti dataan, jos käyttäjä niin valitsi
         planId: widget.hikePlan != null && _linkPlanData
             ? widget.hikePlan!.id
             : null,
@@ -444,7 +406,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
   @override
   Widget build(BuildContext context) {
-    /* ... build-metodi ja sen apumetodit ennallaan PAITSI _buildStepThree ... */ return Scaffold(
+    return Scaffold(
       appBar: AppBar(
         title: Text('Create Post (${_currentStep + 1}/3)',
             style: GoogleFonts.poppins()),
@@ -478,12 +440,11 @@ class _CreatePostPageState extends State<CreatePostPage> {
   }
 
   Widget _buildProgressIndicator() {
-    double beginValue = _currentStep / 3.0;
     double endValue = (_currentStep + 1) / 3.0;
     return TweenAnimationBuilder<double>(
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeInOut,
-      tween: Tween<double>(begin: beginValue, end: endValue),
+      tween: Tween<double>(begin: _currentStep / 3.0, end: endValue),
       builder: (context, value, child) => LinearProgressIndicator(
         value: value,
         backgroundColor: Theme.of(context).colorScheme.surface,
@@ -521,6 +482,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
   Widget _buildSectionHeader(BuildContext context, String title) => Text(title,
       style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w600));
+
   Future<void> _pickImage() async {
     if (_isLoading) return;
     final ImagePicker picker = ImagePicker();
@@ -898,15 +860,25 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
   Widget _buildRatingBar({
     required String title,
+    required IconData icon,
     required double currentRating,
     required ValueChanged<double> onRatingChanged,
+    required Map<double, String> labels,
   }) {
+    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title,
-            style: GoogleFonts.lato(fontSize: 16, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 4),
+        Row(
+          children: [
+            Icon(icon, color: theme.colorScheme.secondary, size: 20),
+            const SizedBox(width: 8),
+            Text(title,
+                style: GoogleFonts.lato(
+                    fontSize: 16, fontWeight: FontWeight.w600)),
+          ],
+        ),
+        const SizedBox(height: 8),
         Row(
           children: List.generate(5, (index) {
             final starNumber = index + 1.0;
@@ -924,6 +896,22 @@ class _CreatePostPageState extends State<CreatePostPage> {
             );
           }),
         ),
+        const SizedBox(height: 4),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          transitionBuilder: (Widget child, Animation<double> animation) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+          child: Text(
+            labels[currentRating] ?? '',
+            key: ValueKey<double>(currentRating),
+            style: GoogleFonts.lato(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: theme.colorScheme.secondary,
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -938,28 +926,34 @@ class _CreatePostPageState extends State<CreatePostPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Rate Your Hike",
+            Text("Arvostele vaelluksesi",
                 style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             _buildRatingBar(
-              title: "Weather Conditions",
+              title: getRatingData(RatingType.weather)['title'],
+              icon: getRatingData(RatingType.weather)['icon'],
               currentRating: _weatherRating,
+              labels: getRatingData(RatingType.weather)['labels'],
               onRatingChanged: (rating) {
                 setState(() => _weatherRating = rating);
               },
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
             _buildRatingBar(
-              title: "Trail Difficulty",
+              title: getRatingData(RatingType.difficulty)['title'],
+              icon: getRatingData(RatingType.difficulty)['icon'],
               currentRating: _difficultyRating,
+              labels: getRatingData(RatingType.difficulty)['labels'],
               onRatingChanged: (rating) {
                 setState(() => _difficultyRating = rating);
               },
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
             _buildRatingBar(
-              title: "Overall Experience",
+              title: getRatingData(RatingType.experience)['title'],
+              icon: getRatingData(RatingType.experience)['icon'],
               currentRating: _experienceRating,
+              labels: getRatingData(RatingType.experience)['labels'],
               onRatingChanged: (rating) {
                 setState(() => _experienceRating = rating);
               },
@@ -970,16 +964,14 @@ class _CreatePostPageState extends State<CreatePostPage> {
     );
   }
 
-  // MUUTOS: Uusi build-metodi kolmannelle sivulle
   Widget _buildStepThree(BuildContext context) {
     return Form(
       key: _formKeys[2],
       child: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         children: [
-          _buildSectionHeader(context, "3. Final Touches"),
+          _buildSectionHeader(context, "3. Final Touches & Ratings"),
           const SizedBox(height: 24),
-          // Näytetään linkitysosio vain, jos tultiin suunnitelmasta
           if (widget.hikePlan != null) ...[
             _buildLinkPlanSection(context),
             const SizedBox(height: 24),
@@ -992,7 +984,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
     );
   }
 
-  // LISÄTTY: Uusi widget suunnitelman tietojen linkittämiseen
   Widget _buildLinkPlanSection(BuildContext context) {
     final theme = Theme.of(context);
     return Card(

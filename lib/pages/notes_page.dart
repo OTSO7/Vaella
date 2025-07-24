@@ -1,9 +1,11 @@
 // lib/pages/notes_page.dart
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart'; // LISÄTTY
 import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import '../models/hike_plan_model.dart';
+import '../models/post_model.dart'; // LISÄTTY
 import '../widgets/hike_plan_card.dart';
 import '../widgets/add_hike_plan_form.dart';
 import '../services/hike_plan_service.dart';
@@ -87,7 +89,6 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  // MUUTOS: Uusi metodi, joka näyttää kuittausdialogin
   Future<void> _showCompleteHikeDialog(HikePlan plan) async {
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -116,7 +117,6 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
     }
   }
 
-  // ... (muut apumetodit, kuten _openAddHikePlanModal ja _deleteHikePlan, pysyvät ennallaan)
   Future<void> _openAddHikePlanModal({HikePlan? existingPlan}) async {
     final newOrUpdatedPlanData = await showModalBottomSheet<HikePlan>(
       context: context,
@@ -259,9 +259,18 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
     }
   }
 
+  // UUSI METODI: Navigoi postauksen luontisivulle ja välittää suunnitelman.
+  void _navigateToCreatePost(HikePlan plan) {
+    // Välitetään sekä suunnitelma että oletusnäkyvyys GoRouterin 'extra'-parametrissa.
+    // Oletetaan, että reititys on konfiguroitu käsittelemään Map-tyyppistä extraa.
+    context.push('/create-post', extra: {
+      'plan': plan,
+      'visibility': PostVisibility.public, // Oletusarvo, kun luodaan postaus
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    // ... (build-metodin alku pysyy ennallaan)
     final theme = Theme.of(context);
     final authProvider = Provider.of<AuthProvider>(context);
     final userId = authProvider.user?.uid;
@@ -272,7 +281,6 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
 
     return Scaffold(
       appBar: AppBar(
-        // ... (AppBar ennallaan)
         leading: IconButton(
           icon: const Icon(Icons.logout),
           tooltip: 'Log out',
@@ -338,7 +346,7 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
     );
   }
 
-  // MUUTOS: Lisätty `isCompletedList`-parametri ja logiikka kuittauskortin näyttämiseen
+  // MUUTOS: Lisätty logiikka näyttämään "CompletedHikeCard", kun lista on suoritetuille vaelluksille.
   Widget _buildPlansList(BuildContext context, ThemeData theme,
       Stream<List<HikePlan>> stream, String emptyListMessage,
       {required bool isCompletedList}) {
@@ -363,19 +371,19 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
                 customMessage: emptyListMessage);
           }
 
-          // MUUTOS: Tarkistetaan, onko vaellus päättynyt mutta ei vielä kuitattu
-          // Järjestetään lista niin, että kuitattavat tulevat ensin
           if (!isCompletedList) {
             hikePlans.sort((a, b) {
               bool aIsPast =
                   a.endDate != null && a.endDate!.isBefore(DateTime.now());
               bool bIsPast =
                   b.endDate != null && b.endDate!.isBefore(DateTime.now());
-              if (aIsPast && !bIsPast) return -1; // a tulee ensin
-              if (!aIsPast && bIsPast) return 1; // b tulee ensin
-              return a.startDate.compareTo(
-                  b.startDate); // muuten järjestetään alkupäivän mukaan
+              if (aIsPast && !bIsPast) return -1;
+              if (!aIsPast && bIsPast) return 1;
+              return a.startDate.compareTo(b.startDate);
             });
+          } else {
+            // Järjestetään suoritetut vaellukset uusimmasta vanhimpaan
+            hikePlans.sort((a, b) => b.endDate!.compareTo(a.endDate!));
           }
 
           return ListView.builder(
@@ -383,11 +391,23 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
             itemCount: hikePlans.length,
             itemBuilder: (context, index) {
               final plan = hikePlans[index];
-              final bool isPastDue = !isCompletedList &&
-                  plan.endDate != null &&
+
+              // MUUTOS TÄSSÄ: Jos lista on suoritetuille vaelluksille, käytä uutta korttia.
+              if (isCompletedList) {
+                return CompletedHikeCard(
+                  plan: plan,
+                  onCreatePost: () => _navigateToCreatePost(plan),
+                  onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) =>
+                              HikePlanHubPage(initialPlan: plan))),
+                );
+              }
+
+              final bool isPastDue = plan.endDate != null &&
                   plan.endDate!.isBefore(DateTime.now());
 
-              // MUUTOS: Näytetään erityinen kortti, jos vaellus odottaa kuittausta
               if (isPastDue) {
                 return ReviewHikeCard(
                   plan: plan,
@@ -395,7 +415,6 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
                 );
               }
 
-              // Muuten näytetään normaali HikePlanCard
               return HikePlanCard(
                 key: ValueKey(plan.id),
                 plan: plan,
@@ -418,7 +437,6 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
     );
   }
 
-  // ... (muut build-metodit, kuten _buildLoginPromptState ja _buildEmptyState, pysyvät ennallaan)
   Widget _buildLoginPromptState(BuildContext context, ThemeData theme) {
     final textTheme = theme.textTheme;
     return Center(
@@ -522,6 +540,85 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
               ),
             ]
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// UUSI WIDGET: Kortti suoritetulle vaellukselle.
+class CompletedHikeCard extends StatelessWidget {
+  final HikePlan plan;
+  final VoidCallback onCreatePost;
+  final VoidCallback onTap;
+
+  const CompletedHikeCard({
+    super.key,
+    required this.plan,
+    required this.onCreatePost,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                plan.hikeName,
+                style:
+                    textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.location_on_outlined,
+                      size: 16, color: textTheme.bodySmall?.color),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      plan.location,
+                      style: textTheme.bodyMedium,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: onCreatePost,
+                  icon: const Icon(Icons.share_outlined),
+                  label: const Text('Share Your Experience'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: theme.colorScheme.secondaryContainer,
+                    foregroundColor: theme.colorScheme.onSecondaryContainer,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              )
+            ],
+          ),
         ),
       ),
     );
