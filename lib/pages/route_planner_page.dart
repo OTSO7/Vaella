@@ -1,10 +1,10 @@
-// lib/pages/route_planner_page.dart
-
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/daily_route_model.dart';
 import '../providers/route_planner_provider.dart';
@@ -344,7 +344,6 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
       List<LatLng> allPoints) {
     if (allPoints.isEmpty) return _buildMapPlaceholder(context);
 
-    // Käytetään keskitettyä funktiota.
     final arrowMarkers = generateArrowMarkersForDays(dailyRoutes);
 
     return Card(
@@ -363,16 +362,13 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
           ),
           children: [
             TileLayer(
-              urlTemplate:
-                  'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-              subdomains: const ['a', 'b', 'c', 'd'],
-              retinaMode: RetinaMode.isHighDensity(context),
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'com.example.treknoteflutter',
             ),
             PolylineLayer(
               polylines: dailyRoutes.map((route) {
                 return Polyline(
                   points: route.points,
-                  // Yhtenäistetty tyyli.
                   strokeWidth: 5.0,
                   color: route.routeColor.withOpacity(0.8),
                   borderColor: Colors.black.withOpacity(0.2),
@@ -380,8 +376,16 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
                 );
               }).toList(),
             ),
-            // Lisätty MarkerLayer nuolille.
             MarkerLayer(markers: arrowMarkers),
+            RichAttributionWidget(
+              attributions: [
+                TextSourceAttribution(
+                  '© OpenStreetMap contributors',
+                  onTap: () => launchUrl(
+                      Uri.parse('https://openstreetmap.org/copyright')),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -472,12 +476,6 @@ class _RoutePreviewMapState extends State<_RoutePreviewMap> {
   final MapController _mapController = MapController();
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _fitMapToRoute());
-  }
-
-  @override
   void didUpdateWidget(covariant _RoutePreviewMap oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.dayRoute.points != oldWidget.dayRoute.points) {
@@ -507,28 +505,33 @@ class _RoutePreviewMapState extends State<_RoutePreviewMap> {
 
   @override
   Widget build(BuildContext context) {
-    // Lisätty nuolten generointi myös esikatselukarttaan.
     final arrowMarkers = generateArrowMarkersForDays([widget.dayRoute]);
 
     return AbsorbPointer(
       child: FlutterMap(
         mapController: _mapController,
         options: MapOptions(
+          // KORJATTU: Lisätään pieni viive onMapReady-kutsuun varmistamaan,
+          // että kartan piirtäminen ehtii valmiiksi ennen kameran siirtoa.
+          onMapReady: () {
+            Future.delayed(const Duration(milliseconds: 100), () {
+              if (mounted) {
+                _fitMapToRoute();
+              }
+            });
+          },
           initialCenter: widget.planLocation ?? const LatLng(65, 25.5),
           initialZoom: 5,
         ),
         children: [
           TileLayer(
-            urlTemplate:
-                'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-            subdomains: const ['a', 'b', 'c', 'd'],
-            retinaMode: RetinaMode.isHighDensity(context),
+            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            userAgentPackageName: 'com.example.treknoteflutter',
           ),
           PolylineLayer(
             polylines: [
               Polyline(
                 points: widget.dayRoute.points,
-                // Yhtenäistetty tyyli.
                 strokeWidth: 5.0,
                 color: widget.dayRoute.routeColor.withOpacity(0.8),
                 borderColor: Colors.black.withOpacity(0.2),
@@ -536,7 +539,6 @@ class _RoutePreviewMapState extends State<_RoutePreviewMap> {
               ),
             ],
           ),
-          // Lisätty MarkerLayer nuolille.
           MarkerLayer(markers: arrowMarkers),
         ],
       ),

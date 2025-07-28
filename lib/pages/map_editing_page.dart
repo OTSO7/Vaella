@@ -1,15 +1,15 @@
-// lib/pages/map_editing_page.dart
-
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/daily_route_model.dart';
-import '../utils/map_helpers.dart'; // LISÄTTY IMPORT
+import '../utils/map_helpers.dart';
 
 class MapEditingPage extends StatefulWidget {
   final List<DailyRoute> allDailyRoutes;
@@ -43,9 +43,6 @@ class _MapEditingPageState extends State<MapEditingPage> {
     _modifiedRoutes =
         widget.allDailyRoutes.map((route) => route.copyWith()).toList();
     _autoContinueRouteIfNeeded();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _fitMapToRoute();
-    });
   }
 
   void _autoContinueRouteIfNeeded() {
@@ -86,6 +83,15 @@ class _MapEditingPageState extends State<MapEditingPage> {
     _addPointToRoute(point);
   }
 
+  double _calculateHikingDuration(
+      {required double distanceMeters, required double ascentMeters}) {
+    final double distanceKm = distanceMeters / 1000;
+    final double minutesForDistance = distanceKm * 15;
+    final double minutesForAscent = ascentMeters / 10;
+    final double totalMinutes = minutesForDistance + minutesForAscent;
+    return totalMinutes * 60;
+  }
+
   Future<(List<LatLng>, RouteSummary)?> _fetchRouteFromORS(
       LatLng start, LatLng end) async {
     final url = Uri.parse(
@@ -103,24 +109,53 @@ class _MapEditingPageState extends State<MapEditingPage> {
     });
 
     try {
-      final response = await http.post(url, headers: headers, body: body);
+      // KORJATTU: Lisätty 15 sekunnin aikaraja verkkopyynnölle.
+      final response = await http
+          .post(url, headers: headers, body: body)
+          .timeout(const Duration(seconds: 15));
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final coords = data['features'][0]['geometry']['coordinates'] as List;
-        final summaryData = data['features'][0]['properties']['summary'];
         final points =
             coords.map((c) => LatLng(c[1] as double, c[0] as double)).toList();
+
+        final double distance =
+            (data['features'][0]['properties']['summary']['distance'] as num?)
+                    ?.toDouble() ??
+                0.0;
+        final double ascent =
+            (data['features'][0]['properties']['ascent'] as num?)?.toDouble() ??
+                0.0;
+        final double descent =
+            (data['features'][0]['properties']['descent'] as num?)
+                    ?.toDouble() ??
+                0.0;
+
+        final double calculatedDuration = _calculateHikingDuration(
+          distanceMeters: distance,
+          ascentMeters: ascent,
+        );
+
         final summary = RouteSummary(
-          distance: (summaryData['distance'] as num?)?.toDouble() ?? 0.0,
-          duration: (summaryData['duration'] as num?)?.toDouble() ?? 0.0,
-          ascent: (data['features'][0]['properties']['ascent'] as num?)
-                  ?.toDouble() ??
-              0.0,
-          descent: (data['features'][0]['properties']['descent'] as num?)
-                  ?.toDouble() ??
-              0.0,
+          distance: distance,
+          duration: calculatedDuration,
+          ascent: ascent,
+          descent: descent,
         );
         return (points, summary);
+      } else {
+        debugPrint(
+            "ORS API returned status ${response.statusCode}: ${response.body}");
+      }
+    } on TimeoutException {
+      debugPrint("ORS request timed out.");
+      // Ilmoitetaan käyttäjälle aikakatkaisusta
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Route service timed out. Check connection.'),
+          backgroundColor: Colors.orange,
+        ));
       }
     } catch (e) {
       debugPrint("ORS Exception: $e");
@@ -128,41 +163,51 @@ class _MapEditingPageState extends State<MapEditingPage> {
     return null;
   }
 
+  // KORJATTU: Koko metodi on nyt try-finally-lohkon sisällä.
   Future<void> _recalculateCurrentDayRoute() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
 
-    final newPoints = <LatLng>[];
-    var newSummary = RouteSummary();
+    try {
+      final newPoints = <LatLng>[];
+      var newSummary = RouteSummary();
 
-    if (_activeRoute.userClickedPoints.length < 2) {
-      newPoints.addAll(_activeRoute.userClickedPoints);
-    } else {
-      for (int i = 0; i < _activeRoute.userClickedPoints.length - 1; i++) {
-        final start = _activeRoute.userClickedPoints[i];
-        final end = _activeRoute.userClickedPoints[i + 1];
-        final result = await _fetchRouteFromORS(start, end);
+      if (_activeRoute.userClickedPoints.length < 2) {
+        newPoints.addAll(_activeRoute.userClickedPoints);
+      } else {
+        for (int i = 0; i < _activeRoute.userClickedPoints.length - 1; i++) {
+          final start = _activeRoute.userClickedPoints[i];
+          final end = _activeRoute.userClickedPoints[i + 1];
+          final result = await _fetchRouteFromORS(start, end);
 
-        if (result != null) {
-          final (points, summary) = result;
-          if (newPoints.isNotEmpty) points.removeAt(0);
-          newPoints.addAll(points);
-          newSummary += summary;
-        } else {
-          if (newPoints.isEmpty) newPoints.add(start);
-          newPoints.add(end);
+          if (result != null) {
+            final (points, summary) = result;
+            if (newPoints.isNotEmpty) points.removeAt(0);
+            newPoints.addAll(points);
+            newSummary += summary;
+          } else {
+            // Jos ORS-haku epäonnistuu, piirretään suora viiva pisteiden välille.
+            if (newPoints.isEmpty) newPoints.add(start);
+            newPoints.add(end);
+          }
         }
       }
-    }
 
-    if (mounted) {
-      setState(() {
-        _modifiedRoutes[widget.editingDayIndex] = _activeRoute.copyWith(
-          points: newPoints,
-          summary: newSummary,
-        );
-        _isLoading = false;
-      });
-      _fitMapToRoute();
+      if (mounted) {
+        setState(() {
+          _modifiedRoutes[widget.editingDayIndex] = _activeRoute.copyWith(
+            points: newPoints,
+            summary: newSummary,
+          );
+        });
+        _fitMapToRoute();
+      }
+    } finally {
+      // Tämä finally-lohko varmistaa, että latausindikaattori
+      // piilotetaan AINA, myös virhetilanteessa.
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -203,7 +248,6 @@ class _MapEditingPageState extends State<MapEditingPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // Luodaan nuolimerkit kaikille näkyvillä oleville reiteille.
     final arrowMarkers = generateArrowMarkersForDays(_modifiedRoutes);
 
     return Scaffold(
@@ -213,7 +257,6 @@ class _MapEditingPageState extends State<MapEditingPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.check_rounded),
-            tooltip: 'Confirm Changes',
             onPressed: () => Navigator.of(context).pop(_modifiedRoutes),
           ),
         ],
@@ -223,16 +266,21 @@ class _MapEditingPageState extends State<MapEditingPage> {
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
+              onMapReady: () {
+                Future.delayed(const Duration(milliseconds: 100), () {
+                  if (mounted) {
+                    _fitMapToRoute();
+                  }
+                });
+              },
               initialCenter: widget.planLocation ?? const LatLng(65.0, 25.5),
               initialZoom: 5.0,
               onLongPress: (_, point) => _handleLongPress(point),
             ),
             children: [
               TileLayer(
-                urlTemplate:
-                    'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-                subdomains: const ['a', 'b', 'c', 'd'],
-                retinaMode: RetinaMode.isHighDensity(context),
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.example.treknoteflutter',
               ),
               PolylineLayer(
                 polylines: _modifiedRoutes.asMap().entries.map((entry) {
@@ -250,7 +298,6 @@ class _MapEditingPageState extends State<MapEditingPage> {
                   );
                 }).toList(),
               ),
-              // LISÄTTY: MarkerLayer nuolille.
               MarkerLayer(markers: arrowMarkers),
               MarkerLayer(
                 markers:
@@ -289,6 +336,15 @@ class _MapEditingPageState extends State<MapEditingPage> {
                   );
                 }).toList(),
               ),
+              RichAttributionWidget(
+                attributions: [
+                  TextSourceAttribution(
+                    '© OpenStreetMap contributors',
+                    onTap: () => launchUrl(
+                        Uri.parse('https://openstreetmap.org/copyright')),
+                  ),
+                ],
+              ),
             ],
           ),
           Positioned(bottom: 30, right: 10, child: _buildActionButtons(theme)),
@@ -313,13 +369,11 @@ class _MapEditingPageState extends State<MapEditingPage> {
         FloatingActionButton(
             heroTag: 'undo_fab',
             mini: true,
-            tooltip: 'Undo last point',
             onPressed: _undoLastPoint,
             child: const Icon(Icons.undo)),
         const SizedBox(height: 10),
         FloatingActionButton(
             heroTag: 'clear_fab',
-            tooltip: 'Clear current day\'s route',
             onPressed: _clearCurrentDayRoute,
             backgroundColor: theme.colorScheme.errorContainer,
             foregroundColor: theme.colorScheme.onErrorContainer,
