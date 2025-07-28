@@ -1,13 +1,12 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:syncfusion_flutter_datepicker/datepicker.dart';
 
 import '../models/hike_plan_model.dart';
+import '../services/location_service.dart';
 import '../widgets/map_picker_page.dart';
 
 class AddHikePlanForm extends StatefulWidget {
@@ -30,70 +29,14 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
   double? _latitude;
   double? _longitude;
 
-  List<Map<String, dynamic>> _locationSuggestions = [];
+  // Sijainninhaun muuttujat
+  final LocationService _locationService = LocationService();
+  List<LocationSuggestion> _suggestions = [];
+  List<LocationSuggestion> _popularSuggestionsCache = [];
   Timer? _debounce;
-  final ValueNotifier<bool> _isSearchingLocation = ValueNotifier(false);
   final FocusNode _locationFocusNode = FocusNode();
-  String _currentSearchQuery = '';
-
-  final List<Map<String, dynamic>> _popularDestinations = const [
-    {
-      'name': 'Karhunkierros Trail',
-      'area': 'Kuusamo',
-      'isPopular': true,
-      'keywords': ['karhunkierros', 'karhu', 'bears ring'],
-      'lat': 66.37162668137469,
-      'lon': 29.30838567629724,
-    },
-    {
-      'name': 'Urho Kekkonen National Park',
-      'area': 'Saariselkä',
-      'isPopular': true,
-      'keywords': ['urho', 'urho kekkonen', 'ukk', 'uk-puisto', 'saariselkä'],
-      'lat': 68.1666654499649,
-      'lon': 28.25000050929616,
-    },
-    {
-      'name': 'Pallas-Yllästunturi National Park',
-      'area': 'Enontekiö, Kittilä',
-      'isPopular': true,
-      'keywords': ['pallas', 'ylläs', 'pallas-ylläs', 'hetta'],
-      'lat': 67.96666545447972,
-      'lon': 24.133333365079718,
-    },
-    {
-      'name': 'Nuuksio National Park',
-      'area': 'Espoo',
-      'isPopular': true,
-      'keywords': ['nuuksio', 'nuuk'],
-      'lat': 60.29272641885399,
-      'lon': 24.55651004451601,
-    },
-    {
-      'name': 'Koli National Park',
-      'area': 'Lieksa',
-      'isPopular': true,
-      'keywords': ['kol', 'koli', 'kolin'],
-      'lat': 63.096856314964896,
-      'lon': 29.806231767971884,
-    },
-    {
-      'name': 'Repovesi National Park',
-      'area': 'Kouvola',
-      'isPopular': true,
-      'keywords': ['repovesi', 'repo'],
-      'lat': 61.1879941764923,
-      'lon': 26.902363366617525,
-    },
-    {
-      'name': 'Kilpisjärvi & Saana Fell',
-      'area': 'Enontekiö',
-      'isPopular': true,
-      'keywords': ['kilpis', 'kilpisjärvi', 'saana', 'halti'],
-      'lat': 69.04428710574022,
-      'lon': 20.803299621352853,
-    },
-  ];
+  bool _isSearching = false;
+  bool _isSelectingLocation = false;
 
   @override
   void initState() {
@@ -110,179 +53,83 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
       _latitude = widget.existingPlan!.latitude;
       _longitude = widget.existingPlan!.longitude;
     }
-    _locationController.addListener(_onLocationChanged);
-    _locationFocusNode.addListener(_onFocusChanged);
+    _locationController.addListener(_onTextChanged);
+    _locationFocusNode.addListener(_onLocationFocusChanged);
+    _fetchInitialSuggestions();
   }
 
   @override
   void dispose() {
     _nameController.dispose();
-    _locationController.removeListener(_onLocationChanged);
+    _locationController.removeListener(_onTextChanged);
     _locationController.dispose();
     _lengthController.dispose();
-    _isSearchingLocation.dispose();
     _debounce?.cancel();
+    _locationFocusNode.removeListener(_onLocationFocusChanged);
     _locationFocusNode.dispose();
     super.dispose();
   }
 
-  void _onFocusChanged() {
-    if (!_locationFocusNode.hasFocus) {
+  Future<void> _fetchInitialSuggestions() async {
+    _popularSuggestionsCache = await _locationService.getPopularLocations();
+    if (_locationFocusNode.hasFocus && _locationController.text.isEmpty) {
+      setState(() => _suggestions = _popularSuggestionsCache);
+    }
+  }
+
+  void _onLocationFocusChanged() {
+    if (_locationFocusNode.hasFocus && _locationController.text.isEmpty) {
+      setState(() => _suggestions = _popularSuggestionsCache);
+    } else if (!_locationFocusNode.hasFocus) {
       Future.delayed(const Duration(milliseconds: 200), () {
-        if (mounted) setState(() => _locationSuggestions = []);
+        if (mounted) setState(() => _suggestions = []);
       });
     }
   }
 
-  void _onLocationChanged() {
+  void _onTextChanged() {
+    if (_isSelectingLocation) return;
+
+    final query = _locationController.text;
     if (_debounce?.isActive ?? false) _debounce!.cancel();
-    _debounce = Timer(const Duration(milliseconds: 500), () {
-      final query = _locationController.text.trim();
-      if (query.length > 2 && query != _currentSearchQuery) {
-        _isSearchingLocation.value = true;
-        _currentSearchQuery = query;
-        _searchLocations(query);
-      } else if (query.isEmpty) {
-        if (mounted) setState(() => _locationSuggestions = []);
+    _debounce = Timer(const Duration(milliseconds: 300), () async {
+      if (query.trim().length < 2) {
+        setState(() {
+          _isSearching = false;
+          _suggestions =
+              _locationController.text.isEmpty ? _popularSuggestionsCache : [];
+        });
+        return;
+      }
+      if (mounted) setState(() => _isSearching = true);
+      final results = await _locationService.searchLocations(query.trim());
+      if (mounted) {
+        setState(() {
+          _suggestions = results;
+          _isSearching = false;
+        });
       }
     });
   }
 
-  Future<void> _searchLocations(String query) async {
-    final normalizedQuery = query.toLowerCase();
-
-    final popularResults = _popularDestinations.where((dest) {
-      final nameMatch =
-          dest['name'].toString().toLowerCase().contains(normalizedQuery);
-      final keywordMatch = (dest['keywords'] as List<String>)
-          .any((k) => k.contains(normalizedQuery));
-      return nameMatch || keywordMatch;
-    }).toList();
-
-    final uri = Uri.parse(
-        'https://nominatim.openstreetmap.org/search?q=$query&format=json&addressdetails=1&limit=5&countrycodes=fi&accept-language=en');
-    List<Map<String, dynamic>> apiResults = [];
-    try {
-      final response =
-          await http.get(uri, headers: {'User-Agent': 'TrekNote/1.0'});
-      if (mounted && response.statusCode == 200) {
-        apiResults =
-            List<Map<String, dynamic>>.from(json.decode(response.body));
-      }
-    } catch (e) {
-      debugPrint("Location search failed: $e");
-    }
-
-    final combinedResults = <String, Map<String, dynamic>>{};
-
-    // **KORJAUS TÄSSÄ:** Luodaan muokattava kopio, jotta 'score_bonus' voidaan lisätä.
-    for (var result in [...popularResults, ...apiResults]) {
-      final mutableResult = Map<String, dynamic>.from(result);
-      final formattedName = _formatLocationSuggestion(mutableResult);
-
-      if (popularResults.any((p) => p['name'] == mutableResult['name'])) {
-        mutableResult['score_bonus'] = true;
-      }
-
-      final score = _getRelevanceScore(mutableResult, query);
-      mutableResult['relevance_score'] = score;
-
-      if (!combinedResults.containsKey(formattedName)) {
-        combinedResults[formattedName] = mutableResult;
-      }
-    }
-
-    final sortedResults = combinedResults.values.toList();
-    sortedResults.sort((a, b) =>
-        (b['relevance_score'] as int).compareTo(a['relevance_score'] as int));
-
-    if (mounted) {
-      setState(() {
-        _locationSuggestions = sortedResults;
-        _isSearchingLocation.value = false;
-      });
-    }
-  }
-
-  int _getRelevanceScore(Map<String, dynamic> suggestion, String query) {
-    int score = 0;
-    String? category = suggestion['category'];
-    String? type = suggestion['type'];
-    final address = suggestion['address'] as Map<String, dynamic>? ?? {};
-    final featureName = (address['tourism'] ??
-                address['natural'] ??
-                address['leisure'] ??
-                address['historic'] ??
-                suggestion['name'])
-            ?.toString()
-            .toLowerCase() ??
-        '';
-
-    if (suggestion['score_bonus'] == true) score += 1000;
-
-    if (category == 'tourism' || category == 'natural' || category == 'leisure')
-      score += 100;
-    if (category == 'boundary') score += 10;
-    if (category == 'highway') score -= 50;
-
-    if (featureName.contains(query.toLowerCase())) {
-      score += 50;
-    }
-
-    return score;
-  }
-
-  String _formatLocationSuggestion(Map<String, dynamic> suggestion) {
-    if (suggestion['isPopular'] ?? false) {
-      return '${suggestion['name']}, ${suggestion['area']}';
-    }
-
-    final address = suggestion['address'] as Map<String, dynamic>?;
-    if (address == null) {
-      return suggestion['display_name'] ?? 'Unknown location';
-    }
-
-    final feature = address['tourism'] ??
-        address['natural'] ??
-        address['historic'] ??
-        address['leisure'] ??
-        address['shop'] ??
-        address['amenity'] ??
-        address['road'] ??
-        address['neighbourhood'];
-    final locality = address['city'] ??
-        address['town'] ??
-        address['village'] ??
-        address['municipality'] ??
-        address['county'];
-
-    if (feature != null && locality != null) {
-      if (feature.toString().toLowerCase() !=
-          locality.toString().toLowerCase()) {
-        return '$feature, $locality';
-      }
-      return feature;
-    }
-    if (feature != null) return feature;
-    if (locality != null) return locality;
-
-    return suggestion['display_name']?.split(',').take(2).join(', ') ??
-        'Unknown';
-  }
-
-  void _selectLocationSuggestion(Map<String, dynamic> suggestion) {
-    final displayName = _formatLocationSuggestion(suggestion);
-    final lat = double.tryParse(suggestion['lat'].toString()) ?? 0.0;
-    final lon = double.tryParse(suggestion['lon'].toString()) ?? 0.0;
-
+  void _selectLocationSuggestion(LocationSuggestion suggestion) {
     setState(() {
-      _locationController.text = displayName;
-      _latitude = lat;
-      _longitude = lon;
-      _locationSuggestions = [];
-      _currentSearchQuery = displayName;
+      _isSelectingLocation = true;
+      String subtitle =
+          suggestion.subtitle.replaceAll(suggestion.title, '').trim();
+      final locationText =
+          '${suggestion.title}${subtitle.isEmpty ? '' : ', $subtitle'}';
+
+      _locationController.text = locationText;
+      _latitude = suggestion.latitude;
+      _longitude = suggestion.longitude;
+      _suggestions = [];
     });
     FocusScope.of(context).unfocus();
+
+    Future.delayed(const Duration(milliseconds: 100), () {
+      _isSelectingLocation = false;
+    });
   }
 
   void _showDateRangePicker() {
@@ -483,26 +330,49 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
           labelText: 'Location*',
           hintText: 'Search location or pick from map...',
           icon: Icons.location_on_outlined,
-          suffixIcon: ValueListenableBuilder<bool>(
-            valueListenable: _isSearchingLocation,
-            builder: (context, isSearching, child) {
-              return isSearching
-                  ? const Padding(
-                      padding: EdgeInsets.all(12.0),
-                      child: SizedBox(
-                          height: 16,
-                          width: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2.0)),
-                    )
-                  : IconButton(
-                      icon: const Icon(Icons.map_outlined),
-                      tooltip: 'Select location from map',
-                      onPressed: () {
-                        /* Map picker not implemented in this snippet */
-                      },
+          suffixIcon: _isSearching
+              ? const Padding(
+                  padding: EdgeInsets.all(12.0),
+                  child: SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2.0)),
+                )
+              : IconButton(
+                  icon: const Icon(Icons.map_outlined),
+                  tooltip: 'Select location from map',
+                  onPressed: () async {
+                    // KORJATTU: Määritellään oletussijainti, jos nykyistä ei ole.
+                    const LatLng defaultLocation =
+                        LatLng(62.5, 26.0); // Suomen keskipiste
+
+                    final LatLng? initialPoint =
+                        (_latitude != null && _longitude != null)
+                            ? LatLng(_latitude!, _longitude!)
+                            : null;
+
+                    final result =
+                        await Navigator.of(context).push<Map<String, dynamic>>(
+                      MaterialPageRoute(
+                        builder: (context) => MapPickerPage(
+                          // Käytetään oletusta, jos initialPoint on null.
+                          initialLocation: initialPoint ?? defaultLocation,
+                        ),
+                      ),
                     );
-            },
-          ),
+
+                    if (result != null && result.containsKey('location')) {
+                      final selectedPoint = result['location'] as LatLng;
+                      final locationName = result['name'] as String?;
+                      setState(() {
+                        _latitude = selectedPoint.latitude;
+                        _longitude = selectedPoint.longitude;
+                        _locationController.text = locationName ??
+                            '${selectedPoint.latitude.toStringAsFixed(4)}, ${selectedPoint.longitude.toStringAsFixed(4)}';
+                      });
+                    }
+                  },
+                ),
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
               return 'Location is required';
@@ -513,7 +383,7 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
             return null;
           },
         ),
-        if (_locationSuggestions.isNotEmpty && _locationFocusNode.hasFocus)
+        if (_suggestions.isNotEmpty && _locationFocusNode.hasFocus)
           Container(
             constraints: BoxConstraints(
                 maxHeight: MediaQuery.of(context).size.height * 0.25),
@@ -533,31 +403,26 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(vertical: 4.0),
               shrinkWrap: true,
-              itemCount: _locationSuggestions.length,
+              itemCount: _suggestions.length,
               itemBuilder: (context, index) {
-                final suggestion = _locationSuggestions[index];
-                final isPopular = suggestion['isPopular'] ?? false;
-                final formattedName = _formatLocationSuggestion(suggestion);
-
+                final suggestion = _suggestions[index];
                 return ListTile(
                   leading: Icon(
-                    isPopular ? Icons.star_rounded : Icons.pin_drop_outlined,
-                    color: isPopular
+                    suggestion.isPopular
+                        ? Icons.star_rounded
+                        : Icons.pin_drop_outlined,
+                    color: suggestion.isPopular
                         ? Colors.amber.shade600
                         : theme.colorScheme.secondary,
                     size: 24,
                   ),
-                  title: Text(formattedName,
+                  title: Text(suggestion.title,
                       style: TextStyle(
-                          fontWeight:
-                              isPopular ? FontWeight.bold : FontWeight.normal)),
-                  subtitle: isPopular
-                      ? null
-                      : Text(suggestion['display_name'] ?? '',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall),
-                  dense: !isPopular,
+                          fontWeight: suggestion.isPopular
+                              ? FontWeight.bold
+                              : FontWeight.normal)),
+                  subtitle: Text(suggestion.subtitle),
+                  dense: !suggestion.isPopular,
                   onTap: () => _selectLocationSuggestion(suggestion),
                 );
               },

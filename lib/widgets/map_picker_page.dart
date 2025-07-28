@@ -1,9 +1,11 @@
 // lib/widgets/map_picker_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:geocoding/geocoding.dart';
-import 'dart:async'; // Tarvitaan Timerille
+import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class MapPickerPage extends StatefulWidget {
   final LatLng initialLocation;
@@ -15,7 +17,7 @@ class MapPickerPage extends StatefulWidget {
 }
 
 class _MapPickerPageState extends State<MapPickerPage> {
-  LatLng? _pickedLocation;
+  late LatLng _pickedLocation;
   String _pickedAddress = 'Liikuta karttaa valitaksesi sijainnin...';
   bool _isLoadingAddress = false;
   final MapController _mapController = MapController();
@@ -25,72 +27,68 @@ class _MapPickerPageState extends State<MapPickerPage> {
   void initState() {
     super.initState();
     _pickedLocation = widget.initialLocation;
-    // Hae osoite heti alussa, jos initialLocation on annettu
-    _reverseGeocodeLocation(_pickedLocation!);
+    _reverseGeocodeWithPhoton(_pickedLocation);
   }
 
   @override
   void dispose() {
     _debounce?.cancel();
+    _mapController.dispose();
     super.dispose();
   }
 
   void _handleMapMoved(MapCamera camera, bool hasGesture) {
-    // Jos karttaa liikutetaan (ei vain "initial build"), päivitä _pickedLocation
-    // ja käynnistä viivästetty geokoodaus.
     if (hasGesture) {
       setState(() {
         _pickedLocation = camera.center;
-        _pickedAddress = 'Haetaan osoitetta...'; // Päivitä teksti heti
+        _pickedAddress = 'Haetaan nimeä...';
         _isLoadingAddress = true;
       });
 
-      // Debounce-ajastin, jotta geokoodausta ei tehdä jokaisella pienen liikkeen jälkeen
       if (_debounce?.isActive ?? false) _debounce?.cancel();
-      _debounce = Timer(const Duration(milliseconds: 500), () {
-        if (_pickedLocation != null) {
-          _reverseGeocodeLocation(_pickedLocation!);
-        }
+      _debounce = Timer(const Duration(milliseconds: 750), () {
+        _reverseGeocodeWithPhoton(_pickedLocation);
       });
     }
   }
 
-  // Käänteisgeokoodaa sijainti ja päivitä osoite
-  Future<void> _reverseGeocodeLocation(LatLng location) async {
+  // --- KOKONAAN UUSITTU LOGIIKKA ÄLYKKÄÄMMÄLLÄ HAULLA ---
+  Future<void> _reverseGeocodeWithPhoton(LatLng location) async {
     if (!mounted) return;
-    setState(() {
-      _isLoadingAddress = true;
+    setState(() => _isLoadingAddress = true);
+
+    final uri = Uri.https('photon.komoot.io', '/reverse', {
+      'lon': location.longitude.toString(),
+      'lat': location.latitude.toString(),
     });
 
     try {
-      List<Placemark> placemarks = await placemarkFromCoordinates(
-        location.latitude,
-        location.longitude,
-        localeIdentifier: 'fi_FI', // Oikea parametri
-      );
-
+      final response = await http.get(uri);
       String displayAddress = 'Tuntematon sijainti';
-      if (placemarks.isNotEmpty) {
-        final placemark = placemarks.first;
-        // Kootaan osoite osista
-        List<String?> addressParts = [
-          placemark.thoroughfare, // Katuosoite
-          placemark.name, // Mahdollinen paikan nimi
-          placemark.locality, // Kaupunki/kunta
-          placemark.administrativeArea, // Maakunta/osavaltio
-          placemark.country, // Maa
-        ];
-        // Siivotaan tyhjät tai null-arvot ja yhdistetään
-        displayAddress = addressParts
-            .where((element) => element != null && element.isNotEmpty)
-            .join(', ');
 
-        // Jos osoite on todella pitkä, yritetään lyhyempää muotoa
-        if (displayAddress.length > 50) {
-          if (placemark.locality != null && placemark.country != null) {
-            displayAddress = '${placemark.locality}, ${placemark.country}';
-          } else if (placemark.name != null && placemark.locality != null) {
-            displayAddress = '${placemark.name}, ${placemark.locality}';
+      if (response.statusCode == 200) {
+        final data = json.decode(utf8.decode(response.bodyBytes));
+        final features = data['features'] as List;
+
+        if (features.isNotEmpty) {
+          final properties =
+              features.first['properties'] as Map<String, dynamic>;
+
+          final name = properties['name'];
+          final city = properties['city'];
+          final county = properties['county'];
+          final country = properties['country'];
+
+          // Muodostetaan älykkäästi paras mahdollinen nimi
+          if (name != null) {
+            displayAddress =
+                (city != null && city != name) ? '$name, $city' : name;
+          } else if (city != null) {
+            displayAddress = city;
+          } else if (county != null) {
+            displayAddress = county;
+          } else if (country != null) {
+            displayAddress = country;
           }
         }
       }
@@ -101,12 +99,12 @@ class _MapPickerPageState extends State<MapPickerPage> {
         });
       }
     } catch (e) {
-      print('Käänteisgeokoodaus epäonnistui: $e');
       if (mounted) {
         setState(() {
-          _pickedAddress = 'Osoitteen haku epäonnistui.';
+          _pickedAddress = 'Nimen haku epäonnistui';
         });
       }
+      debugPrint("Photon reverse geocoding failed: $e");
     } finally {
       if (mounted) {
         setState(() {
@@ -131,54 +129,27 @@ class _MapPickerPageState extends State<MapPickerPage> {
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
-              initialCenter: _pickedLocation ??
-                  const LatLng(60.4518, 22.2666), // Default Turku
+              initialCenter: _pickedLocation,
               initialZoom: 10.0,
-              minZoom: 2.0, // Sallittu minimizoom
-              maxZoom: 18.0, // Sallittu maksimizoom
+              minZoom: 2.0,
+              maxZoom: 18.0,
               onTap: (tapPosition, latlng) {
-                // Kun käyttäjä napauttaa, keskitä kartta siihen kohtaan
                 _mapController.move(latlng, _mapController.camera.zoom);
-                _handleMapMoved(
-                    _mapController.camera, true); // Simuloi liikettä
               },
-              onPositionChanged:
-                  _handleMapMoved, // Käsittele kartan liikuttelua
+              onPositionChanged: _handleMapMoved,
               keepAlive: true,
             ),
             children: [
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName:
-                    'com.example.treknote', // VAIHDA TÄMÄ SOVELLUKSESI PAKETIN NIMEEN
-                // Voit harkita cacheManageria (esim. `flutter_map_tile_caching` -paketti)
-                // jos haluat parempaa offline-tukea tai vielä sulavampaa selausta.
+                userAgentPackageName: 'com.example.treknoteflutter',
               ),
-              // MarkerLayer poistettu, koska käytetään keskipisteen tähtäintä
-              // if (_pickedLocation != null)
-              //   MarkerLayer(
-              //     markers: [
-              //       Marker(
-              //         point: _pickedLocation!,
-              //         width: 80,
-              //         height: 80,
-              //         child: const Icon(
-              //           Icons.location_on,
-              //           color: Colors.red,
-              //           size: 40,
-              //         ),
-              //       ),
-              //     ],
-              //   ),
             ],
           ),
-          // Tähtäin kartan keskellä
           Center(
             child: Icon(
-              Icons.location_on, // Tai Icons.add_location_alt
-              color: Theme.of(context)
-                  .colorScheme
-                  .primary, // Käytä teeman pääväriä
+              Icons.location_on,
+              color: theme.colorScheme.primary,
               size: 48,
               shadows: const [
                 BoxShadow(
@@ -189,16 +160,15 @@ class _MapPickerPageState extends State<MapPickerPage> {
               ],
             ),
           ),
-          // Osoite- ja vahvistuspainike-laatikko
           Positioned(
-            bottom: 0, // Aseta ihan alaosaan
+            bottom: 0,
             left: 0,
             right: 0,
             child: Container(
               padding:
                   const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
               decoration: BoxDecoration(
-                color: theme.colorScheme.surface, // Käytä teeman pintaväriä
+                color: theme.colorScheme.surface,
                 borderRadius:
                     const BorderRadius.vertical(top: Radius.circular(24.0)),
                 boxShadow: [
@@ -210,7 +180,6 @@ class _MapPickerPageState extends State<MapPickerPage> {
                 ],
               ),
               child: SafeArea(
-                // Varmista, ettei mene navigaatiopalkin alle
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -227,12 +196,11 @@ class _MapPickerPageState extends State<MapPickerPage> {
                     if (_isLoadingAddress)
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 8.0),
-                        child:
-                            LinearProgressIndicator(), // Hieno latausindikaattori
+                        child: LinearProgressIndicator(),
                       )
-                    else if (_pickedLocation != null)
+                    else
                       Text(
-                        'Lat: ${_pickedLocation!.latitude.toStringAsFixed(4)}, Lon: ${_pickedLocation!.longitude.toStringAsFixed(4)}',
+                        'Lat: ${_pickedLocation.latitude.toStringAsFixed(4)}, Lon: ${_pickedLocation.longitude.toStringAsFixed(4)}',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurface.withOpacity(0.7),
                         ),
@@ -244,21 +212,21 @@ class _MapPickerPageState extends State<MapPickerPage> {
                       child: ElevatedButton.icon(
                         icon: const Icon(Icons.check_circle_outline),
                         label: const Text('Vahvista sijainti'),
-                        onPressed: _pickedLocation != null && !_isLoadingAddress
+                        onPressed: !_isLoadingAddress
                             ? () {
-                                Navigator.pop(context,
-                                    _pickedLocation); // Palauta valittu sijainti
+                                Navigator.pop(context, {
+                                  'location': _pickedLocation,
+                                  'name': _pickedAddress
+                                });
                               }
-                            : null, // Poista käytöstä, jos ei sijaintia tai ladataan
+                            : null,
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          backgroundColor: theme
-                              .colorScheme.primary, // Käytä teeman pääväriä
-                          foregroundColor: theme.colorScheme
-                              .onPrimary, // Tekstin väri päävärin päällä
+                          backgroundColor: theme.colorScheme.primary,
+                          foregroundColor: theme.colorScheme.onPrimary,
                         ),
                       ),
                     ),
@@ -269,17 +237,6 @@ class _MapPickerPageState extends State<MapPickerPage> {
           ),
         ],
       ),
-      // Floating Action Button kartan keskittämiseen käyttäjän nykyiseen sijaintiin?
-      // floatingActionButton: FloatingActionButton(
-      //   onPressed: () {
-      //     // Tähän voisi lisätä logiikan nykyisen sijainnin hakemiseksi ja kartan keskittämiseksi
-      //     ScaffoldMessenger.of(context).showSnackBar(
-      //       const SnackBar(content: Text('Sijainnin haku ei vielä toteutettu.')),
-      //     );
-      //   },
-      //   child: const Icon(Icons.my_location),
-      // ),
-      // floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 }

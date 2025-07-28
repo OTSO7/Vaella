@@ -1,5 +1,3 @@
-// lib/pages/home_page.dart
-
 import 'dart:ui';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -19,7 +17,7 @@ import '../widgets/post_card.dart';
 import '../widgets/select_visibility_modal.dart';
 import '../widgets/star_rating_display.dart';
 import '../models/daily_route_model.dart';
-import '../utils/map_helpers.dart'; // UUSI IMPORT APUFUNKTIOLLE
+import '../utils/map_helpers.dart';
 
 enum HomeView { map, feed }
 
@@ -67,8 +65,6 @@ class _HomePageState extends State<HomePage> {
             .toList());
   }
 
-  // POISTETTU: Paikallinen _generateArrowMarkers-metodi on siirretty map_helpers.dart-tiedostoon.
-
   void _updateSelectedRoute() {
     _selectedRoutePolylines.clear();
     _arrowMarkers.clear();
@@ -86,7 +82,6 @@ class _HomePageState extends State<HomePage> {
         );
         _selectedRoutePolylines.add(polyline);
       }
-      // KORJATTU: Käytetään keskitettyä apufunktiota.
       _arrowMarkers
           .addAll(generateArrowMarkersForDays(_selectedPost!.dailyRoutes!));
     }
@@ -199,11 +194,13 @@ class _HomePageState extends State<HomePage> {
         maxZoom: 18.0,
       ),
       children: [
+        // --- KARTTATYYLI MUUTETTU TÄSSÄ ---
         TileLayer(
-          urlTemplate:
-              'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-          subdomains: const ['a', 'b', 'c', 'd'],
+          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          userAgentPackageName:
+              'com.example.treknoteflutter', // Käytä oman sovelluksesi nimeä
         ),
+        // ------------------------------------
         PolylineLayer(polylines: _selectedRoutePolylines),
         MarkerLayer(markers: _arrowMarkers),
         MarkerClusterLayerWidget(
@@ -239,17 +236,13 @@ class _HomePageState extends State<HomePage> {
             },
           ),
         ),
+        // --- KARTAN LÄHDETIEDOT PÄIVITETTY ---
         RichAttributionWidget(
           attributions: [
             TextSourceAttribution(
-              'OpenStreetMap contributors',
+              '© OpenStreetMap contributors',
               onTap: () =>
                   launchUrl(Uri.parse('https://openstreetmap.org/copyright')),
-            ),
-            TextSourceAttribution(
-              'CARTO',
-              onTap: () =>
-                  launchUrl(Uri.parse('https://carto.com/attributions')),
             ),
           ],
         ),
