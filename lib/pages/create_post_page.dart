@@ -1,3 +1,5 @@
+// tiedosto: lib/pages/create_post_page.dart
+
 import 'dart:async';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -132,8 +134,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
     }
   }
 
-  // --- SIJAINNIN HAKULOGIIKKA ---
-
   Future<void> _fetchInitialSuggestions() async {
     _popularSuggestionsCache = await _locationService.getPopularLocations();
     if (_locationFocusNode.hasFocus && _locationController.text.isEmpty) {
@@ -195,8 +195,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
       _isSelectingLocation = false;
     });
   }
-
-  // --- YLEISET METODIT ---
 
   void _onNextPressed() {
     if (_formKeys[_currentStep].currentState!.validate()) {
@@ -271,13 +269,13 @@ class _CreatePostPageState extends State<CreatePostPage> {
             : null,
       );
 
-      // --- TÄRKEÄ MUUTOS TÄSSÄ ---
-      // Muunnetaan Post-olio Mapiksi ja lisätään `title_lowercase` -kenttä hakua varten.
       final postData = newPost.toFirestore();
       postData['title_lowercase'] = _titleController.text.trim().toLowerCase();
+      postData['location_lowercase'] =
+          _locationController.text.trim().toLowerCase();
 
       await newPostRef.set(postData);
-      // ----------------------------
+      // -----------------------------------------------------------------
 
       await authProvider.handlePostCreationSuccess();
       _showSuccessDialog();
@@ -379,8 +377,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
               size: 64),
     );
   }
-
-  // --- KÄYTTÖLIITTYMÄ (BUILD-METODIT) ---
 
   @override
   Widget build(BuildContext context) {
@@ -564,15 +560,12 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
   Widget _buildSectionHeader(BuildContext context, String title) => Text(title,
       style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w600));
-
   Future<void> _openMapPicker() async {
     const LatLng defaultLocation = LatLng(62.5, 26.0);
     final LatLng? initialPoint = (_latitude != null && _longitude != null)
         ? LatLng(_latitude!, _longitude!)
         : null;
-
     FocusScope.of(context).unfocus();
-
     final result = await Navigator.of(context).push<Map<String, dynamic>>(
       MaterialPageRoute(
         builder: (context) => MapPickerPage(
@@ -580,7 +573,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
         ),
       ),
     );
-
     if (mounted && result != null && result.containsKey('location')) {
       final selectedPoint = result['location'] as LatLng;
       final locationName = result['name'] as String?;
@@ -596,81 +588,79 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
   Widget _buildLocationField(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
-      children: [
-        _buildStyledTextFormField(
-          controller: _locationController,
-          focusNode: _locationFocusNode,
-          labelText: "Location*",
-          hintText: "Search for a trail or area...",
-          icon: Icons.location_on_outlined,
-          suffixIcon: _isSearching
-              ? const Padding(
-                  padding: EdgeInsets.all(12.0),
-                  child: SizedBox(
-                      height: 16,
-                      width: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2.0)),
-                )
-              : IconButton(
-                  icon: const Icon(Icons.map_outlined),
-                  tooltip: 'Pick from map',
-                  onPressed: _openMapPicker,
-                ),
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Location is required';
-            }
-            if (_latitude == null || _longitude == null) {
-              return 'Please select a valid location from suggestions';
-            }
-            return null;
-          },
-        ),
-        if (_suggestions.isNotEmpty && _locationFocusNode.hasFocus)
-          Container(
-            constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.25),
-            margin: const EdgeInsets.only(top: 4),
-            decoration: BoxDecoration(
-              color: theme.cardColor,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withAlpha((255 * 0.05).round()),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                )
-              ],
-              border: Border.all(
-                  color: theme.dividerColor.withAlpha((255 * 0.5).round())),
-            ),
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 4.0),
-              shrinkWrap: true,
-              itemCount: _suggestions.length,
-              itemBuilder: (context, index) {
-                final suggestion = _suggestions[index];
-                return ListTile(
-                  leading: Icon(
-                    suggestion.isPopular
-                        ? Icons.star_rounded
-                        : Icons.pin_drop_outlined,
-                    color: suggestion.isPopular
-                        ? Colors.amber.shade600
-                        : theme.colorScheme.secondary,
-                    size: 24,
-                  ),
-                  title: Text(suggestion.title,
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text(suggestion.subtitle),
-                  onTap: () => _selectLocationSuggestion(suggestion),
-                );
-              },
-            ),
+    return Column(children: [
+      _buildStyledTextFormField(
+        controller: _locationController,
+        focusNode: _locationFocusNode,
+        labelText: "Location*",
+        hintText: "Search for a trail or area...",
+        icon: Icons.location_on_outlined,
+        suffixIcon: _isSearching
+            ? const Padding(
+                padding: EdgeInsets.all(12.0),
+                child: SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2.0)),
+              )
+            : IconButton(
+                icon: const Icon(Icons.map_outlined),
+                tooltip: 'Pick from map',
+                onPressed: _openMapPicker,
+              ),
+        validator: (value) {
+          if (value == null || value.trim().isEmpty) {
+            return 'Location is required';
+          }
+          if (_latitude == null || _longitude == null) {
+            return 'Please select a valid location from suggestions';
+          }
+          return null;
+        },
+      ),
+      if (_suggestions.isNotEmpty && _locationFocusNode.hasFocus)
+        Container(
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.25),
+          margin: const EdgeInsets.only(top: 4),
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha((255 * 0.05).round()),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              )
+            ],
+            border: Border.all(
+                color: theme.dividerColor.withAlpha((255 * 0.5).round())),
           ),
-      ],
-    );
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(vertical: 4.0),
+            shrinkWrap: true,
+            itemCount: _suggestions.length,
+            itemBuilder: (context, index) {
+              final suggestion = _suggestions[index];
+              return ListTile(
+                leading: Icon(
+                  suggestion.isPopular
+                      ? Icons.star_rounded
+                      : Icons.pin_drop_outlined,
+                  color: suggestion.isPopular
+                      ? Colors.amber.shade600
+                      : theme.colorScheme.secondary,
+                  size: 24,
+                ),
+                title: Text(suggestion.title,
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text(suggestion.subtitle),
+                onTap: () => _selectLocationSuggestion(suggestion),
+              );
+            },
+          ),
+        ),
+    ]);
   }
 
   Widget _buildStyledTextFormField({
@@ -853,37 +843,34 @@ class _CreatePostPageState extends State<CreatePostPage> {
   }
 
   Widget _buildOptionalFields(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text("Optional Details",
-            style: GoogleFonts.lato(
-                color: Theme.of(context).colorScheme.onSurfaceVariant)),
-        const SizedBox(height: 8),
-        FilterChip(
-          label: const Text("Pack Weight"),
-          selected: _showPackWeightField,
-          onSelected: (selected) =>
-              setState(() => _showPackWeightField = selected),
-          avatar: const Icon(Icons.backpack_outlined, size: 18),
-        ),
-        const SizedBox(height: 16),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          child: _showPackWeightField
-              ? _buildStyledTextFormField(
-                  key: const ValueKey('weight_field'),
-                  controller: _weightController,
-                  labelText: "Pack Weight (kg)",
-                  hintText: "e.g., 15.5",
-                  icon: Icons.backpack_outlined,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                )
-              : const SizedBox.shrink(key: ValueKey('weight_empty')),
-        ),
-      ],
-    );
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text("Optional Details",
+          style: GoogleFonts.lato(
+              color: Theme.of(context).colorScheme.onSurfaceVariant)),
+      const SizedBox(height: 8),
+      FilterChip(
+        label: const Text("Pack Weight"),
+        selected: _showPackWeightField,
+        onSelected: (selected) =>
+            setState(() => _showPackWeightField = selected),
+        avatar: const Icon(Icons.backpack_outlined, size: 18),
+      ),
+      const SizedBox(height: 16),
+      AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: _showPackWeightField
+            ? _buildStyledTextFormField(
+                key: const ValueKey('weight_field'),
+                controller: _weightController,
+                labelText: "Pack Weight (kg)",
+                hintText: "e.g., 15.5",
+                icon: Icons.backpack_outlined,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+              )
+            : const SizedBox.shrink(key: ValueKey('weight_empty')),
+      ),
+    ]);
   }
 
   Widget _buildRatingBar({
@@ -894,54 +881,48 @@ class _CreatePostPageState extends State<CreatePostPage> {
     required Map<double, String> labels,
   }) {
     final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, color: theme.colorScheme.secondary, size: 20),
-            const SizedBox(width: 8),
-            Text(title,
-                style: GoogleFonts.lato(
-                    fontSize: 16, fontWeight: FontWeight.w600)),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: List.generate(5, (index) {
-            final starNumber = index + 1.0;
-            return IconButton(
-              onPressed: () => onRatingChanged(starNumber),
-              icon: Icon(
-                starNumber <= currentRating
-                    ? Icons.star_rounded
-                    : Icons.star_border_rounded,
-                color: Colors.amber.shade600,
-                size: 32,
-              ),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-            );
-          }),
-        ),
-        const SizedBox(height: 4),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 200),
-          transitionBuilder: (Widget child, Animation<double> animation) {
-            return FadeTransition(opacity: animation, child: child);
-          },
-          child: Text(
-            labels[currentRating] ?? '',
-            key: ValueKey<double>(currentRating),
-            style: GoogleFonts.lato(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.secondary,
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Icon(icon, color: theme.colorScheme.secondary, size: 20),
+        const SizedBox(width: 8),
+        Text(title,
+            style: GoogleFonts.lato(fontSize: 16, fontWeight: FontWeight.w600)),
+      ]),
+      const SizedBox(height: 8),
+      Row(
+        children: List.generate(5, (index) {
+          final starNumber = index + 1.0;
+          return IconButton(
+            onPressed: () => onRatingChanged(starNumber),
+            icon: Icon(
+              starNumber <= currentRating
+                  ? Icons.star_rounded
+                  : Icons.star_border_rounded,
+              color: Colors.amber.shade600,
+              size: 32,
             ),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          );
+        }),
+      ),
+      const SizedBox(height: 4),
+      AnimatedSwitcher(
+        duration: const Duration(milliseconds: 200),
+        transitionBuilder: (Widget child, Animation<double> animation) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        child: Text(
+          labels[currentRating] ?? '',
+          key: ValueKey<double>(currentRating),
+          style: GoogleFonts.lato(
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+            color: theme.colorScheme.secondary,
           ),
         ),
-      ],
-    );
+      ),
+    ]);
   }
 
   Widget _buildRatingsSection(BuildContext context) {
@@ -996,6 +977,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                 setState(() => _experienceRating = rating);
               },
             ),
+            const SizedBox(height: 24)
           ],
         ),
       ),

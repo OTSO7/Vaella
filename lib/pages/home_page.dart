@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -22,15 +23,10 @@ import '../utils/map_helpers.dart';
 
 enum HomeView { map, feed }
 
-enum SortOption {
-  newest,
-  oldest,
-  highestRated,
-  longest,
-  shortest,
-}
+enum SortOption { newest, oldest, highestRated, longest, shortest }
 
-// Helper-map, joka yhdistää enumin ja käyttäjälle näkyvän tekstin/ikonin
+enum NotificationType { success, error, info }
+
 const Map<SortOption, Map<String, dynamic>> sortOptionsData = {
   SortOption.newest: {
     'label': 'Newest first',
@@ -53,119 +49,255 @@ const Map<SortOption, Map<String, dynamic>> sortOptionsData = {
 
 class PostMarker extends Marker {
   final Post post;
-
-  PostMarker({
-    required this.post,
-    required Widget child,
-    super.width = 50,
-    super.height = 60,
-  }) : super(
-          point: LatLng(post.latitude!, post.longitude!),
-          child: child,
-        );
+  PostMarker(
+      {required this.post,
+      required Widget child,
+      super.width = 50,
+      super.height = 60})
+      : super(point: LatLng(post.latitude!, post.longitude!), child: child);
 }
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
-
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   final MapController _mapController = MapController();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
 
   HomeView _currentView = HomeView.map;
   Post? _selectedPost;
-
-  Stream<List<Post>> _postsStream = const Stream.empty();
   Timer? _debounce;
-
   SortOption _currentSortOption = SortOption.newest;
+
+  List<Post> _posts = [];
+  bool _isLoading = true;
 
   final List<Polyline> _selectedRoutePolylines = [];
   final List<Marker> _arrowMarkers = [];
 
+  String _notificationMessage = '';
+  NotificationType _notificationType = NotificationType.info;
+  bool _isNotificationVisible = false;
+  Timer? _notificationTimer;
+
   @override
   void initState() {
     super.initState();
-    _updateStream();
-
-    _searchController.addListener(() {
-      if (_debounce?.isActive ?? false) _debounce!.cancel();
-      _debounce = Timer(const Duration(milliseconds: 300), () {
-        if (mounted) {
-          _updateStream();
-        }
-      });
-    });
+    _fetchPosts();
+    _searchController.addListener(_onSearchChanged);
   }
 
   @override
   void dispose() {
+    _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     _mapController.dispose();
     _searchFocusNode.dispose();
     _debounce?.cancel();
+    _notificationTimer?.cancel();
     super.dispose();
   }
 
-  void _updateStream() {
-    setState(() {
-      _postsStream =
-          _getPublicPostsStream(_searchController.text, _currentSortOption);
+  void _onSearchChanged() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        _fetchPosts();
+      }
     });
   }
 
-  Stream<List<Post>> _getPublicPostsStream(
-      String query, SortOption sortOption) {
-    Query postsQuery = FirebaseFirestore.instance
-        .collection('posts')
-        .where('visibility', isEqualTo: 'public');
+  Future<void> _fetchPosts() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
 
+    try {
+      final results =
+          await _executeSearch(_searchController.text, _currentSortOption);
+      if (mounted) {
+        _handleSearchResultsFeedback(results);
+        setState(() => _posts = results);
+      }
+    } catch (e) {
+      print("Search failed: $e");
+      if (mounted) {
+        _showNotification('Search failed. A database index might be missing.',
+            isError: true);
+        setState(() => _posts = []);
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _handleSearchResultsFeedback(List<Post> results) {
+    final searchTerm = _searchController.text.trim();
+    if (searchTerm.isEmpty) return;
+
+    if (results.isEmpty) {
+      _showNotification("No results found for '$searchTerm'", isError: true);
+    } else {
+      if (_currentView == HomeView.map) {
+        _showNotification(
+            "Found ${results.length} posts. Zooming to results...");
+        _flyToResults(results);
+      }
+    }
+  }
+
+  void _flyToResults(List<Post> posts) {
+    if (posts.isEmpty || !mounted) return;
+
+    final LatLng targetCenter;
+    final double targetZoom;
+
+    if (posts.length == 1) {
+      final post = posts.first;
+      targetCenter = LatLng(post.latitude!, post.longitude!);
+      targetZoom = 12.0;
+    } else {
+      final bounds = LatLngBounds.fromPoints(
+          posts.map((p) => LatLng(p.latitude!, p.longitude!)).toList());
+      targetCenter = bounds.center;
+      targetZoom = _calculateZoomForBounds(bounds);
+    }
+
+    final animationController = AnimationController(
+        duration: const Duration(milliseconds: 1200), vsync: this);
+
+    final animation = CurvedAnimation(
+        parent: animationController, curve: Curves.fastOutSlowIn);
+
+    final latTween = Tween<double>(
+        begin: _mapController.camera.center.latitude,
+        end: targetCenter.latitude);
+    final lngTween = Tween<double>(
+        begin: _mapController.camera.center.longitude,
+        end: targetCenter.longitude);
+    final zoomTween =
+        Tween<double>(begin: _mapController.camera.zoom, end: targetZoom);
+
+    animation.addListener(() {
+      _mapController.move(
+        LatLng(latTween.evaluate(animation), lngTween.evaluate(animation)),
+        zoomTween.evaluate(animation),
+      );
+    });
+
+    animationController.forward().whenComplete(() {
+      animationController.dispose();
+    });
+  }
+
+  double _calculateZoomForBounds(LatLngBounds bounds) {
+    final size = MediaQuery.of(context).size;
+    final worldMapWidth = 256;
+
+    final ne = bounds.northEast;
+    final sw = bounds.southWest;
+
+    final latFraction = (ne.latitudeInRad - sw.latitudeInRad).abs() / (2 * pi);
+    final lngDiff = ne.longitude - sw.longitude;
+    final lngFraction = (lngDiff < 0 ? lngDiff + 360 : lngDiff) / 360;
+
+    final latZoom = log(size.height / (worldMapWidth * latFraction)) / ln2;
+    final lngZoom = log(size.width / (worldMapWidth * lngFraction)) / ln2;
+
+    return min(latZoom, lngZoom) - 0.5;
+  }
+
+  void _showNotification(String message, {bool isError = false}) {
+    if (!mounted) return;
+    _notificationTimer?.cancel();
+    setState(() {
+      _notificationMessage = message;
+      _notificationType =
+          isError ? NotificationType.error : NotificationType.success;
+      _isNotificationVisible = true;
+    });
+    _notificationTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) {
+        setState(() => _isNotificationVisible = false);
+      }
+    });
+  }
+
+  Future<List<Post>> _executeSearch(String query, SortOption sortOption) async {
+    final db = FirebaseFirestore.instance;
     final searchTerm = query.trim().toLowerCase();
-    if (searchTerm.isNotEmpty) {
-      postsQuery = postsQuery
-          .where('title_lowercase', isGreaterThanOrEqualTo: searchTerm)
-          .where('title_lowercase', isLessThanOrEqualTo: '$searchTerm\uf8ff');
+    if (searchTerm.isEmpty) {
+      Query baseQuery =
+          db.collection('posts').where('visibility', isEqualTo: 'public');
+      switch (sortOption) {
+        case SortOption.newest:
+          baseQuery = baseQuery.orderBy('timestamp', descending: true);
+          break;
+        case SortOption.oldest:
+          baseQuery = baseQuery.orderBy('timestamp', descending: false);
+          break;
+        case SortOption.highestRated:
+          baseQuery = baseQuery.orderBy('averageRating', descending: true);
+          break;
+        case SortOption.longest:
+          baseQuery = baseQuery.orderBy('distanceKm', descending: true);
+          break;
+        case SortOption.shortest:
+          baseQuery = baseQuery.orderBy('distanceKm', descending: false);
+          break;
+      }
+      final snapshot = await baseQuery.limit(50).get();
+      return snapshot.docs
+          .map((doc) => Post.fromFirestore(doc))
+          .where((post) => post.latitude != null && post.longitude != null)
+          .toList();
     }
-
-    switch (sortOption) {
-      case SortOption.newest:
-        postsQuery = postsQuery.orderBy(
-            searchTerm.isNotEmpty ? 'title_lowercase' : 'timestamp',
-            descending: searchTerm.isEmpty);
-        break;
-      case SortOption.oldest:
-        postsQuery = postsQuery.orderBy('timestamp', descending: false);
-        break;
-      case SortOption.highestRated:
-        postsQuery = postsQuery.orderBy('averageRating', descending: true);
-        break;
-      case SortOption.longest:
-        postsQuery = postsQuery.orderBy('distanceKm', descending: true);
-        break;
-      case SortOption.shortest:
-        postsQuery = postsQuery.orderBy('distanceKm', descending: false);
-        break;
+    final titleQuery = db
+        .collection('posts')
+        .where('visibility', isEqualTo: 'public')
+        .where('title_lowercase', isGreaterThanOrEqualTo: searchTerm)
+        .where('title_lowercase', isLessThanOrEqualTo: '$searchTerm\uf8ff')
+        .get();
+    final locationQuery = db
+        .collection('posts')
+        .where('visibility', isEqualTo: 'public')
+        .where('location_lowercase', isGreaterThanOrEqualTo: searchTerm)
+        .where('location_lowercase', isLessThanOrEqualTo: '$searchTerm\uf8ff')
+        .get();
+    final results = await Future.wait([titleQuery, locationQuery]);
+    final titleDocs = results[0].docs;
+    final locationDocs = results[1].docs;
+    final Map<String, Post> uniquePosts = {};
+    for (var doc in [...titleDocs, ...locationDocs]) {
+      final post = Post.fromFirestore(doc);
+      if (post.latitude != null && post.longitude != null) {
+        uniquePosts[post.id] = post;
+      }
     }
-
-    if (searchTerm.isNotEmpty && sortOption != SortOption.newest) {
-      postsQuery = postsQuery.orderBy('timestamp', descending: true);
-    }
-
-    return postsQuery.snapshots().map((snapshot) => snapshot.docs
-        .map((doc) => Post.fromFirestore(doc))
-        .where((post) => post.latitude != null && post.longitude != null)
-        .toList());
+    final mergedList = uniquePosts.values.toList();
+    mergedList.sort((a, b) {
+      switch (sortOption) {
+        case SortOption.newest:
+          return b.timestamp.compareTo(a.timestamp);
+        case SortOption.oldest:
+          return a.timestamp.compareTo(b.timestamp);
+        case SortOption.highestRated:
+          return b.averageRating.compareTo(a.averageRating);
+        case SortOption.longest:
+          return b.distanceKm.compareTo(a.distanceKm);
+        case SortOption.shortest:
+          return a.distanceKm.compareTo(b.distanceKm);
+      }
+    });
+    return mergedList;
   }
 
   void _updateSelectedRoute() {
     _selectedRoutePolylines.clear();
     _arrowMarkers.clear();
-
     if (_selectedPost != null &&
         _selectedPost!.dailyRoutes != null &&
         _selectedPost!.dailyRoutes!.isNotEmpty) {
@@ -190,7 +322,6 @@ class _HomePageState extends State<HomePage> {
       _selectedPost = post;
       _updateSelectedRoute();
     });
-
     final bool hasRoute =
         post.dailyRoutes != null && post.dailyRoutes!.isNotEmpty;
     if (hasRoute) {
@@ -208,7 +339,6 @@ class _HomePageState extends State<HomePage> {
     } else {
       _mapController.move(LatLng(post.latitude!, post.longitude!), 13);
     }
-
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -225,7 +355,7 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  void _showPostSelectionSheet(BuildContext context, List<Post> posts) {
+  _showPostSelectionSheet(BuildContext context, List<Post> posts) {
     HapticFeedback.lightImpact();
     showModalBottomSheet(
       context: context,
@@ -299,7 +429,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // --- UUTTA: Metodi, joka avaa uuden suodatinpaneelin ---
   void _showFilterSheet() async {
     final result = await showModalBottomSheet<SortOption>(
       context: context,
@@ -309,12 +438,11 @@ class _HomePageState extends State<HomePage> {
         return _FilterBottomSheet(initialSortOption: _currentSortOption);
       },
     );
-
     if (result != null && result != _currentSortOption) {
       setState(() {
         _currentSortOption = result;
-        _updateStream();
       });
+      _fetchPosts();
     }
   }
 
@@ -330,54 +458,38 @@ class _HomePageState extends State<HomePage> {
         elevation: 0,
         toolbarHeight: 0,
       ),
-      body: StreamBuilder<List<Post>>(
-        stream: _postsStream,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              (!snapshot.hasData || snapshot.data!.isEmpty)) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            print(snapshot.error);
-            return Center(
-                child: Text("Error loading posts. ${snapshot.error}"));
-          }
-
-          final allPosts = snapshot.data ?? [];
-
-          return Stack(
-            children: [
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 400),
-                transitionBuilder: (child, animation) {
-                  return FadeTransition(opacity: animation, child: child);
-                },
-                child: _currentView == HomeView.map
-                    ? _buildMapView(context, allPosts)
-                    : _buildPostFeed(context, allPosts, authProvider),
-              ),
-              _buildSearchAndFilterBar(theme),
-              Positioned(
-                bottom: 20,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: _buildFloatingViewSwitcher(context),
-                ),
-              ),
-            ],
-          );
-        },
+      body: Stack(
+        children: [
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 400),
+            transitionBuilder: (child, animation) =>
+                FadeTransition(opacity: animation, child: child),
+            child: _currentView == HomeView.map
+                ? _buildMapView(context, _posts)
+                : _buildPostFeed(context, _posts, authProvider),
+          ),
+          _buildSearchAndFilterBar(theme),
+          _buildSearchNotification(),
+          Positioned(
+            bottom: 20,
+            left: 0,
+            right: 0,
+            child: Center(child: _buildFloatingViewSwitcher(context)),
+          ),
+          if (_isLoading && _posts.isEmpty)
+            Container(
+              color: Colors.black.withOpacity(0.2),
+              child: const Center(child: CircularProgressIndicator()),
+            ),
+        ],
       ),
       floatingActionButton: authProvider.isLoggedIn
           ? FloatingActionButton(
               onPressed: () {
                 HapticFeedback.mediumImpact();
                 showSelectVisibilityModal(context, (selectedVisibility) {
-                  context.push('/create-post', extra: {
-                    'visibility': selectedVisibility,
-                    'plan': null,
-                  });
+                  context.push('/create-post',
+                      extra: {'visibility': selectedVisibility, 'plan': null});
                 });
               },
               backgroundColor: theme.colorScheme.primary,
@@ -388,48 +500,39 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildSearchAndFilterBar(ThemeData theme) {
-    bool isFilterActive = _currentSortOption != SortOption.newest;
-    return Positioned(
-      top: MediaQuery.of(context).padding.top + 15,
+  Widget _buildSearchNotification() {
+    final theme = Theme.of(context);
+    final searchBarHeight = MediaQuery.of(context).padding.top + 15 + 56;
+    final color = _notificationType == NotificationType.error
+        ? Colors.redAccent.shade200
+        : theme.colorScheme.secondary;
+
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+      top: _isNotificationVisible ? searchBarHeight : searchBarHeight - 50,
       left: 15,
       right: 15,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(25.0),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 8.0, sigmaY: 8.0),
-          child: Container(
-            decoration: BoxDecoration(
-                color: theme.cardColor.withOpacity(0.6),
-                borderRadius: BorderRadius.circular(15.0),
-                border: Border.all(color: Colors.white.withOpacity(0.2))),
-            child: Row(
-              children: [
-                const Padding(
-                  padding: EdgeInsets.only(left: 15.0),
-                  child: Icon(Icons.search),
-                ),
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    focusNode: _searchFocusNode,
-                    decoration: InputDecoration(
-                      hintText: "Search trips or places...",
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 15, vertical: 14),
-                    ),
-                  ),
-                ),
-                // --- PÄIVITETTY: Nappi avaa nyt modaalipaneelin ---
-                IconButton(
-                  icon: Icon(
-                    Icons.filter_list_rounded,
-                    color: isFilterActive ? theme.colorScheme.secondary : null,
-                  ),
-                  onPressed: _showFilterSheet,
-                ),
-              ],
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 300),
+        opacity: _isNotificationVisible ? 1.0 : 0.0,
+        child: Material(
+          elevation: 4.0,
+          borderRadius:
+              const BorderRadius.vertical(bottom: Radius.circular(16)),
+          color: Colors.transparent,
+          child: ClipRRect(
+            borderRadius:
+                const BorderRadius.vertical(bottom: Radius.circular(16)),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              color: color,
+              child: Text(
+                _notificationMessage,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(
+                    color: Colors.white, fontWeight: FontWeight.w500),
+              ),
             ),
           ),
         ),
@@ -437,8 +540,82 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Jatkuu alla... (loput HomePage-koodista)
-  // Kaikki alla olevat metodit pysyvät ennallaan.
+  // --- KORJATTU HAKUPALKKI: Ongelmallinen Material-widget on poistettu ---
+  Widget _buildSearchAndFilterBar(ThemeData theme) {
+    bool isFilterActive = _currentSortOption != SortOption.newest;
+    return Positioned(
+      top: MediaQuery.of(context).padding.top + 15,
+      left: 15,
+      right: 15,
+      child: Container(
+        // Material-widget poistettu
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(25.0),
+          boxShadow: [
+            // Varjostus lisätty suoraan tänne
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 10,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(25.0),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 8.0, sigmaY: 8.0),
+            child: Container(
+              decoration: BoxDecoration(
+                color: theme.cardColor.withOpacity(0.6),
+                border: Border.all(color: Colors.white.withOpacity(0.2)),
+              ),
+              child: Row(
+                children: [
+                  const Padding(
+                      padding: EdgeInsets.only(left: 15.0),
+                      child: Icon(Icons.search)),
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      focusNode: _searchFocusNode,
+                      decoration: InputDecoration(
+                        hintText: "Search trips or places...",
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 15, vertical: 14),
+                      ),
+                    ),
+                  ),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    child: _isLoading
+                        ? const Padding(
+                            padding: EdgeInsets.all(12.0),
+                            child: SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2.5)),
+                          )
+                        : IconButton(
+                            key: const ValueKey('filter_button'),
+                            icon: Icon(
+                              Icons.filter_list_rounded,
+                              color: isFilterActive
+                                  ? theme.colorScheme.secondary
+                                  : null,
+                            ),
+                            onPressed: _showFilterSheet,
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _buildMapView(BuildContext context, List<Post> posts) {
     final postMarkers = posts
@@ -447,7 +624,6 @@ class _HomePageState extends State<HomePage> {
               child: _buildPostMarkerWidget(context, post),
             ))
         .toList();
-
     return FlutterMap(
       mapController: _mapController,
       options: const MapOptions(
@@ -480,7 +656,6 @@ class _HomePageState extends State<HomePage> {
               final firstPoint = cluster.markers.first.point;
               final allSameLocation =
                   cluster.markers.every((m) => m.point == firstPoint);
-
               if (allSameLocation && cluster.markers.length > 1) {
                 final postsInCluster = cluster.markers
                     .map((node) =>
@@ -491,7 +666,7 @@ class _HomePageState extends State<HomePage> {
                 _mapController.fitCamera(
                   CameraFit.bounds(
                       bounds: cluster.bounds,
-                      padding: const EdgeInsets.all(50)),
+                      padding: const EdgeInsets.all(50.0)),
                 );
               }
             },
@@ -512,7 +687,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildPostFeed(
       BuildContext context, List<Post> posts, AuthProvider authProvider) {
-    if (posts.isEmpty) {
+    if (posts.isEmpty && !_isLoading) {
       return Center(
         child: Text(
           _searchController.text.isEmpty
@@ -527,8 +702,8 @@ class _HomePageState extends State<HomePage> {
         _searchController.clear();
         setState(() {
           _currentSortOption = SortOption.newest;
-          _updateStream();
         });
+        await _fetchPosts();
       },
       child: ListView.builder(
         padding: EdgeInsets.only(
@@ -622,7 +797,6 @@ class _HomePageState extends State<HomePage> {
   Widget _buildPostMarkerWidget(BuildContext context, Post post) {
     final isSelected = _selectedPost?.id == post.id;
     final theme = Theme.of(context);
-
     return GestureDetector(
       onTap: () => _handlePostSelection(post),
       child: Tooltip(
@@ -700,7 +874,6 @@ class _HomePageState extends State<HomePage> {
   Widget _buildInteractivePostModal(BuildContext context, Post post) {
     final theme = Theme.of(context);
     final hasImage = post.postImageUrl != null && post.postImageUrl!.isNotEmpty;
-
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 2.0, sigmaY: 2.0),
       child: Container(
@@ -740,28 +913,26 @@ class _HomePageState extends State<HomePage> {
                                   blurRadius: 10, color: Colors.black87)
                             ])),
                     const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 12,
-                          backgroundImage: post.userAvatarUrl.isNotEmpty
-                              ? NetworkImage(post.userAvatarUrl)
-                              : null,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          "@${post.username}",
-                          style: GoogleFonts.poppins(
-                              color: Colors.white.withOpacity(0.9)),
-                        ),
-                        const Spacer(),
-                        StarRatingDisplay(
-                            rating: post.averageRating,
-                            size: 18,
-                            showLabel: false,
-                            color: Colors.amber),
-                      ],
-                    ),
+                    Row(children: [
+                      CircleAvatar(
+                        radius: 12,
+                        backgroundImage: post.userAvatarUrl.isNotEmpty
+                            ? NetworkImage(post.userAvatarUrl)
+                            : null,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        "@${post.username}",
+                        style: GoogleFonts.poppins(
+                            color: Colors.white.withOpacity(0.9)),
+                      ),
+                      const Spacer(),
+                      StarRatingDisplay(
+                          rating: post.averageRating,
+                          size: 18,
+                          showLabel: false,
+                          color: Colors.amber),
+                    ]),
                     const SizedBox(height: 16),
                     SizedBox(
                       width: double.infinity,
@@ -805,19 +976,15 @@ class _TriangleClipper extends CustomClipper<Path> {
   bool shouldReclip(CustomClipper<Path> oldClipper) => false;
 }
 
-// --- UUTTA: Siisti, uudelleenkäytettävä ja tilallinen widget suodatinpaneelille ---
 class _FilterBottomSheet extends StatefulWidget {
   final SortOption initialSortOption;
-
   const _FilterBottomSheet({required this.initialSortOption});
-
   @override
   State<_FilterBottomSheet> createState() => _FilterBottomSheetState();
 }
 
 class _FilterBottomSheetState extends State<_FilterBottomSheet> {
   late SortOption _selectedOption;
-
   @override
   void initState() {
     super.initState();
@@ -839,7 +1006,6 @@ class _FilterBottomSheetState extends State<_FilterBottomSheet> {
           ),
           child: Column(
             children: [
-              // Vedettävä kahva ja otsikko
               Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Row(
@@ -867,8 +1033,6 @@ class _FilterBottomSheetState extends State<_FilterBottomSheet> {
                 ),
               ),
               const SizedBox(height: 16),
-
-              // Suodatinvaihtoehdot
               Expanded(
                 child: ListView(
                   controller: scrollController,
@@ -912,8 +1076,6 @@ class _FilterBottomSheetState extends State<_FilterBottomSheet> {
                   ],
                 ),
               ),
-
-              // Toimintonapit
               Padding(
                 padding: EdgeInsets.fromLTRB(
                     24, 16, 24, MediaQuery.of(context).padding.bottom + 16),
