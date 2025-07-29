@@ -270,7 +270,15 @@ class _CreatePostPageState extends State<CreatePostPage> {
             ? widget.hikePlan!.dailyRoutes
             : null,
       );
-      await newPostRef.set(newPost.toFirestore());
+
+      // --- TÄRKEÄ MUUTOS TÄSSÄ ---
+      // Muunnetaan Post-olio Mapiksi ja lisätään `title_lowercase` -kenttä hakua varten.
+      final postData = newPost.toFirestore();
+      postData['title_lowercase'] = _titleController.text.trim().toLowerCase();
+
+      await newPostRef.set(postData);
+      // ----------------------------
+
       await authProvider.handlePostCreationSuccess();
       _showSuccessDialog();
     } catch (e) {
@@ -340,7 +348,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
           backgroundColor: theme.cardColor,
           contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
-            _buildAnimatedIcon(isSuccess), // TÄMÄ KUTSUU PUUTTUVAA METODIA
+            _buildAnimatedIcon(isSuccess),
             const SizedBox(height: 20),
             Text(title,
                 style: GoogleFonts.poppins(
@@ -355,7 +363,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
     );
   }
 
-  // --- PUUTTUVA METODI LISÄTTY TÄHÄN ---
   Widget _buildAnimatedIcon(bool isSuccess) {
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 300),
