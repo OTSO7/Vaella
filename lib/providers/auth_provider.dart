@@ -1,5 +1,4 @@
 // lib/providers/auth_provider.dart
-
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -20,14 +19,12 @@ class AuthProvider with ChangeNotifier {
 
   AuthProvider() {
     _auth.authStateChanges().listen((fb_auth.User? firebaseUser) async {
-      bool wasLoading = _isLoading;
-      if (!_isLoading) _setLoading(true);
+      _setLoading(true);
       _user = firebaseUser;
       if (_user != null) {
         await _fetchUserProfile();
       } else {
         _userProfile = null;
-        if (!wasLoading) notifyListeners();
       }
       _setLoading(false);
     });
@@ -39,56 +36,137 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // --- XP-järjestelmän logiikka ---
-  int getExperienceRequiredForLevel(int level) {
-    if (level <= 0) return 100;
-    return 100 + (level - 1) * 50; // Lineaarinen kasvu
+  // --- KÄYTTÄJIEN JA SEURAAMISEN HALLINTA ---
+
+  Future<UserProfile> fetchUserProfileById(String userId) async {
+    try {
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      if (!userDoc.exists || userDoc.data() == null) {
+        throw Exception('User not found.');
+      }
+      UserProfile profile = UserProfile.fromFirestore(userDoc.data()!, userId);
+
+      if (!isLoggedIn) {
+        profile = profile.copyWith(relationToCurrentUser: UserRelation.unknown);
+      } else if (userId == _user!.uid) {
+        profile = profile.copyWith(relationToCurrentUser: UserRelation.self);
+      } else {
+        if (_userProfile == null) await _fetchUserProfile();
+        final isFollowing =
+            _userProfile?.followingIds.contains(userId) ?? false;
+        profile = profile.copyWith(
+          relationToCurrentUser:
+              isFollowing ? UserRelation.following : UserRelation.notFollowing,
+        );
+      }
+      return profile;
+    } catch (e) {
+      print('Error fetching profile for $userId: $e');
+      rethrow;
+    }
   }
 
-  // KORJATTU: Tämä metodi on nyt ainoa paikka, joka päivittää XP:n, tason ja tilastot.
+  Future<void> followUser(String userIdToFollow) async {
+    if (!isLoggedIn || _user!.uid == userIdToFollow) return;
+    await _firestore.runTransaction((transaction) async {
+      transaction.update(_firestore.collection('users').doc(_user!.uid), {
+        'followingIds': FieldValue.arrayUnion([userIdToFollow])
+      });
+      transaction.update(_firestore.collection('users').doc(userIdToFollow), {
+        'followerIds': FieldValue.arrayUnion([_user!.uid])
+      });
+    });
+    if (_userProfile != null &&
+        !_userProfile!.followingIds.contains(userIdToFollow)) {
+      _userProfile!.followingIds.add(userIdToFollow);
+      notifyListeners();
+    }
+  }
+
+  Future<void> unfollowUser(String userIdToUnfollow) async {
+    if (!isLoggedIn) return;
+    await _firestore.runTransaction((transaction) async {
+      transaction.update(_firestore.collection('users').doc(_user!.uid), {
+        'followingIds': FieldValue.arrayRemove([userIdToUnfollow])
+      });
+      transaction.update(_firestore.collection('users').doc(userIdToUnfollow), {
+        'followerIds': FieldValue.arrayRemove([_user!.uid])
+      });
+    });
+    if (_userProfile != null) {
+      _userProfile!.followingIds.remove(userIdToUnfollow);
+      notifyListeners();
+    }
+  }
+
+  // --- POSTAUSLASKURIN JA XP:N HALLINTA ---
+
+  Future<void> synchronizePostsCount() async {
+    if (!isLoggedIn || _userProfile == null) return;
+    try {
+      final postsQuery = await _firestore
+          .collection('posts')
+          .where('userId', isEqualTo: _user!.uid)
+          .get();
+      final actualPostsCount = postsQuery.docs.length;
+
+      if (actualPostsCount != _userProfile!.postsCount) {
+        await _firestore.collection('users').doc(_user!.uid).update({
+          'postsCount': actualPostsCount,
+        });
+        _userProfile = _userProfile!.copyWith(postsCount: actualPostsCount);
+        notifyListeners();
+      }
+    } catch (e) {
+      print('Error synchronizing post count: $e');
+    }
+  }
+
+  Future<void> handlePostCreationSuccess() async {
+    if (_userProfile == null || !isLoggedIn) return;
+    await _firestore.collection('users').doc(_user!.uid).update({
+      'postsCount': FieldValue.increment(1),
+    });
+    _userProfile =
+        _userProfile!.copyWith(postsCount: _userProfile!.postsCount + 1);
+    await addExperience(50);
+    notifyListeners();
+  }
+
+  Future<void> handlePostDeletionSuccess() async {
+    if (_userProfile == null || !isLoggedIn || _userProfile!.postsCount <= 0)
+      return;
+    await _firestore.collection('users').doc(_user!.uid).update({
+      'postsCount': FieldValue.increment(-1),
+    });
+    _userProfile =
+        _userProfile!.copyWith(postsCount: _userProfile!.postsCount - 1);
+    notifyListeners();
+  }
+
   Future<void> addExperience(int amount) async {
-    if (_userProfile == null || _user == null) return;
-
-    int currentTotalExperience = _userProfile!.experience;
-    int currentLevel = _userProfile!.level;
-
-    int newTotalExperience = currentTotalExperience + amount;
-    int newLevel = currentLevel;
-
-    // Käsittele tasojen nousu
+    if (_userProfile == null || !isLoggedIn) return;
+    int newTotalExperience = _userProfile!.experience + amount;
+    int newLevel = _userProfile!.level;
     while (
         newTotalExperience >= _getTotalExperienceToReachLevel(newLevel + 1)) {
       newLevel++;
-      print('Level up! New level: $newLevel');
     }
+    if (newTotalExperience != _userProfile!.experience ||
+        newLevel != _userProfile!.level) {
+      await _firestore.collection('users').doc(_user!.uid).update({
+        'experience': newTotalExperience,
+        'level': newLevel,
+      });
+      _userProfile = _userProfile!
+          .copyWith(experience: newTotalExperience, level: newLevel);
+      notifyListeners();
+    }
+  }
 
-    // Päivitä tilastot ('Vaelluksia' ja 'postsCount')
-    Map<String, dynamic> updatedStats = Map.from(_userProfile!.stats);
-    updatedStats['Vaelluksia'] = (updatedStats['Vaelluksia'] as num? ?? 0) + 1;
-
-    // KORJATTU: Lisätty postsCount-päivitys tähän.
-    int newPostsCount = _userProfile!.postsCount + 1;
-
-    UserProfile updatedProfile = _userProfile!.copyWith(
-      experience: newTotalExperience,
-      level: newLevel,
-      stats: updatedStats,
-      postsCount: newPostsCount, // Lisätty postsCount
-    );
-
-    // KORJATTU: Käytetään update-metodia koko objektin sijaan
-    // Tämä on turvallisempaa ja päivittää vain muuttuneet kentät.
-    await _firestore.collection('users').doc(_user!.uid).update({
-      'experience': updatedProfile.experience,
-      'level': updatedProfile.level,
-      'stats': updatedProfile.stats,
-      'postsCount': updatedProfile.postsCount,
-    }).then((_) {
-      _userProfile = updatedProfile;
-      notifyListeners(); // Varmista, että UI päivittyy
-    }).catchError((e) {
-      print('Error updating XP/Level/Stats in Firestore: $e');
-    });
+  int getExperienceRequiredForLevel(int level) {
+    if (level <= 0) return 100;
+    return 100 + (level - 1) * 50;
   }
 
   int _getTotalExperienceToReachLevel(int targetLevel) {
@@ -98,76 +176,32 @@ class AuthProvider with ChangeNotifier {
     }
     return totalXp;
   }
-  // --- XP-järjestelmän logiikka loppuu ---
+
+  // --- PROFIILIN HAKU JA PÄIVITYS ---
 
   Future<void> _fetchUserProfile() async {
     if (_user == null) {
-      if (_userProfile != null) {
-        _userProfile = null;
-        notifyListeners();
-      }
+      _userProfile = null;
+      notifyListeners();
       return;
     }
     try {
       DocumentSnapshot<Map<String, dynamic>> userDoc =
           await _firestore.collection('users').doc(_user!.uid).get();
-
       if (userDoc.exists && userDoc.data() != null) {
         _userProfile = UserProfile.fromFirestore(userDoc.data()!, _user!.uid);
-
-        bool needsUpdateInFirestore = false;
-        Map<String, dynamic> dataToUpdate = {};
-
-        if (userDoc.data()!['level'] == null) {
-          _userProfile = _userProfile!.copyWith(level: 1);
-          dataToUpdate['level'] = 1;
-          needsUpdateInFirestore = true;
-        }
-        if (userDoc.data()!['experience'] == null) {
-          _userProfile = _userProfile!.copyWith(experience: 0);
-          dataToUpdate['experience'] = 0;
-          needsUpdateInFirestore = true;
-        }
-        if (!_userProfile!.stats.containsKey('Vaelluksia')) {
-          Map<String, dynamic> updatedStats = Map.from(_userProfile!.stats);
-          updatedStats['Vaelluksia'] = 0;
-          _userProfile = _userProfile!.copyWith(stats: updatedStats);
-          dataToUpdate['stats'] = updatedStats;
-          needsUpdateInFirestore = true;
-        }
-
-        if (needsUpdateInFirestore) {
-          print(
-              'User profile missing fields, initializing and updating Firestore.');
-          await _firestore
-              .collection('users')
-              .doc(_user!.uid)
-              .update(dataToUpdate); // Käytä update setin sijaan
-        }
+        await synchronizePostsCount();
       } else {
-        // Luo oletusprofiili
         _userProfile = UserProfile(
           uid: _user!.uid,
           username: _user!.email?.split('@')[0] ??
               'user${_user!.uid.substring(0, 6)}',
-          displayName: 'New Adventurer',
+          displayName: _user!.displayName ?? 'New Adventurer',
           email: _user!.email ?? '',
           photoURL: _user!.photoURL,
-          bio: 'This is a new profile! Start your adventure.',
-          bannerImageUrl: null,
-          stats: {
-            'Vaelluksia': 0,
-            'Kilometrejä': 0.0,
-            'Huippuja': 0,
-            'Kuvia jaettu': 0
-          },
-          achievements: [],
-          stickers: [],
-          followingIds: [],
-          followerIds: [],
-          postsCount: 0,
           level: 1,
           experience: 0,
+          postsCount: 0,
         );
         await _firestore
             .collection('users')
@@ -175,83 +209,37 @@ class AuthProvider with ChangeNotifier {
             .set(_userProfile!.toFirestore());
       }
     } catch (e) {
-      _userProfile = null;
       print('Error fetching user profile: $e');
+      _userProfile = null;
     } finally {
-      // Varmistaa, että UI päivittyy aina haun jälkeen
       notifyListeners();
     }
   }
 
-  // KORJATTU: Yksinkertaistettu metodi kutsumaan addExperience-metodia.
-  Future<void> handlePostCreationSuccess() async {
-    // Annetaan käyttäjälle 50 XP jokaisesta uudesta postauksesta.
-    // Tämä arvo on helppo säätää yhdestä paikasta.
-    await addExperience(50);
-  }
-
-  // MUUT METODIT (login, register, jne.) SÄILYVÄT ENNALLAAN...
-  // ... (liitä loput AuthProviderin metodeista tähän, ne eivät vaadi muutoksia) ...
-  // ... (Täydellisyyden vuoksi ne ovat alla, mutta niitä ei muutettu) ...
-
   Future<void> updateLocalUserProfile(UserProfile updatedProfile) async {
-    _userProfile = updatedProfile; // Päivitä paikallisesti heti
+    if (_user == null) return;
+    _userProfile = updatedProfile;
     notifyListeners();
-
-    if (_user != null) {
-      if (_user!.displayName != updatedProfile.displayName) {
-        await _user!
-            .updateDisplayName(updatedProfile.displayName)
-            .catchError((e) {/* error handling */});
-      }
-      if (updatedProfile.photoURL != null &&
-          _user!.photoURL != updatedProfile.photoURL) {
-        await _user!
-            .updatePhotoURL(updatedProfile.photoURL)
-            .catchError((e) {/* error handling */});
-      }
-      try {
-        await _firestore
-            .collection('users')
-            .doc(_user!.uid)
-            .update(updatedProfile.toFirestore());
-      } catch (e) {
-        print('Error updating user profile in Firestore: $e');
-      }
+    if (_user!.displayName != updatedProfile.displayName) {
+      await _user!
+          .updateDisplayName(updatedProfile.displayName)
+          .catchError((e) {});
     }
-  }
-
-  Future<void> updateProfileDataDirectly(
-      Map<String, dynamic> dataToUpdate) async {
-    if (_userProfile == null || _user == null) {
-      print('Cannot update profile: user not logged in or profile not loaded.');
-      return;
+    if (updatedProfile.photoURL != null &&
+        _user!.photoURL != updatedProfile.photoURL) {
+      await _user!.updatePhotoURL(updatedProfile.photoURL).catchError((e) {});
     }
-
-    _setLoading(true);
     try {
-      await _firestore.collection('users').doc(_user!.uid).update(dataToUpdate);
-      await _fetchUserProfile(); // Hae profiili uudelleen varmistaaksesi synkronoinnin
+      await _firestore
+          .collection('users')
+          .doc(_user!.uid)
+          .update(updatedProfile.toFirestore());
     } catch (e) {
-      print('Error updating profile directly: $e');
-    } finally {
-      _setLoading(false);
+      print('Error updating user profile in Firestore: $e');
     }
   }
 
-  Future<void> handlePostDeletionSuccess() async {
-    if (_userProfile != null && _user != null && _userProfile!.postsCount > 0) {
-      final userDocRef = _firestore.collection('users').doc(_user!.uid);
-      await userDocRef
-          .update({'postsCount': FieldValue.increment(-1)}).then((_) {
-        _userProfile =
-            _userProfile!.copyWith(postsCount: _userProfile!.postsCount - 1);
-        notifyListeners();
-      }).catchError((e) {
-        print('Error updating postsCount in Firestore: $e');
-      });
-    }
-  }
+  // --- AUTENTIKOINTIMETODIT ---
 
   bool _isEmail(String input) {
     return RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(input);
@@ -260,46 +248,25 @@ class AuthProvider with ChangeNotifier {
   Future<void> loginWithUsernameOrEmail(
       String identifier, String password) async {
     _setLoading(true);
-    String emailToLogin;
     try {
+      String emailToLogin;
       if (_isEmail(identifier)) {
         emailToLogin = identifier.trim();
       } else {
-        final QuerySnapshot<Map<String, dynamic>> userQuery = await _firestore
+        final query = await _firestore
             .collection('users')
             .where('username', isEqualTo: identifier.trim().toLowerCase())
             .limit(1)
             .get();
-        if (userQuery.docs.isEmpty) {
+        if (query.docs.isEmpty) {
           throw Exception('Username or email not found.');
         }
-        final userData = userQuery.docs.first.data();
-        if (userData.containsKey('email') && userData['email'] != null) {
-          emailToLogin = userData['email'];
-        } else {
-          throw Exception('Email not found for the given username.');
-        }
+        emailToLogin = query.docs.first.data()['email'];
       }
-      fb_auth.UserCredential userCredential = await _auth
-          .signInWithEmailAndPassword(email: emailToLogin, password: password);
-      if (userCredential.user != null &&
-          _user?.uid != userCredential.user?.uid) {
-        _user = userCredential.user;
-        await _fetchUserProfile();
-      }
+      await _auth.signInWithEmailAndPassword(
+          email: emailToLogin, password: password);
     } on fb_auth.FirebaseAuthException catch (e) {
-      String message;
-      if (e.code == 'user-not-found' ||
-          e.code == 'wrong-password' ||
-          e.code == 'invalid-credential') {
-        message = 'Invalid username/email or password.';
-      } else if (e.code == 'invalid-email')
-        message = 'Invalid email address or username.';
-      else if (e.code == 'network-request-failed')
-        message = 'Network error. Please check your internet connection.';
-      else
-        message = 'Login failed: ${e.message}';
-      throw Exception(message);
+      throw Exception('Login failed: ${e.message}');
     } catch (e) {
       throw Exception('Login failed: ${e.toString()}');
     } finally {
@@ -312,9 +279,6 @@ class AuthProvider with ChangeNotifier {
     _setLoading(true);
     try {
       final usernameLower = username.toLowerCase().trim();
-      if (usernameLower.isEmpty) throw Exception('Username cannot be empty.');
-      if (name.trim().isEmpty) throw Exception('Display name cannot be empty.');
-
       final usernameExists = await _firestore
           .collection('users')
           .where('username', isEqualTo: usernameLower)
@@ -323,56 +287,29 @@ class AuthProvider with ChangeNotifier {
       if (usernameExists.docs.isNotEmpty) {
         throw Exception('Username is already taken.');
       }
-
       fb_auth.UserCredential userCredential =
           await _auth.createUserWithEmailAndPassword(
               email: email.trim(), password: password);
-
-      if (userCredential.user != null) {
-        _user = userCredential.user;
-        _userProfile = UserProfile(
+      _user = userCredential.user;
+      if (_user != null) {
+        await _user!.updateDisplayName(name.trim());
+        UserProfile newUserProfile = UserProfile(
           uid: _user!.uid,
           username: usernameLower,
           displayName: name.trim(),
           email: email.trim().toLowerCase(),
-          photoURL: _user!.photoURL,
-          bio: '',
-          bannerImageUrl: null,
-          stats: {
-            'Vaelluksia': 0,
-            'Kilometrejä': 0.0,
-            'Huippuja': 0,
-            'Kuvia jaettu': 0
-          },
-          achievements: [],
-          stickers: [],
-          followingIds: [],
-          followerIds: [],
-          postsCount: 0,
           level: 1,
           experience: 0,
+          postsCount: 0,
         );
         await _firestore
             .collection('users')
             .doc(_user!.uid)
-            .set(_userProfile!.toFirestore());
-        notifyListeners();
-      } else {
-        throw Exception('User registration failed, user object not created.');
+            .set(newUserProfile.toFirestore());
+        _userProfile = newUserProfile;
       }
     } on fb_auth.FirebaseAuthException catch (e) {
-      String message;
-      if (e.code == 'weak-password') {
-        message = 'Password is too weak.';
-      } else if (e.code == 'email-already-in-use')
-        message = 'Email address is already in use.';
-      else if (e.code == 'invalid-email')
-        message = 'Invalid email address.';
-      else if (e.code == 'network-request-failed')
-        message = 'Network error. Please check your internet connection.';
-      else
-        message = 'Registration failed: ${e.message}';
-      throw Exception(message);
+      throw Exception('Registration failed: ${e.message}');
     } catch (e) {
       throw Exception('Registration failed: ${e.toString()}');
     } finally {
@@ -381,16 +318,9 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<void> logout() async {
-    try {
-      await _auth.signOut();
-      if (_user != null || _userProfile != null) {
-        _user = null;
-        _userProfile = null;
-      }
-    } catch (e) {
-      throw Exception('Logout failed: ${e.toString()}');
-    } finally {
-      _setLoading(false);
-    }
+    await _auth.signOut();
+    _user = null;
+    _userProfile = null;
+    notifyListeners();
   }
 }

@@ -1,9 +1,10 @@
 // lib/widgets/user_posts_section.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/post_model.dart';
-import 'post_thumbnail_card.dart';
+import 'post_list_item.dart'; // UUSI WIDGET
 
 class UserPostsSection extends StatefulWidget {
   final String userId;
@@ -55,16 +56,8 @@ class _UserPostsSectionState extends State<UserPostsSection> {
         return [];
       }
       final posts = querySnapshot.docs
-          .map((doc) {
-            try {
-              return Post.fromFirestore(
-                  doc as DocumentSnapshot<Map<String, dynamic>>);
-            } catch (e) {
-              // print('Error parsing post document ${doc.id}: $e');
-              return null;
-            }
-          })
-          .whereType<Post>()
+          .map((doc) =>
+              Post.fromFirestore(doc as DocumentSnapshot<Map<String, dynamic>>))
           .toList();
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -74,12 +67,10 @@ class _UserPostsSectionState extends State<UserPostsSection> {
       });
       return posts;
     } catch (e) {
-      // print('Critical error fetching user posts for ${widget.userId}: $e\nStackTrace: $stackTrace');
       if (mounted) {
         widget.onPostsLoaded(0);
       }
-      throw Exception(
-          'Failed to load posts. Please check your connection or try again later.');
+      rethrow;
     }
   }
 
@@ -90,94 +81,46 @@ class _UserPostsSectionState extends State<UserPostsSection> {
       future: _userPostsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 40.0),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-          );
+          return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return SliverToBoxAdapter(
+          return Center(child: Text("Error loading posts: ${snapshot.error}"));
+        }
+        final posts = snapshot.data;
+        if (posts == null || posts.isEmpty) {
+          return Center(
             child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(vertical: 40.0, horizontal: 20.0),
-              child: Center(
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.cloud_off_rounded,
-                      color: theme.colorScheme.error, size: 48),
+              padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.photo_library_outlined,
+                      size: 50, color: theme.hintColor.withOpacity(0.5)),
                   const SizedBox(height: 16),
-                  Text('Could not load posts',
-                      textAlign: TextAlign.center,
+                  Text('No posts yet.',
                       style: GoogleFonts.poppins(
-                          color: theme.colorScheme.error,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  Text(
-                      snapshot.error.toString().replaceFirst("Exception: ", ""),
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.lato(
-                          color: theme.hintColor, fontSize: 14)),
-                ]),
+                          fontSize: 18, fontWeight: FontWeight.w500)),
+                ],
               ),
             ),
           );
         }
-        final posts = snapshot.data;
-        if (posts == null || posts.isEmpty) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) {
-              widget.onPostsLoaded(0);
-            }
-          });
-          return SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 24),
-              child: Center(
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.photo_library_outlined,
-                    size: 50, color: theme.hintColor.withOpacity(0.5)),
-                const SizedBox(height: 16),
-                Text('No posts yet.',
-                    style: GoogleFonts.poppins(
-                        fontSize: 18,
-                        color: theme.colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w500),
-                    textAlign: TextAlign.center),
-                const SizedBox(height: 8),
-                Text('Create your first adventure post!',
-                    style:
-                        GoogleFonts.lato(fontSize: 14, color: theme.hintColor),
-                    textAlign: TextAlign.center),
-              ])),
-            ),
-          );
-        }
-        return SliverPadding(
-          padding:
-              const EdgeInsets.all(4.0), // Lisätty yleinen padding ruudukolle
-          sliver: SliverGrid(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              crossAxisSpacing: 4.0, // KORJATTU: Lisätty välistystä
-              mainAxisSpacing: 4.0, // KORJATTU: Lisätty välistystä
-              childAspectRatio: 1.0,
-            ),
-            delegate: SliverChildBuilderDelegate(
-              (BuildContext context, int index) {
-                final post = posts[index];
-                return PostThumbnailCard(
-                  post: post,
-                  onTap: () {
-                    // TODO: Navigoi julkaisun yksityiskohtaiseen näkymään
-                    // Esim. context.push('/post/${post.id}');
-                  },
-                );
+
+        // KORVATTU: GridView on nyt ListView.builder.
+        return ListView.builder(
+          padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
+          itemCount: posts.length,
+          itemBuilder: (BuildContext context, int index) {
+            final post = posts[index];
+            // KORVATTU: Käytetään uutta PostListItem-widgettiä.
+            return PostListItem(
+              post: post,
+              onTap: () {
+                // Navigoi postauksen yksityiskohtaiseen näkymään
+                context.push('/post/${post.id}');
               },
-              childCount: posts.length,
-            ),
-          ),
+            );
+          },
         );
       },
     );

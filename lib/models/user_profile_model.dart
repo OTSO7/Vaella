@@ -2,7 +2,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-// Achievement-malli (oletetaan, että tämä on jo määritelty ja toimii)
+// Määrittelee suhteen kirjautuneen käyttäjän ja profiilin omistajan välillä.
+// Tätä ei tallenneta Firestoreen, vaan se päätellään lennosta.
+enum UserRelation { self, following, notFollowing, unknown }
+
 class Achievement {
   final String id;
   final String title;
@@ -63,7 +66,6 @@ class Achievement {
   }
 }
 
-// Sticker-malli (oletetaan, että tämä on jo määritelty ja toimii)
 class Sticker {
   final String id;
   final String name;
@@ -81,7 +83,6 @@ class Sticker {
   Map<String, dynamic> toFirestore() => {'name': name, 'imageUrl': imageUrl};
 }
 
-// UserProfile-malli
 class UserProfile {
   final String uid;
   String username;
@@ -95,9 +96,11 @@ class UserProfile {
   List<Sticker> stickers;
   List<String> followingIds;
   List<String> followerIds;
+  List<String> featuredHikeIds;
   int postsCount;
-  int level; // LISÄTTY
-  int experience; // LISÄTTY
+  int level;
+  int experience;
+  UserRelation relationToCurrentUser;
 
   UserProfile({
     required this.uid,
@@ -112,9 +115,11 @@ class UserProfile {
     this.stickers = const [],
     this.followingIds = const [],
     this.followerIds = const [],
+    this.featuredHikeIds = const [],
     this.postsCount = 0,
-    this.level = 1, // ALUSTUSARVO
-    this.experience = 0, // ALUSTUSARVO
+    this.level = 1,
+    this.experience = 0,
+    this.relationToCurrentUser = UserRelation.unknown,
   });
 
   factory UserProfile.fromFirestore(Map<String, dynamic> data, String uid) {
@@ -165,10 +170,10 @@ class UserProfile {
       stickers: parsedStickers,
       followingIds: parseStringList(data['followingIds'] ?? data['friends']),
       followerIds: parseStringList(data['followerIds']),
+      featuredHikeIds: parseStringList(data['featuredHikeIds']),
       postsCount: (data['postsCount'] as num?)?.toInt() ?? 0,
-      level: (data['level'] as num?)?.toInt() ?? 1, // Varmista lukeminen
-      experience:
-          (data['experience'] as num?)?.toInt() ?? 0, // Varmista lukeminen
+      level: (data['level'] as num?)?.toInt() ?? 1,
+      experience: (data['experience'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -185,9 +190,10 @@ class UserProfile {
       'stickers': stickers.map((s) => s.toFirestore()).toList(),
       'followingIds': followingIds,
       'followerIds': followerIds,
+      'featuredHikeIds': featuredHikeIds,
       'postsCount': postsCount,
-      'level': level, // Varmista tallennus
-      'experience': experience, // Varmista tallennus
+      'level': level,
+      'experience': experience,
     };
   }
 
@@ -204,9 +210,11 @@ class UserProfile {
     List<Sticker>? stickers,
     List<String>? followingIds,
     List<String>? followerIds,
+    List<String>? featuredHikeIds,
     int? postsCount,
     int? level,
     int? experience,
+    UserRelation? relationToCurrentUser,
   }) {
     return UserProfile(
       uid: uid ?? this.uid,
@@ -221,9 +229,12 @@ class UserProfile {
       stickers: stickers ?? this.stickers,
       followingIds: followingIds ?? this.followingIds,
       followerIds: followerIds ?? this.followerIds,
+      featuredHikeIds: featuredHikeIds ?? this.featuredHikeIds,
       postsCount: postsCount ?? this.postsCount,
       level: level ?? this.level,
       experience: experience ?? this.experience,
+      relationToCurrentUser:
+          relationToCurrentUser ?? this.relationToCurrentUser,
     );
   }
 }

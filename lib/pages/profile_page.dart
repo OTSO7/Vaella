@@ -1,249 +1,288 @@
+// lib/pages/profile_page.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import '../providers/auth_provider.dart';
 import '../models/user_profile_model.dart' as user_model;
-import '../widgets/profile_header.dart';
-import '../widgets/achievement_grid.dart' as achievement_widget;
 import '../widgets/profile_counts_bar.dart';
+import '../widgets/user_posts_section.dart';
+import '../widgets/profile_header_content.dart';
+import '../widgets/profile_tab_bar.dart';
+import '../widgets/user_hikes_map_section.dart';
+import '../widgets/achievement_grid.dart' as achievement_widget;
 
 class ProfilePage extends StatefulWidget {
-  const ProfilePage({super.key});
+  final String? userId;
+  const ProfilePage({super.key, this.userId});
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage> {
+class _ProfilePageState extends State<ProfilePage>
+    with TickerProviderStateMixin {
+  late TabController _tabController;
+  late Future<user_model.UserProfile> _profileFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+    _profileFuture = _fetchProfile();
+  }
+
+  Future<user_model.UserProfile> _fetchProfile() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final idToFetch = widget.userId ?? authProvider.user?.uid;
+
+    if (idToFetch == null) {
+      return Future.error("User not found or not logged in.");
+    }
+
+    return authProvider.fetchUserProfileById(idToFetch);
+  }
+
+  @override
+  void didUpdateWidget(covariant ProfilePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.userId != oldWidget.userId) {
+      setState(() {
+        _profileFuture = _fetchProfile();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context);
     final theme = Theme.of(context);
+    final authProvider = Provider.of<AuthProvider>(context);
 
-    if (!authProvider.isLoggedIn || authProvider.userProfile == null) {
-      return Scaffold(
-        appBar: AppBar(
-          title: Text('Profile',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-          backgroundColor: theme.colorScheme.surface,
-          elevation: 0,
-        ),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              authProvider.isLoading
-                  ? CircularProgressIndicator(color: theme.colorScheme.primary)
-                  : Text('Loading profile...',
-                      style: GoogleFonts.lato(fontSize: 16)),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: theme.colorScheme.primary,
-                  foregroundColor: theme.colorScheme.onPrimary,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  textStyle: GoogleFonts.poppins(fontWeight: FontWeight.w500),
-                ),
-                onPressed: () => authProvider.logout(),
-                child: const Text('Log out'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    final user_model.UserProfile userProfile = authProvider.userProfile!;
-
-    void navigateToEditProfile() async {
-      final updatedProfile = await context.push<user_model.UserProfile>(
-        '/profile/edit',
-        extra: userProfile,
-      );
-      if (updatedProfile != null && mounted) {
-        await authProvider.updateLocalUserProfile(updatedProfile);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Profile updated successfully!',
-                  style: GoogleFonts.lato()),
-              backgroundColor: Colors.green[600],
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10.0)),
-              margin: const EdgeInsets.all(10.0),
-            ),
-          );
-        }
-      }
-    }
-
-    final int currentLevel = userProfile.level;
-    final int currentTotalExperience = userProfile.experience;
-
-    int totalExperienceToReachCurrentLevel = 0;
-    for (int i = 1; i < currentLevel; i++) {
-      totalExperienceToReachCurrentLevel +=
-          authProvider.getExperienceRequiredForLevel(i);
-    }
-
-    final int experienceRequiredForNextLevel =
-        authProvider.getExperienceRequiredForLevel(currentLevel);
-
-    final int currentExperienceInCurrentLevel =
-        (currentTotalExperience >= totalExperienceToReachCurrentLevel)
-            ? currentTotalExperience - totalExperienceToReachCurrentLevel
-            : 0;
-
-    final double experienceProgress = (experienceRequiredForNextLevel > 0)
-        ? (currentExperienceInCurrentLevel / experienceRequiredForNextLevel)
-            .clamp(0.0, 1.0)
-        : 0.0;
+    final bool isOwnProfile =
+        widget.userId == null || widget.userId == authProvider.user?.uid;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      body: CustomScrollView(
-        slivers: [
-          // Use SliverList for dynamic height and flexibility
-          SliverList(
-            delegate: SliverChildListDelegate(
-              [
-                // Header section (no more fixed height)
-                Padding(
-                  padding: const EdgeInsets.only(top: 16),
-                  child: ProfileHeader(
-                    username: userProfile.username,
-                    displayName: userProfile.displayName,
-                    photoURL: userProfile.photoURL,
-                    bio: userProfile.bio,
-                    bannerImageUrl: userProfile.bannerImageUrl,
-                    onEditProfile: navigateToEditProfile,
-                    level: currentLevel,
-                    currentExperience: currentExperienceInCurrentLevel,
-                    experienceToNextLevel: experienceRequiredForNextLevel,
+      body: FutureBuilder<user_model.UserProfile>(
+        future: _profileFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text("Error: ${snapshot.error.toString()}"));
+          }
+          if (!snapshot.hasData) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text("Please log in to see your profile.",
+                      style: GoogleFonts.lato()),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: () => context.go('/login'),
+                    child: const Text("Go to Login"),
+                  )
+                ],
+              ),
+            );
+          }
+
+          final user_model.UserProfile user = isOwnProfile &&
+                  authProvider.userProfile != null
+              ? authProvider.userProfile!
+                  .copyWith(relationToCurrentUser: user_model.UserRelation.self)
+              : snapshot.data!;
+
+          return RefreshIndicator(
+            onRefresh: () async {
+              setState(() {
+                _profileFuture = _fetchProfile();
+              });
+            },
+            child: NestedScrollView(
+              headerSliverBuilder:
+                  (BuildContext context, bool innerBoxIsScrolled) {
+                return <Widget>[
+                  // YKSINKERTAISTETTU SLIVERAPPBAR
+                  SliverAppBar(
+                    expandedHeight: 50.0,
+                    floating: false,
+                    pinned: true,
+                    stretch: true,
+                    backgroundColor: theme.colorScheme.surface,
+                    foregroundColor: Colors.white,
+                    // Näyttää nimen automaattisesti, kun palkki on pienennetty
+                    title: innerBoxIsScrolled
+                        ? Text(user.displayName,
+                            style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.w600))
+                        : null,
+                    flexibleSpace: FlexibleSpaceBar(
+                      background: (user.bannerImageUrl != null &&
+                              user.bannerImageUrl!.isNotEmpty)
+                          ? Image.network(
+                              user.bannerImageUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Container(
+                                      color: theme.scaffoldBackgroundColor),
+                            )
+                          : Container(color: theme.scaffoldBackgroundColor),
+                    ),
+                    actions: [_buildAppBarActions(context, user, authProvider)],
                   ),
-                ),
 
-                const SizedBox(height: 12),
+                  // UUSI, SIISTI HEADER-OSA
+                  SliverToBoxAdapter(
+                      child: ProfileHeaderContent(userProfile: user)),
 
-                // Profile Counts
-                ProfileCountsBar(
-                  postsCount: userProfile.postsCount,
-                  followersCount: userProfile.followerIds.length,
-                  followingCount: userProfile.followingIds.length,
-                  onPostsTap: () {
-                    context.push('/users/${userProfile.uid}/posts',
-                        extra: userProfile.username);
-                  },
-                  onFollowersTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                        content: Text("Followers list coming soon!")));
-                  },
-                  onFollowingTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                        content: Text("Following list coming soon!")));
-                  },
-                ),
-
-                const SizedBox(height: 24),
-
-                // Achievements
-                _buildSectionHeader(
-                    context, 'Achievements', Icons.emoji_events_rounded),
-                userProfile.achievements.isEmpty
-                    ? _buildEmptySectionPlaceholder(
-                        context,
-                        'No achievements yet. Keep exploring!',
-                        Icons.explore_outlined)
-                    : achievement_widget.AchievementGrid(
-                        achievements: userProfile.achievements
-                            .map((a) => achievement_widget.Achievement(
-                                  title: a.title,
-                                  description: a.description,
-                                  icon: user_model.Achievement.getIconFromName(
-                                      a.iconName),
-                                  dateAchieved: a.dateAchieved,
-                                  iconColor: a.iconColor,
-                                  imageUrl: a.imageUrl,
-                                ))
-                            .toList(),
-                        isStickerGrid: false,
-                      ),
-
-                const SizedBox(height: 24),
-
-                // National Park Badges
-                _buildSectionHeader(context, 'National Park Badges',
-                    Icons.collections_bookmark_rounded),
-                userProfile.stickers.isEmpty
-                    ? _buildEmptySectionPlaceholder(
-                        context,
-                        'No national park badges collected yet.',
-                        Icons.park_outlined)
-                    : achievement_widget.AchievementGrid(
-                        achievements: userProfile.stickers
-                            .map((s) => achievement_widget.Achievement(
-                                  title: s.name,
-                                  description: s.name,
-                                  imageUrl: s.imageUrl,
-                                  dateAchieved: DateTime.now(),
-                                  icon: Icons.shield_moon_outlined,
-                                ))
-                            .toList(),
-                        isStickerGrid: true,
-                      ),
-
-                const SizedBox(height: 48),
-              ],
+                  // ALAOSA, JOKA PYSTYI ENNALLAAN
+                  SliverToBoxAdapter(
+                    child: ProfileCountsBar(
+                      postsCount: user.postsCount,
+                      followersCount: user.followerIds.length,
+                      followingCount: user.followingIds.length,
+                      onPostsTap: () => _tabController.animateTo(0),
+                      onFollowersTap: () {/* Navigoi seuraajalistaan */},
+                      onFollowingTap: () {/* Navigoi seurattujen listaan */},
+                    ),
+                  ),
+                  ProfileTabBar(controller: _tabController),
+                ];
+              },
+              body: TabBarView(
+                controller: _tabController,
+                children: <Widget>[
+                  UserPostsSection(userId: user.uid, onPostsLoaded: (count) {}),
+                  UserHikesMapSection(userId: user.uid),
+                  _buildAchievementsTab(context, user)
+                ],
+              ),
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildSectionHeader(
-      BuildContext context, String title, IconData icon) {
+  Widget _buildAppBarActions(BuildContext context, user_model.UserProfile user,
+      AuthProvider authProvider) {
+    if (user.relationToCurrentUser == user_model.UserRelation.self) {
+      return PopupMenuButton<String>(
+        onSelected: (value) {
+          if (value == 'settings') {
+            ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Settings page coming soon!")));
+          } else if (value == 'logout') {
+            authProvider.logout();
+            context.go('/login');
+          }
+        },
+        itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+          const PopupMenuItem<String>(
+            value: 'settings',
+            child: ListTile(
+                leading: Icon(Icons.settings_outlined),
+                title: Text('Settings')),
+          ),
+          const PopupMenuItem<String>(
+            value: 'logout',
+            child:
+                ListTile(leading: Icon(Icons.logout), title: Text('Log Out')),
+          ),
+        ],
+      );
+    } else {
+      return PopupMenuButton<String>(
+        onSelected: (value) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("$value action coming soon!")));
+        },
+        itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+          const PopupMenuItem<String>(
+              value: 'report',
+              child: ListTile(
+                  leading: Icon(Icons.flag_outlined),
+                  title: Text('Report User'))),
+          const PopupMenuItem<String>(
+              value: 'block',
+              child: ListTile(
+                  leading: Icon(Icons.block), title: Text('Block User'))),
+        ],
+      );
+    }
+  }
+
+  Widget _buildAchievementsTab(
+      BuildContext context, user_model.UserProfile user) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 28, 20, 16),
-      child: Row(
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Column(
         children: [
-          Icon(icon, color: theme.colorScheme.primary, size: 26),
-          const SizedBox(width: 12),
-          Text(
-            title,
-            style: GoogleFonts.poppins(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptySectionPlaceholder(
-      BuildContext context, String message, IconData icon) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 50, color: theme.hintColor.withOpacity(0.6)),
-            const SizedBox(height: 16),
-            Text(
-              message,
-              style: GoogleFonts.lato(
-                  fontSize: 16, color: theme.hintColor.withOpacity(0.8)),
-              textAlign: TextAlign.center,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text("Achievements",
+                  style: GoogleFonts.poppins(
+                      fontSize: 18, fontWeight: FontWeight.w600)),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 8),
+          user.achievements.isEmpty
+              ? Text("No achievements yet.",
+                  style: GoogleFonts.lato(color: theme.hintColor))
+              : achievement_widget.AchievementGrid(
+                  achievements: user.achievements
+                      .map((a) => achievement_widget.Achievement(
+                            title: a.title,
+                            description: a.description,
+                            icon: a.icon,
+                            dateAchieved: a.dateAchieved,
+                            iconColor: a.iconColor,
+                            imageUrl: a.imageUrl,
+                          ))
+                      .toList(),
+                  isStickerGrid: false,
+                ),
+          const SizedBox(height: 24),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text("National Park Badges",
+                  style: GoogleFonts.poppins(
+                      fontSize: 18, fontWeight: FontWeight.w600)),
+            ),
+          ),
+          const SizedBox(height: 8),
+          user.stickers.isEmpty
+              ? Text("No badges collected yet.",
+                  style: GoogleFonts.lato(color: theme.hintColor))
+              : achievement_widget.AchievementGrid(
+                  achievements: user.stickers
+                      .map((s) => achievement_widget.Achievement(
+                            title: s.name,
+                            description: '',
+                            imageUrl: s.imageUrl,
+                            dateAchieved: DateTime.now(),
+                            icon: Icons.shield,
+                          ))
+                      .toList(),
+                  isStickerGrid: true,
+                ),
+        ],
       ),
     );
   }
