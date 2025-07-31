@@ -926,7 +926,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
   }
 
   Widget _buildRatingsSection(BuildContext context) {
-    Map<double, String> _convertRatingLabels(dynamic labels) {
+    Map<double, String> convertRatingLabels(dynamic labels) {
       if (labels is Map<int, String>) {
         return labels.map((key, value) => MapEntry(key.toDouble(), value));
       }
@@ -949,7 +949,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
               title: getRatingData(RatingType.weather)['title'],
               icon: getRatingData(RatingType.weather)['icon'],
               currentRating: _weatherRating,
-              labels: _convertRatingLabels(
+              labels: convertRatingLabels(
                   getRatingData(RatingType.weather)['labels']),
               onRatingChanged: (rating) {
                 setState(() => _weatherRating = rating);
@@ -960,7 +960,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
               title: getRatingData(RatingType.difficulty)['title'],
               icon: getRatingData(RatingType.difficulty)['icon'],
               currentRating: _difficultyRating,
-              labels: _convertRatingLabels(
+              labels: convertRatingLabels(
                   getRatingData(RatingType.difficulty)['labels']),
               onRatingChanged: (rating) {
                 setState(() => _difficultyRating = rating);
@@ -971,7 +971,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
               title: getRatingData(RatingType.experience)['title'],
               icon: getRatingData(RatingType.experience)['icon'],
               currentRating: _experienceRating,
-              labels: _convertRatingLabels(
+              labels: convertRatingLabels(
                   getRatingData(RatingType.experience)['labels']),
               onRatingChanged: (rating) {
                 setState(() => _experienceRating = rating);

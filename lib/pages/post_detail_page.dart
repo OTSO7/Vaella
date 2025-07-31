@@ -39,10 +39,6 @@ class PostDetailPage extends StatelessWidget {
 
           final post = Post.fromFirestore(snapshot.data!);
 
-          if (post == null) {
-            return _buildErrorState(context, 'Could not read post data.');
-          }
-
           // Successful load -> display content
           return _buildPostContent(context, post);
         },

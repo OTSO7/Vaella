@@ -514,7 +514,7 @@ class _HikePlanHubPageState extends State<HikePlanHubPage> {
                     color: theme.colorScheme.primary.withOpacity(0.1)),
               )
             else
-              Container(color: theme.colorScheme.surfaceVariant),
+              Container(color: theme.colorScheme.surfaceContainerHighest),
             if (hasImage)
               BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 1.0, sigmaY: 1.0),

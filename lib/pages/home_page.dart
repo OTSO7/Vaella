@@ -51,10 +51,10 @@ class PostMarker extends Marker {
   final Post post;
   PostMarker(
       {required this.post,
-      required Widget child,
+      required super.child,
       super.width = 50,
       super.height = 60})
-      : super(point: LatLng(post.latitude!, post.longitude!), child: child);
+      : super(point: LatLng(post.latitude!, post.longitude!));
 }
 
 class HomePage extends StatefulWidget {
@@ -195,7 +195,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   double _calculateZoomForBounds(LatLngBounds bounds) {
     final size = MediaQuery.of(context).size;
-    final worldMapWidth = 256;
+    const worldMapWidth = 256;
 
     final ne = bounds.northEast;
     final sw = bounds.southWest;
@@ -578,11 +578,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     child: TextField(
                       controller: _searchController,
                       focusNode: _searchFocusNode,
-                      decoration: InputDecoration(
+                      decoration: const InputDecoration(
                         hintText: "Search trips or places...",
                         border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 15, vertical: 14),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 15, vertical: 14),
                       ),
                     ),
                   ),
@@ -658,8 +658,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   cluster.markers.every((m) => m.point == firstPoint);
               if (allSameLocation && cluster.markers.length > 1) {
                 final postsInCluster = cluster.markers
-                    .map((node) =>
-                        ((node as MarkerNode).marker as PostMarker).post)
+                    .map((node) => ((node).marker as PostMarker).post)
                     .toList();
                 _showPostSelectionSheet(context, postsInCluster);
               } else {
