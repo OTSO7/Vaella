@@ -48,12 +48,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
     _bioController =
         TextEditingController(text: widget.initialProfile.bio ?? '');
 
-    // Initialize profile image display
     _profileImageDisplayUrl = widget.initialProfile.photoURL;
 
-    // Initialize banner image display
-    // The controller will hold the URL string if it's from network,
-    // or an internal marker/path if it's a picked file to be uploaded.
     _bannerImageUrlController =
         TextEditingController(text: widget.initialProfile.bannerImageUrl ?? '');
     _bannerImageDisplayUrl = widget.initialProfile.bannerImageUrl;
@@ -91,7 +87,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 
   Future<String?> _uploadImage(File imageFile, String firebasePath) async {
-    setState(() => _isLoading = true);
+    // Note: No setState for _isLoading here, it's handled in _updateProfile
     try {
       final ref = FirebaseStorage.instance.ref().child(firebasePath).child(
           '${fb_auth.FirebaseAuth.instance.currentUser!.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg');
@@ -102,8 +98,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
         _showErrorSnackBar('Image upload failed: ${e.toString()}');
       }
       return null;
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -168,44 +162,26 @@ class _EditProfilePageState extends State<EditProfilePage> {
         finalBannerImageUrl = null; // User cleared the banner URL
       } else {
         // If controller text is not a local path and not empty, assume it's a network URL
-        if (!_bannerImageUrlController.text.contains('/') &&
-            !_bannerImageUrlController.text.contains('file:')) {
+        if (_pickedBannerImageFile_isValidUrl(_bannerImageUrlController.text)) {
           finalBannerImageUrl = _bannerImageUrlController.text.trim();
         }
       }
 
+      // KORJATTU KOHTA: Käytetään toValueGetter-apufunktiota
       final updatedProfile = widget.initialProfile.copyWith(
         username: newUsername,
         displayName: _displayNameController.text.trim(),
-        bio: _bioController.text.trim(),
+        bio: toValueGetter(_bioController.text.trim()),
         photoURL: finalProfilePhotoUrl,
-        bannerImageUrl: finalBannerImageUrl,
+        bannerImageUrl: toValueGetter(finalBannerImageUrl),
       );
 
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUser.uid)
-          .update(updatedProfile.toFirestore());
-
-      // Update Firebase Auth user display name and photo URL (optional but good practice)
-      if (fb_auth.FirebaseAuth.instance.currentUser != null) {
-        if (fb_auth.FirebaseAuth.instance.currentUser!.displayName !=
-            updatedProfile.displayName) {
-          await fb_auth.FirebaseAuth.instance.currentUser!
-              .updateDisplayName(updatedProfile.displayName);
-        }
-        if (fb_auth.FirebaseAuth.instance.currentUser!.photoURL !=
-            updatedProfile.photoURL) {
-          await fb_auth.FirebaseAuth.instance.currentUser!
-              .updatePhotoURL(updatedProfile.photoURL);
-        }
-      }
-
+      // Tämä on nyt AuthProviderin vastuulla
       await authProvider.updateLocalUserProfile(updatedProfile);
 
       if (mounted) {
         _showSuccessSnackBar('Profile updated successfully!');
-        context.pop(updatedProfile);
+        context.pop();
       }
     } catch (e) {
       if (mounted) {
@@ -280,7 +256,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
               backgroundColor: theme.colorScheme.surface,
               backgroundImage: backgroundImage,
               onBackgroundImageError: (_, __) {
-                // This can happen if NetworkImage fails
                 if (mounted) {
                   setState(() =>
                       _profileImageDisplayUrl = 'use_default_placeholder');
@@ -299,7 +274,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
             bottom: 0,
             right: 0,
             child: Material(
-              // Added Material for InkWell splash effect
               color: theme.colorScheme.secondary,
               shape: const CircleBorder(),
               elevation: 2.0,
@@ -361,7 +335,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
                       image: bannerPreviewImage!,
                       fit: BoxFit.cover,
                       onError: (err, stack) {
-                        // Handle NetworkImage load error for banner
                         if (mounted) {
                           setState(() => _bannerImageDisplayUrl =
                               'use_default_placeholder_banner');
@@ -415,7 +388,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
           keyboardType: TextInputType.url,
           enabled: !_isLoading,
           onChanged: (value) {
-            // If user types a URL, update the display URL and clear picked file
             if (value.isNotEmpty &&
                 (value.startsWith('http') || value.startsWith('https'))) {
               setState(() {
@@ -434,7 +406,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 value.isNotEmpty &&
                 !_pickedBannerImageFile_isValidUrl(value)) {
               if (!_pickedBannerImageFile_isValidFilePath(value)) {
-                // Check if it's not a picked file path
                 return 'Enter a valid URL or pick an image';
               }
             }
@@ -451,7 +422,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 
   bool _pickedBannerImageFile_isValidFilePath(String value) {
-    // This is a simple check, assumes picked file paths will be absolute
     return value.startsWith('/') || value.startsWith('file:');
   }
 
@@ -496,7 +466,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
             style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
         backgroundColor: theme.colorScheme.surface,
         foregroundColor: theme.colorScheme.onSurface,
-        elevation: 0.5, // Subtle elevation
+        elevation: 0.5,
       ),
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SingleChildScrollView(
@@ -583,8 +553,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                       fontSize: 16, fontWeight: FontWeight.w600),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12.0)),
-                  minimumSize:
-                      const Size(double.infinity, 50), // Full width button
+                  minimumSize: const Size(double.infinity, 50),
                 ),
                 onPressed: _isLoading ? null : _updateProfile,
                 icon: _isLoading

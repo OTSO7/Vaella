@@ -18,22 +18,24 @@ class AuthProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
 
   AuthProvider() {
-    _auth.authStateChanges().listen((fb_auth.User? firebaseUser) async {
-      _setLoading(true);
-      _user = firebaseUser;
-      if (_user != null) {
-        await _fetchUserProfile();
-      } else {
-        _userProfile = null;
-      }
-      _setLoading(false);
-    });
+    _auth.authStateChanges().listen(_onAuthStateChanged);
   }
 
   void _setLoading(bool value) {
     if (_isLoading == value) return;
     _isLoading = value;
     notifyListeners();
+  }
+
+  Future<void> _onAuthStateChanged(fb_auth.User? firebaseUser) async {
+    _setLoading(true);
+    _user = firebaseUser;
+    if (_user != null) {
+      await _fetchCurrentUserProfile();
+    } else {
+      _userProfile = null;
+    }
+    _setLoading(false);
   }
 
   // --- KÄYTTÄJIEN JA SEURAAMISEN HALLINTA ---
@@ -46,18 +48,17 @@ class AuthProvider with ChangeNotifier {
       }
       UserProfile profile = UserProfile.fromFirestore(userDoc.data()!, userId);
 
+      // Määritä suhde nykyiseen käyttäjään
       if (!isLoggedIn) {
-        profile = profile.copyWith(relationToCurrentUser: UserRelation.unknown);
+        profile.relationToCurrentUser = UserRelation.unknown;
       } else if (userId == _user!.uid) {
-        profile = profile.copyWith(relationToCurrentUser: UserRelation.self);
+        profile.relationToCurrentUser = UserRelation.self;
       } else {
-        if (_userProfile == null) await _fetchUserProfile();
+        if (_userProfile == null) await _fetchCurrentUserProfile();
         final isFollowing =
             _userProfile?.followingIds.contains(userId) ?? false;
-        profile = profile.copyWith(
-          relationToCurrentUser:
-              isFollowing ? UserRelation.following : UserRelation.notFollowing,
-        );
+        profile.relationToCurrentUser =
+            isFollowing ? UserRelation.following : UserRelation.notFollowing;
       }
       return profile;
     } catch (e) {
@@ -66,36 +67,46 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  Future<void> followUser(String userIdToFollow) async {
-    if (!isLoggedIn || _user!.uid == userIdToFollow) return;
-    await _firestore.runTransaction((transaction) async {
-      transaction.update(_firestore.collection('users').doc(_user!.uid), {
-        'followingIds': FieldValue.arrayUnion([userIdToFollow])
-      });
-      transaction.update(_firestore.collection('users').doc(userIdToFollow), {
-        'followerIds': FieldValue.arrayUnion([_user!.uid])
-      });
-    });
-    if (_userProfile != null &&
-        !_userProfile!.followingIds.contains(userIdToFollow)) {
-      _userProfile!.followingIds.add(userIdToFollow);
-      notifyListeners();
-    }
-  }
-
-  Future<void> unfollowUser(String userIdToUnfollow) async {
+  Future<void> toggleFollowStatus(
+      String otherUserId, bool isCurrentlyFollowing) async {
     if (!isLoggedIn) return;
-    await _firestore.runTransaction((transaction) async {
-      transaction.update(_firestore.collection('users').doc(_user!.uid), {
-        'followingIds': FieldValue.arrayRemove([userIdToUnfollow])
+    final currentUserId = _user!.uid;
+
+    final currentUserRef = _firestore.collection('users').doc(currentUserId);
+    final otherUserRef = _firestore.collection('users').doc(otherUserId);
+
+    try {
+      await _firestore.runTransaction((transaction) async {
+        if (isCurrentlyFollowing) {
+          // Unfollow
+          transaction.update(currentUserRef, {
+            'followingIds': FieldValue.arrayRemove([otherUserId])
+          });
+          transaction.update(otherUserRef, {
+            'followerIds': FieldValue.arrayRemove([currentUserId])
+          });
+        } else {
+          // Follow
+          transaction.update(currentUserRef, {
+            'followingIds': FieldValue.arrayUnion([otherUserId])
+          });
+          transaction.update(otherUserRef, {
+            'followerIds': FieldValue.arrayUnion([currentUserId])
+          });
+        }
       });
-      transaction.update(_firestore.collection('users').doc(userIdToUnfollow), {
-        'followerIds': FieldValue.arrayRemove([_user!.uid])
-      });
-    });
-    if (_userProfile != null) {
-      _userProfile!.followingIds.remove(userIdToUnfollow);
-      notifyListeners();
+      // Päivitä paikallinen tila välittömästi
+      if (_userProfile != null) {
+        if (isCurrentlyFollowing) {
+          _userProfile!.followingIds.remove(otherUserId);
+        } else {
+          _userProfile!.followingIds.add(otherUserId);
+        }
+        notifyListeners();
+      }
+    } catch (e) {
+      print("Error toggling follow status: $e");
+      rethrow;
     }
   }
 
@@ -179,7 +190,7 @@ class AuthProvider with ChangeNotifier {
 
   // --- PROFIILIN HAKU JA PÄIVITYS ---
 
-  Future<void> _fetchUserProfile() async {
+  Future<void> _fetchCurrentUserProfile() async {
     if (_user == null) {
       _userProfile = null;
       notifyListeners();
@@ -319,8 +330,5 @@ class AuthProvider with ChangeNotifier {
 
   Future<void> logout() async {
     await _auth.signOut();
-    _user = null;
-    _userProfile = null;
-    notifyListeners();
   }
 }

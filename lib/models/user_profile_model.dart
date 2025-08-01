@@ -2,8 +2,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-// Määrittelee suhteen kirjautuneen käyttäjän ja profiilin omistajan välillä.
-// Tätä ei tallenneta Firestoreen, vaan se päätellään lennosta.
+// Helper-funktio, jota käytetään `copyWith`-metodissa
+ValueGetter<T?> toValueGetter<T>(T? value) => () => value;
+
 enum UserRelation { self, following, notFollowing, unknown }
 
 class Achievement {
@@ -33,7 +34,8 @@ class Achievement {
         return Icons.emoji_events_outlined;
       case 'star':
         return Icons.star;
-      // ... muut ikonit ...
+      case 'filter_hdr':
+        return Icons.filter_hdr;
       default:
         return Icons.help_outline;
     }
@@ -83,23 +85,50 @@ class Sticker {
   Map<String, dynamic> toFirestore() => {'name': name, 'imageUrl': imageUrl};
 }
 
+class HikeStats {
+  final double totalDistance;
+  final int totalHikes;
+  final double highestAltitude;
+
+  HikeStats(
+      {this.totalDistance = 0.0,
+      this.totalHikes = 0,
+      this.highestAltitude = 0.0});
+
+  factory HikeStats.fromFirestore(Map<String, dynamic>? data) {
+    if (data == null) return HikeStats();
+    return HikeStats(
+      totalDistance: (data['totalDistance'] as num?)?.toDouble() ?? 0.0,
+      totalHikes: (data['totalHikes'] as num?)?.toInt() ?? 0,
+      highestAltitude: (data['highestAltitude'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+
+  Map<String, dynamic> toFirestore() => {
+        'totalDistance': totalDistance,
+        'totalHikes': totalHikes,
+        'highestAltitude': highestAltitude,
+      };
+}
+
 class UserProfile {
   final String uid;
-  String username;
-  String displayName;
-  String email;
-  String? photoURL;
-  String? bio;
-  String? bannerImageUrl;
-  Map<String, dynamic> stats;
-  List<Achievement> achievements;
-  List<Sticker> stickers;
-  List<String> followingIds;
-  List<String> followerIds;
-  List<String> featuredHikeIds;
-  int postsCount;
-  int level;
-  int experience;
+  final String username;
+  final String displayName;
+  final String email;
+  final String? photoURL;
+  final String? bio;
+  final String? bannerImageUrl;
+  final HikeStats hikeStats;
+  final List<Achievement> achievements;
+  final List<Sticker> stickers;
+  final List<String> followingIds;
+  final List<String> followerIds;
+  final List<String> featuredHikeIds;
+  final int postsCount;
+  final int level;
+  final int experience;
+  final bool isPrivate;
   UserRelation relationToCurrentUser;
 
   UserProfile({
@@ -110,7 +139,7 @@ class UserProfile {
     this.photoURL,
     this.bio,
     this.bannerImageUrl,
-    this.stats = const {},
+    HikeStats? hikeStats,
     this.achievements = const [],
     this.stickers = const [],
     this.followingIds = const [],
@@ -119,13 +148,11 @@ class UserProfile {
     this.postsCount = 0,
     this.level = 1,
     this.experience = 0,
+    this.isPrivate = false,
     this.relationToCurrentUser = UserRelation.unknown,
-  });
+  }) : this.hikeStats = hikeStats ?? HikeStats();
 
   factory UserProfile.fromFirestore(Map<String, dynamic> data, String uid) {
-    final String retrievedDisplayName =
-        data['displayName'] as String? ?? data['name'] as String? ?? '';
-
     List<Achievement> parsedAchievements = [];
     if (data['achievements'] is List) {
       parsedAchievements = (data['achievements'] as List<dynamic>).map((a) {
@@ -160,20 +187,22 @@ class UserProfile {
     return UserProfile(
       uid: uid,
       username: data['username'] as String? ?? '',
-      displayName: retrievedDisplayName,
+      displayName: data['displayName'] as String? ?? '',
       email: data['email'] as String? ?? '',
       photoURL: data['photoURL'] as String?,
       bio: data['bio'] as String?,
       bannerImageUrl: data['bannerImageUrl'] as String?,
-      stats: Map<String, dynamic>.from(data['stats'] as Map? ?? {}),
+      hikeStats:
+          HikeStats.fromFirestore(data['hikeStats'] as Map<String, dynamic>?),
       achievements: parsedAchievements,
       stickers: parsedStickers,
-      followingIds: parseStringList(data['followingIds'] ?? data['friends']),
+      followingIds: parseStringList(data['followingIds']),
       followerIds: parseStringList(data['followerIds']),
       featuredHikeIds: parseStringList(data['featuredHikeIds']),
       postsCount: (data['postsCount'] as num?)?.toInt() ?? 0,
       level: (data['level'] as num?)?.toInt() ?? 1,
       experience: (data['experience'] as num?)?.toInt() ?? 0,
+      isPrivate: data['isPrivate'] as bool? ?? false,
     );
   }
 
@@ -185,7 +214,7 @@ class UserProfile {
       'photoURL': photoURL,
       'bio': bio,
       'bannerImageUrl': bannerImageUrl,
-      'stats': stats,
+      'hikeStats': hikeStats.toFirestore(),
       'achievements': achievements.map((a) => a.toFirestore()).toList(),
       'stickers': stickers.map((s) => s.toFirestore()).toList(),
       'followingIds': followingIds,
@@ -194,6 +223,7 @@ class UserProfile {
       'postsCount': postsCount,
       'level': level,
       'experience': experience,
+      'isPrivate': isPrivate,
     };
   }
 
@@ -203,9 +233,9 @@ class UserProfile {
     String? displayName,
     String? email,
     String? photoURL,
-    String? bio,
-    String? bannerImageUrl,
-    Map<String, dynamic>? stats,
+    ValueGetter<String?>? bio,
+    ValueGetter<String?>? bannerImageUrl,
+    HikeStats? hikeStats,
     List<Achievement>? achievements,
     List<Sticker>? stickers,
     List<String>? followingIds,
@@ -214,6 +244,7 @@ class UserProfile {
     int? postsCount,
     int? level,
     int? experience,
+    bool? isPrivate,
     UserRelation? relationToCurrentUser,
   }) {
     return UserProfile(
@@ -222,9 +253,10 @@ class UserProfile {
       displayName: displayName ?? this.displayName,
       email: email ?? this.email,
       photoURL: photoURL ?? this.photoURL,
-      bio: bio ?? this.bio,
-      bannerImageUrl: bannerImageUrl ?? this.bannerImageUrl,
-      stats: stats ?? this.stats,
+      bio: bio != null ? bio() : this.bio,
+      bannerImageUrl:
+          bannerImageUrl != null ? bannerImageUrl() : this.bannerImageUrl,
+      hikeStats: hikeStats ?? this.hikeStats,
       achievements: achievements ?? this.achievements,
       stickers: stickers ?? this.stickers,
       followingIds: followingIds ?? this.followingIds,
@@ -233,6 +265,7 @@ class UserProfile {
       postsCount: postsCount ?? this.postsCount,
       level: level ?? this.level,
       experience: experience ?? this.experience,
+      isPrivate: isPrivate ?? this.isPrivate,
       relationToCurrentUser:
           relationToCurrentUser ?? this.relationToCurrentUser,
     );
