@@ -8,6 +8,10 @@ import '../models/post_model.dart';
 import 'star_rating_display.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'comments_bottom_sheet.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PostCard extends StatefulWidget {
   final Post post;
@@ -93,6 +97,13 @@ class _PostCardState extends State<PostCard> {
     final bool hasRouteImage = widget.post.dailyRoutes != null &&
         widget.post.dailyRoutes!.isNotEmpty &&
         widget.post.dailyRoutes!.any((r) => r.points.isNotEmpty);
+
+    // --- HAE KÄYTTÄJÄN TIEDOT PROVIDERISTA ---
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userProfile = authProvider.userProfile;
+    final currentUserId = authProvider.user?.uid ?? "";
+    final currentUsername = userProfile?.username ?? "";
+    final currentUserAvatarUrl = userProfile?.photoURL ?? "";
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
@@ -357,12 +368,44 @@ class _PostCardState extends State<PostCard> {
                         label: "Like",
                         onTap: _toggleLike,
                       ),
-                      _socialAction(
-                        icon: Icons.mode_comment_outlined,
-                        color: theme.colorScheme.primary,
-                        count: widget.post.commentCount,
-                        label: "Comment",
-                        onTap: () => context.push('/post/${widget.post.id}'),
+                      // --- Kommenttien määrä reaaliaikaisesti ---
+                      StreamBuilder<DocumentSnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection('posts')
+                            .doc(widget.post.id)
+                            .snapshots(),
+                        builder: (context, snapshot) {
+                          int commentCount = widget.post.commentCount;
+                          if (snapshot.hasData &&
+                              snapshot.data!.data() != null) {
+                            final data =
+                                snapshot.data!.data() as Map<String, dynamic>;
+                            commentCount = (data['commentCount'] ?? 0) as int;
+                          }
+                          return _socialAction(
+                            icon: Icons.mode_comment_outlined,
+                            color: theme.colorScheme.primary,
+                            count: commentCount,
+                            label: "Comment",
+                            onTap: () {
+                              showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                backgroundColor: Colors.transparent,
+                                builder: (context) => SizedBox(
+                                  height:
+                                      MediaQuery.of(context).size.height * 0.7,
+                                  child: CommentsBottomSheet(
+                                    postId: widget.post.id,
+                                    currentUserId: currentUserId,
+                                    currentUsername: currentUsername,
+                                    currentUserAvatarUrl: currentUserAvatarUrl,
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        },
                       ),
                       _socialAction(
                         icon: Icons.share_outlined,
