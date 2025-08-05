@@ -1,5 +1,3 @@
-// lib/pages/hike_plan_hub_page.dart
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -14,6 +12,14 @@ import '../services/hike_plan_service.dart';
 import '../utils/app_colors.dart';
 import '../providers/route_planner_provider.dart';
 
+// Extension to provide a short string for HikeStatus enum
+extension HikeStatusExtension on HikeStatus {
+  String toShortString() {
+    return toString().split('.').last.replaceAll('_', ' ').replaceFirstMapped(
+        RegExp(r'^[a-z]'), (match) => match.group(0)!.toUpperCase());
+  }
+}
+
 class HikePlanHubPage extends StatefulWidget {
   final HikePlan initialPlan;
   const HikePlanHubPage({super.key, required this.initialPlan});
@@ -27,13 +33,10 @@ class _HikePlanHubPageState extends State<HikePlanHubPage> {
   final HikePlanService _hikePlanService = HikePlanService();
   final ScrollController _scrollController = ScrollController();
 
-  // The TextTheme is no longer a state variable.
-
   @override
   void initState() {
     super.initState();
     _currentPlan = widget.initialPlan;
-    // The TextTheme is NOT initialized here anymore.
   }
 
   @override
@@ -47,7 +50,7 @@ class _HikePlanHubPageState extends State<HikePlanHubPage> {
     return GoogleFonts.latoTextTheme(currentTheme.textTheme).copyWith(
       headlineLarge: currentTheme.textTheme.headlineLarge?.copyWith(
           fontFamily: GoogleFonts.poppins().fontFamily,
-          fontWeight: FontWeight.w700),
+          fontWeight: FontWeight.w800),
       headlineMedium: currentTheme.textTheme.headlineMedium?.copyWith(
           fontFamily: GoogleFonts.poppins().fontFamily,
           fontWeight: FontWeight.w700),
@@ -56,7 +59,7 @@ class _HikePlanHubPageState extends State<HikePlanHubPage> {
           fontWeight: FontWeight.w600),
       titleLarge: currentTheme.textTheme.titleLarge?.copyWith(
           fontFamily: GoogleFonts.poppins().fontFamily,
-          fontWeight: FontWeight.w600),
+          fontWeight: FontWeight.w700),
       titleMedium: currentTheme.textTheme.titleMedium?.copyWith(
           fontFamily: GoogleFonts.poppins().fontFamily,
           fontWeight: FontWeight.w600),
@@ -109,382 +112,30 @@ class _HikePlanHubPageState extends State<HikePlanHubPage> {
 
   @override
   Widget build(BuildContext context) {
-    // **FIXED**: The TextTheme is now created here, where the context is safe to use.
     final appTextTheme = _createAppTextTheme(context);
+    final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: CustomScrollView(
         controller: _scrollController,
-        slivers: <Widget>[
-          _buildHubSliverAppBar(appTextTheme),
-          _buildHubContent(appTextTheme),
+        slivers: [
+          _buildHeroHeader(appTextTheme),
+          SliverToBoxAdapter(child: _buildMainContent(appTextTheme, theme)),
         ],
       ),
+      // quick action button removed
     );
   }
 
-  // **FIXED**: The method now accepts the TextTheme as a parameter.
-  Widget _buildHubContent(TextTheme appTextTheme) {
-    bool isPreparationRelevant = _currentPlan.status == HikeStatus.planned ||
-        _currentPlan.status == HikeStatus.upcoming ||
-        _currentPlan.status == HikeStatus.ongoing;
-
-    return SliverPadding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      sliver: SliverList(
-        delegate: SliverChildListDelegate([
-          const SizedBox(height: 24),
-          if (_currentPlan.status == HikeStatus.completed) ...[
-            _buildStatusHighlight("Hike completed successfully!",
-                Icons.celebration_rounded, Colors.green.shade600, appTextTheme),
-            const SizedBox(height: 24),
-          ] else if (_currentPlan.status == HikeStatus.cancelled) ...[
-            _buildStatusHighlight(
-                "This hike has been cancelled.",
-                Icons.block_rounded,
-                AppColors.errorColor(context),
-                appTextTheme),
-            const SizedBox(height: 24),
-          ],
-          if (isPreparationRelevant) ...[
-            _buildSectionTitle(
-                "Preparation Status", Icons.fact_check_outlined, appTextTheme),
-            const SizedBox(height: 8),
-            _buildPreparationSection(appTextTheme),
-            const SizedBox(height: 32),
-          ],
-          _buildSectionTitle(
-              "Overview", Icons.info_outline_rounded, appTextTheme),
-          const SizedBox(height: 8),
-          _buildOverviewSection(appTextTheme),
-          const SizedBox(height: 32),
-          _buildSectionTitle(
-              "Planning Tools", Icons.construction_rounded, appTextTheme),
-          const SizedBox(height: 16),
-          _buildActionDashboard(appTextTheme),
-          const SizedBox(height: 32),
-          if (_currentPlan.notes != null && _currentPlan.notes!.isNotEmpty) ...[
-            _buildSectionTitle(
-                "Notes", Icons.sticky_note_2_outlined, appTextTheme),
-            const SizedBox(height: 8),
-            _buildNotesSection(appTextTheme),
-            const SizedBox(height: 24),
-          ],
-          const SizedBox(height: 40),
-        ]),
-      ),
-    );
-  }
-
-  Widget _buildActionDashboard(TextTheme appTextTheme) {
-    return Column(
-      children: [
-        _buildDashboardActionCard(
-          title: "Weather Forecast",
-          subtitle: "Check the conditions for your trip",
-          icon: Icons.thermostat_auto_rounded,
-          appTextTheme: appTextTheme,
-          onTap: () {
-            if (_currentPlan.latitude != null &&
-                _currentPlan.longitude != null) {
-              GoRouter.of(context).pushNamed('weatherPage',
-                  pathParameters: {'planId': _currentPlan.id},
-                  extra: _currentPlan);
-            } else {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: const Text(
-                    'Location coordinates are required for weather.'),
-                backgroundColor: AppColors.errorColor(context),
-              ));
-            }
-          },
-        ),
-        _buildDashboardActionCard(
-          title: "Route Planner",
-          subtitle: "View and edit the route map",
-          icon: Icons.map_outlined,
-          appTextTheme: appTextTheme,
-          onTap: () {
-            context.read<RoutePlannerProvider>().loadPlan(_currentPlan);
-            context.push('/route-planner').then((_) {
-              if (mounted) {
-                setState(() {
-                  _currentPlan = context.read<RoutePlannerProvider>().plan;
-                });
-              }
-            });
-          },
-        ),
-        _buildDashboardActionCard(
-          title: "Packing List",
-          subtitle: "Manage your gear and essentials",
-          icon: Icons.backpack_outlined,
-          appTextTheme: appTextTheme,
-          onTap: () => GoRouter.of(context).pushNamed('packingListPage',
-              pathParameters: {'planId': _currentPlan.id}, extra: _currentPlan),
-        ),
-        _buildDashboardActionCard(
-          title: "Meal Plan",
-          subtitle: "Coming soon!",
-          icon: Icons.restaurant_menu_outlined,
-          appTextTheme: appTextTheme,
-          onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                  content: Text("Meal Plan feature is under development."))),
-          isEnabled: false,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDashboardActionCard({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required VoidCallback onTap,
-    required TextTheme appTextTheme,
-    bool isEnabled = true,
-  }) {
+  Widget _buildHeroHeader(TextTheme appTextTheme) {
     final theme = Theme.of(context);
-    final color = isEnabled ? theme.colorScheme.primary : theme.disabledColor;
-
-    return Card(
-      elevation: 1,
-      shadowColor: theme.shadowColor.withOpacity(0.1),
-      color: theme.colorScheme.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      margin: const EdgeInsets.only(bottom: 12),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: isEnabled ? onTap : null,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 18.0),
-          child: Row(
-            children: [
-              Icon(icon, size: 28, color: color),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: appTextTheme.titleMedium),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: appTextTheme.bodyMedium?.copyWith(
-                        color: theme.hintColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (isEnabled)
-                Icon(Icons.arrow_forward_ios_rounded,
-                    size: 18, color: theme.hintColor),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSectionTitle(String title, IconData icon, TextTheme appTextTheme,
-      {Color? iconColor}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 8.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Icon(icon,
-              color: iconColor ?? AppColors.primaryColor(context), size: 22),
-          const SizedBox(width: 12),
-          Text(title, style: appTextTheme.titleLarge),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOverviewSection(TextTheme appTextTheme) {
-    final dateFormat = DateFormat('MMM d, yyyy');
-    return Card(
-      elevation: 1,
-      color: AppColors.cardColor(context).withOpacity(0.5),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          children: [
-            _buildInfoRow(
-                Icons.date_range_outlined,
-                '${dateFormat.format(_currentPlan.startDate)}${_currentPlan.endDate != null && _currentPlan.endDate != _currentPlan.startDate ? " – ${dateFormat.format(_currentPlan.endDate!)}" : ""}',
-                appTextTheme),
-            if (_currentPlan.lengthKm != null &&
-                _currentPlan.lengthKm! > 0) ...[
-              const SizedBox(height: 12),
-              _buildInfoRow(
-                  Icons.linear_scale_rounded,
-                  'Approx. ${_currentPlan.lengthKm?.toStringAsFixed(1)} km',
-                  appTextTheme),
-            ],
-            if (_currentPlan.difficulty != HikeDifficulty.unknown) ...[
-              const SizedBox(height: 12),
-              _buildDifficultyRow(appTextTheme),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(IconData icon, String text, TextTheme appTextTheme) {
-    if (text.isEmpty) return const SizedBox.shrink();
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Icon(icon, size: 20, color: AppColors.accentColor(context)),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(text,
-              style: appTextTheme.bodyLarge?.copyWith(
-                color: AppColors.textColor(context).withOpacity(0.9),
-              )),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDifficultyRow(TextTheme appTextTheme) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Icon(Icons.speed_rounded,
-            size: 20, color: AppColors.accentColor(context)),
-        const SizedBox(width: 12),
-        Expanded(
-          child: RichText(
-            text: TextSpan(
-                style: appTextTheme.bodyLarge?.copyWith(
-                    color: AppColors.textColor(context).withOpacity(0.9)),
-                children: [
-                  const TextSpan(text: 'Difficulty: '),
-                  TextSpan(
-                      text: _currentPlan.difficulty.toShortString(),
-                      style: TextStyle(
-                          color: _currentPlan.difficulty.getColor(context),
-                          fontWeight: FontWeight.bold)),
-                ]),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatusHighlight(
-      String message, IconData icon, Color color, TextTheme appTextTheme) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      decoration: BoxDecoration(
-          color: color.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.5), width: 1.5)),
-      child: Row(
-        children: [
-          Icon(icon, color: color, size: 28),
-          const SizedBox(width: 16),
-          Expanded(
-              child: Text(message,
-                  style: appTextTheme.titleMedium?.copyWith(color: color))),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPreparationSection(TextTheme appTextTheme) {
-    int completed = _currentPlan.completedPreparationItems;
-    int total = _currentPlan.totalPreparationItems;
-    double progress = total > 0 ? completed / total : 0.0;
-    bool allDone = completed == total && total > 0;
-
-    return Card(
-      elevation: 2,
-      color: AppColors.cardColor(context),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: _openAndUpdatePreparationModal,
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                      child: Text(
-                          allDone
-                              ? 'All items checked!'
-                              : '$completed of $total tasks done',
-                          style: appTextTheme.titleMedium)),
-                  Icon(Icons.arrow_forward_ios_rounded,
-                      size: 18, color: AppColors.subtleTextColor(context)),
-                ],
-              ),
-              if (total > 0) ...[
-                const SizedBox(height: 16),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    backgroundColor:
-                        AppColors.primaryColor(context).withOpacity(0.2),
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                        AppColors.primaryColor(context)),
-                    minHeight: 12,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNotesSection(TextTheme appTextTheme) {
-    return Card(
-      elevation: 1,
-      color: AppColors.cardColor(context).withOpacity(0.5),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Text(
-          _currentPlan.notes ?? "No notes for this hike.",
-          style: appTextTheme.bodyLarge?.copyWith(
-            color: AppColors.onCardColor(context).withOpacity(
-                _currentPlan.notes != null && _currentPlan.notes!.isNotEmpty
-                    ? 0.95
-                    : 0.7),
-            height: 1.5,
-            fontStyle:
-                _currentPlan.notes != null && _currentPlan.notes!.isNotEmpty
-                    ? FontStyle.normal
-                    : FontStyle.italic,
-          ),
-        ),
-      ),
-    );
-  }
-
-  // **FIXED**: The method now accepts the TextTheme as a parameter.
-  SliverAppBar _buildHubSliverAppBar(TextTheme appTextTheme) {
-    final theme = Theme.of(context);
-    const double expandedHeight = 260.0;
     final bool hasImage =
         _currentPlan.imageUrl != null && _currentPlan.imageUrl!.isNotEmpty;
+    final dateFormat = DateFormat('MMM d, yyyy');
 
     return SliverAppBar(
-      expandedHeight: expandedHeight,
+      expandedHeight: 320,
       pinned: true,
       stretch: true,
       elevation: 0,
@@ -517,16 +168,16 @@ class _HikePlanHubPageState extends State<HikePlanHubPage> {
               Container(color: theme.colorScheme.surfaceContainerHighest),
             if (hasImage)
               BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 1.0, sigmaY: 1.0),
-                child: Container(color: Colors.black.withOpacity(0.25)),
+                filter: ImageFilter.blur(sigmaX: 2.5, sigmaY: 2.5),
+                child: Container(color: Colors.black.withOpacity(0.22)),
               ),
             Container(
               decoration: BoxDecoration(
                   gradient: LinearGradient(
                       colors: [
-                        Colors.black.withOpacity(0.4),
+                        Colors.black.withOpacity(0.55),
                         Colors.transparent,
-                        theme.scaffoldBackgroundColor.withOpacity(0.5),
+                        theme.scaffoldBackgroundColor.withOpacity(0.7),
                         theme.scaffoldBackgroundColor,
                       ],
                       begin: Alignment.topCenter,
@@ -534,49 +185,406 @@ class _HikePlanHubPageState extends State<HikePlanHubPage> {
                       stops: const [0.0, 0.5, 0.8, 1.0])),
             ),
             Positioned(
-              bottom: 20,
-              left: 20,
-              right: 20,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _currentPlan.hikeName,
-                    style: appTextTheme.headlineMedium?.copyWith(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _currentPlan.hikeName,
+                      style: appTextTheme.headlineLarge?.copyWith(
                         color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 30,
                         shadows: [
                           const Shadow(
-                              blurRadius: 6,
+                              blurRadius: 10,
                               offset: Offset(1, 2),
                               color: Colors.black87)
-                        ]),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(Icons.fmd_good_outlined,
-                          color: Colors.white.withOpacity(0.9), size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _currentPlan.location,
-                          style: appTextTheme.titleSmall?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w500,
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Icon(Icons.fmd_good_outlined,
+                            color: Colors.white.withOpacity(0.92), size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _currentPlan.location,
+                            style: appTextTheme.titleMedium?.copyWith(
+                              color: Colors.white.withOpacity(0.95),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 17,
                               shadows: [
                                 const Shadow(
-                                    blurRadius: 4,
+                                    blurRadius: 6,
                                     offset: Offset(1, 1),
                                     color: Colors.black87)
-                              ]),
-                          overflow: TextOverflow.ellipsis,
+                              ],
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      )
-                    ],
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.date_range_rounded,
+                            color: Colors.white.withOpacity(0.92), size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${dateFormat.format(_currentPlan.startDate)}'
+                          '${_currentPlan.endDate != null && _currentPlan.endDate != _currentPlan.startDate ? " – ${dateFormat.format(_currentPlan.endDate!)}" : ""}',
+                          style: appTextTheme.bodyLarge?.copyWith(
+                            color: Colors.white.withOpacity(0.93),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        if (_currentPlan.lengthKm != null &&
+                            _currentPlan.lengthKm! > 0) ...[
+                          const SizedBox(width: 16),
+                          Icon(Icons.linear_scale_rounded,
+                              color: Colors.white.withOpacity(0.92), size: 18),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${_currentPlan.lengthKm?.toStringAsFixed(1)} km',
+                            style: appTextTheme.bodyLarge?.copyWith(
+                              color: Colors.white.withOpacity(0.93),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMainContent(TextTheme appTextTheme, ThemeData theme) {
+    bool isPreparationRelevant = _currentPlan.status == HikeStatus.planned ||
+        _currentPlan.status == HikeStatus.upcoming ||
+        _currentPlan.status == HikeStatus.ongoing;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Status chip
+        Padding(
+          padding: const EdgeInsets.only(top: 18, left: 24, right: 24),
+          child: Row(
+            children: [
+              _buildStatusChip(_currentPlan.status, theme),
+              const Spacer(),
+              if (_currentPlan.status == HikeStatus.completed)
+                Icon(Icons.celebration_rounded, color: Colors.green, size: 28),
+              if (_currentPlan.status == HikeStatus.cancelled)
+                Icon(Icons.block_rounded,
+                    color: AppColors.errorColor(context), size: 28),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+
+        // Preparation Progress
+        if (isPreparationRelevant)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: _buildPreparationCard(appTextTheme, theme),
+          ),
+        if (isPreparationRelevant) const SizedBox(height: 24),
+
+        // Dashboard
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: _buildDashboardGrid(appTextTheme, theme),
+        ),
+        const SizedBox(height: 30),
+
+        // Notes
+        if (_currentPlan.notes != null && _currentPlan.notes!.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: _buildNotesCard(appTextTheme, theme),
+          ),
+        if (_currentPlan.notes != null && _currentPlan.notes!.isNotEmpty)
+          const SizedBox(height: 30),
+        const SizedBox(height: 60),
+      ],
+    );
+  }
+
+  Widget _buildStatusChip(HikeStatus status, ThemeData theme) {
+    Color color;
+    String label;
+    IconData icon;
+    switch (status) {
+      case HikeStatus.completed:
+        color = Colors.green.shade600;
+        label = "Completed";
+        icon = Icons.check_circle_rounded;
+        break;
+      case HikeStatus.cancelled:
+        color = AppColors.errorColor(context);
+        label = "Cancelled";
+        icon = Icons.block_rounded;
+        break;
+      case HikeStatus.ongoing:
+        color = Colors.orange.shade700;
+        label = "Ongoing";
+        icon = Icons.directions_walk_rounded;
+        break;
+      case HikeStatus.upcoming:
+        color = Colors.blue.shade600;
+        label = "Upcoming";
+        icon = Icons.schedule_rounded;
+        break;
+      default:
+        color = theme.colorScheme.primary;
+        label = "Planned";
+        icon = Icons.flag_rounded;
+    }
+    return Chip(
+      avatar: Icon(icon, color: Colors.white, size: 18),
+      label: Text(label,
+          style: GoogleFonts.poppins(
+              color: Colors.white, fontWeight: FontWeight.w600)),
+      backgroundColor: color,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    );
+  }
+
+  Widget _buildPreparationCard(TextTheme appTextTheme, ThemeData theme) {
+    int completed = _currentPlan.completedPreparationItems;
+    int total = _currentPlan.totalPreparationItems;
+    double progress = total > 0 ? completed / total : 0.0;
+    bool allDone = completed == total && total > 0;
+
+    return Card(
+      elevation: 3,
+      color: theme.colorScheme.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      // POISTETTU OUTLINE: ei borderia Cardissa eikä InkWellissä
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: _openAndUpdatePreparationModal,
+        splashColor: theme.colorScheme.primary.withOpacity(0.08),
+        highlightColor: Colors.transparent,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 22),
+          child: Row(
+            children: [
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox(
+                    width: 54,
+                    height: 54,
+                    child: CircularProgressIndicator(
+                      value: progress,
+                      strokeWidth: 7,
+                      backgroundColor:
+                          theme.colorScheme.primary.withOpacity(0.13),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                          theme.colorScheme.primary),
+                    ),
+                  ),
+                  Icon(
+                    allDone ? Icons.verified_rounded : Icons.fact_check_rounded,
+                    color: allDone
+                        ? Colors.green.shade700
+                        : theme.colorScheme.primary,
+                    size: 32,
                   ),
                 ],
               ),
-            )
+              const SizedBox(width: 22),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      allDone
+                          ? "All preparation done!"
+                          : "Preparation in progress",
+                      style: appTextTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 17,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      "Tap to view or update your checklist",
+                      style: appTextTheme.bodyMedium?.copyWith(
+                        color: theme.hintColor,
+                        fontSize: 14.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.arrow_forward_ios_rounded, size: 18),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDashboardGrid(TextTheme appTextTheme, ThemeData theme) {
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 18,
+      crossAxisSpacing: 18,
+      childAspectRatio: 1.18,
+      children: [
+        _dashboardTile(
+          icon: Icons.thermostat_auto_rounded,
+          color: Colors.orange.shade400,
+          title: "Weather",
+          subtitle: "Forecast & conditions",
+          onTap: () {
+            if (_currentPlan.latitude != null &&
+                _currentPlan.longitude != null) {
+              GoRouter.of(context).pushNamed('weatherPage',
+                  pathParameters: {'planId': _currentPlan.id},
+                  extra: _currentPlan);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: const Text(
+                    'Location coordinates are required for weather.'),
+                backgroundColor: AppColors.errorColor(context),
+              ));
+            }
+          },
+        ),
+        _dashboardTile(
+          icon: Icons.map_outlined,
+          color: Colors.blue.shade400,
+          title: "Route Planner",
+          subtitle: "View & edit map",
+          onTap: () {
+            context.read<RoutePlannerProvider>().loadPlan(_currentPlan);
+            context.push('/route-planner').then((_) {
+              if (mounted) {
+                setState(() {
+                  _currentPlan = context.read<RoutePlannerProvider>().plan;
+                });
+              }
+            });
+          },
+        ),
+        _dashboardTile(
+          icon: Icons.backpack_outlined,
+          color: Colors.green.shade400,
+          title: "Packing List",
+          subtitle: "Gear & essentials",
+          onTap: () => GoRouter.of(context).pushNamed('packingListPage',
+              pathParameters: {'planId': _currentPlan.id}, extra: _currentPlan),
+        ),
+        _dashboardTile(
+          icon: Icons.restaurant_menu_outlined,
+          color: Colors.purple.shade400,
+          title: "Meal Plan",
+          subtitle: "Coming soon!",
+          onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                  content: Text("Meal Plan feature is under development."))),
+          enabled: false,
+        ),
+      ],
+    );
+  }
+
+  Widget _dashboardTile({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    bool enabled = true,
+  }) {
+    return Material(
+      color: enabled ? color.withOpacity(0.09) : Colors.grey.withOpacity(0.07),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: enabled ? onTap : null,
+        child: Padding(
+          padding: const EdgeInsets.all(18.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircleAvatar(
+                backgroundColor: color.withOpacity(0.18),
+                radius: 26,
+                child: Icon(icon, color: color, size: 30),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                title,
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16.5,
+                  color: enabled ? color : Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: GoogleFonts.lato(
+                  fontSize: 13.5,
+                  color: enabled ? color.withOpacity(0.8) : Colors.grey,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotesCard(TextTheme appTextTheme, ThemeData theme) {
+    return Card(
+      elevation: 1,
+      color: theme.colorScheme.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Padding(
+        padding: const EdgeInsets.all(22.0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.sticky_note_2_outlined,
+                color: theme.colorScheme.primary, size: 22),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                _currentPlan.notes ?? "No notes for this hike.",
+                style: appTextTheme.bodyLarge?.copyWith(
+                  color: theme.colorScheme.onSurface.withOpacity(0.95),
+                  height: 1.5,
+                  fontStyle: _currentPlan.notes != null &&
+                          _currentPlan.notes!.isNotEmpty
+                      ? FontStyle.normal
+                      : FontStyle.italic,
+                ),
+              ),
+            ),
           ],
         ),
       ),
