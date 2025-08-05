@@ -27,9 +27,10 @@ class Post {
   final int commentCount;
   final List<String> sharedData;
   final Map<String, double> ratings;
-  // LISÄTTY: Kentät suunnitelman linkkaamiseen ja reitin tallentamiseen
   final String? planId;
   final List<DailyRoute>? dailyRoutes;
+  final int views;
+  final int saves;
 
   Post({
     required this.id,
@@ -53,8 +54,10 @@ class Post {
     this.commentCount = 0,
     this.sharedData = const [],
     required this.ratings,
-    this.planId, // LISÄTTY
-    this.dailyRoutes, // LISÄTTY
+    this.planId,
+    this.dailyRoutes,
+    this.views = 0,
+    this.saves = 0,
   });
 
   double get averageRating {
@@ -65,10 +68,66 @@ class Post {
     return total > 0 ? total / 3.0 : 0.0;
   }
 
+  Post copyWith({
+    String? id,
+    String? userId,
+    String? username,
+    String? userAvatarUrl,
+    String? postImageUrl,
+    String? title,
+    String? caption,
+    DateTime? timestamp,
+    String? location,
+    double? latitude,
+    double? longitude,
+    DateTime? startDate,
+    DateTime? endDate,
+    double? distanceKm,
+    int? nights,
+    double? weightKg,
+    PostVisibility? visibility,
+    List<String>? likes,
+    int? commentCount,
+    List<String>? sharedData,
+    Map<String, double>? ratings,
+    String? planId,
+    List<DailyRoute>? dailyRoutes,
+    int? views,
+    int? saves,
+  }) {
+    return Post(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      username: username ?? this.username,
+      userAvatarUrl: userAvatarUrl ?? this.userAvatarUrl,
+      postImageUrl: postImageUrl ?? this.postImageUrl,
+      title: title ?? this.title,
+      caption: caption ?? this.caption,
+      timestamp: timestamp ?? this.timestamp,
+      location: location ?? this.location,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      distanceKm: distanceKm ?? this.distanceKm,
+      nights: nights ?? this.nights,
+      weightKg: weightKg ?? this.weightKg,
+      visibility: visibility ?? this.visibility,
+      likes: likes ?? this.likes,
+      commentCount: commentCount ?? this.commentCount,
+      sharedData: sharedData ?? this.sharedData,
+      ratings: ratings ?? this.ratings,
+      planId: planId ?? this.planId,
+      dailyRoutes: dailyRoutes ?? this.dailyRoutes,
+      views: views ?? this.views,
+      saves: saves ?? this.saves,
+    );
+  }
+
   factory Post.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
 
-    // LISÄTTY: Reittien lukeminen tietokannasta
+    // Reittien lukeminen tietokannasta
     List<DailyRoute>? routesFromDb;
     if (data['dailyRoutes'] != null && data['dailyRoutes'] is List) {
       routesFromDb = (data['dailyRoutes'] as List)
@@ -107,8 +166,10 @@ class Post {
       commentCount: data['commentCount'] as int? ?? 0,
       sharedData: List<String>.from(data['sharedData'] ?? []),
       ratings: ratingsMap,
-      planId: data['planId'] as String?, // LISÄTTY
-      dailyRoutes: routesFromDb, // LISÄTTY
+      planId: data['planId'] as String?,
+      dailyRoutes: routesFromDb,
+      views: data['views'] as int? ?? 0,
+      saves: data['saves'] as int? ?? 0,
     );
   }
 
@@ -134,9 +195,10 @@ class Post {
       'commentCount': commentCount,
       'sharedData': sharedData,
       'ratings': ratings,
-      // LISÄTTY: Reittien kirjoittaminen tietokantaan
       'planId': planId,
       'dailyRoutes': dailyRoutes?.map((route) => route.toFirestore()).toList(),
+      'views': views,
+      'saves': saves,
     };
   }
 }

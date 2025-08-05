@@ -1,430 +1,578 @@
-// lib/pages/post_detail_page.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-
 import '../models/post_model.dart';
-import '../utils/rating_utils.dart';
-import '../utils/map_helpers.dart';
-import '../widgets/detailed_rating_display.dart';
-import 'full_screen_map_page.dart';
+import '../widgets/star_rating_display.dart';
 
-class PostDetailPage extends StatelessWidget {
+class PostDetailPage extends StatefulWidget {
   final String postId;
-
   const PostDetailPage({super.key, required this.postId});
 
   @override
+  State<PostDetailPage> createState() => _PostDetailPageState();
+}
+
+class _PostDetailPageState extends State<PostDetailPage> {
+  late Future<Post> _postFuture;
+  bool _isLiked = false;
+  int _likeCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _postFuture = _fetchAndIncrementViews();
+  }
+
+  Future<Post> _fetchAndIncrementViews() async {
+    final doc = await FirebaseFirestore.instance
+        .collection('posts')
+        .doc(widget.postId)
+        .get();
+    if (!doc.exists) throw Exception("Post not found");
+    final post = Post.fromFirestore(doc);
+    _likeCount = post.likes.length;
+    _isLiked = post.likes
+        .contains("CURRENT_USER_ID"); // TODO: Replace with real user id
+    FirebaseFirestore.instance
+        .collection('posts')
+        .doc(widget.postId)
+        .update({'views': (post.views + 1)});
+    return post.copyWith(views: post.views + 1);
+  }
+
+  Future<void> _toggleLike(Post post) async {
+    final userId = "CURRENT_USER_ID"; // TODO: Replace with real user id
+    final postRef =
+        FirebaseFirestore.instance.collection('posts').doc(widget.postId);
+
+    setState(() {
+      if (_isLiked) {
+        _isLiked = false;
+        _likeCount--;
+      } else {
+        _isLiked = true;
+        _likeCount++;
+      }
+    });
+
+    await FirebaseFirestore.instance.runTransaction((transaction) async {
+      final freshSnap = await transaction.get(postRef);
+      final likes = List<String>.from(freshSnap['likes'] ?? []);
+      if (_isLiked) {
+        if (!likes.contains(userId)) likes.add(userId);
+      } else {
+        likes.remove(userId);
+      }
+      transaction.update(postRef, {'likes': likes});
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      body: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        future:
-            FirebaseFirestore.instance.collection('posts').doc(postId).get(),
+      backgroundColor: theme.colorScheme.background,
+      body: FutureBuilder<Post>(
+        future: _postFuture,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (snapshot.hasError) {
-            return _buildErrorState(context, 'Error loading post.');
-          }
-          if (!snapshot.hasData || !snapshot.data!.exists) {
-            return _buildErrorState(context, 'Post not found.');
-          }
+          final post = snapshot.data!;
+          // _isLiked ja _likeCount päivitetään initStatessa ja toggleLikessa
 
-          final post = Post.fromFirestore(snapshot.data!);
-
-          // Successful load -> display content
-          return _buildPostContent(context, post);
+          return Stack(
+            children: [
+              // Kansikuva
+              _buildHeaderImage(context, post),
+              // Sisältö
+              DraggableScrollableSheet(
+                initialChildSize: 0.68,
+                minChildSize: 0.68,
+                maxChildSize: 0.98,
+                builder: (context, scrollController) {
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surface,
+                      borderRadius:
+                          const BorderRadius.vertical(top: Radius.circular(32)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.07),
+                          blurRadius: 16,
+                          offset: const Offset(0, -4),
+                        ),
+                      ],
+                    ),
+                    child: SingleChildScrollView(
+                      controller: scrollController,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 18),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Center(
+                              child: Container(
+                                width: 40,
+                                height: 4,
+                                margin: const EdgeInsets.only(bottom: 16),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[300],
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                            ),
+                            _buildUserCard(context, post),
+                            const SizedBox(height: 18),
+                            // Likes & Views minimalistisesti oikeaan yläkulmaan
+                            Align(
+                              alignment: Alignment.topRight,
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 8.0),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // LIKE BUTTON tässä, helposti löydettävä mutta ei liian keskeinen
+                                    GestureDetector(
+                                      onTap: () => _toggleLike(post),
+                                      child: AnimatedContainer(
+                                        duration:
+                                            const Duration(milliseconds: 180),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: _isLiked
+                                              ? theme.colorScheme.error
+                                                  .withOpacity(0.13)
+                                              : Colors.transparent,
+                                          borderRadius:
+                                              BorderRadius.circular(20),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.favorite,
+                                              color: _isLiked
+                                                  ? theme.colorScheme.error
+                                                  : theme.colorScheme.error
+                                                      .withOpacity(0.7),
+                                              size: 20,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              '$_likeCount',
+                                              style: GoogleFonts.poppins(
+                                                fontWeight: FontWeight.w600,
+                                                color: theme.colorScheme.error
+                                                    .withOpacity(0.85),
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    _miniStat(
+                                      icon: Icons.visibility_outlined,
+                                      count: post.views,
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            Text(
+                              post.title,
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 25,
+                                color: theme.colorScheme.onSurface,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Icon(Icons.location_on_rounded,
+                                    color: theme.colorScheme.primary, size: 20),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    post.location,
+                                    style: GoogleFonts.lato(
+                                        fontWeight: FontWeight.w600,
+                                        color: theme.colorScheme.primary,
+                                        fontSize: 15.5),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                Text(
+                                  DateFormat('d MMM y').format(post.timestamp),
+                                  style: GoogleFonts.lato(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 18),
+                            _buildStatsBar(context, post),
+                            const SizedBox(height: 18),
+                            if (post.caption.isNotEmpty)
+                              Text(
+                                post.caption,
+                                style: GoogleFonts.lato(
+                                  fontSize: 16.5,
+                                  color: theme.colorScheme.onSurface,
+                                  height: 1.7,
+                                ),
+                              ),
+                            const SizedBox(height: 24),
+                            _buildRatingsSection(context, post),
+                            const SizedBox(height: 24),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              // Takaisin-nappi ja SHARE-nappi oikealle ylös
+              Positioned(
+                top: 36,
+                left: 16,
+                child: CircleAvatar(
+                  backgroundColor: Colors.black.withOpacity(0.45),
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 36,
+                right: 16,
+                child: CircleAvatar(
+                  backgroundColor: Colors.black.withOpacity(0.45),
+                  child: IconButton(
+                    icon: const Icon(Icons.ios_share, color: Colors.white),
+                    onPressed: () {
+                      // TODO: Share logic
+                    },
+                  ),
+                ),
+              ),
+            ],
+          );
         },
       ),
     );
   }
 
-  /// Unified error state display to avoid code repetition.
-  Widget _buildErrorState(BuildContext context, String message) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Error'),
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        elevation: 0,
-      ),
-      body: Center(child: Text(message)),
-    );
-  }
-
-  Widget _buildPostContent(BuildContext context, Post post) {
-    final hasRoute = post.dailyRoutes != null && post.dailyRoutes!.isNotEmpty;
-
-    return CustomScrollView(
-      slivers: [
-        _buildSliverAppBar(context, post),
-        SliverToBoxAdapter(
-          child: AnimationLimiter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: AnimationConfiguration.toStaggeredList(
-                  duration: const Duration(milliseconds: 500),
-                  childAnimationBuilder: (widget) => SlideAnimation(
-                    verticalOffset: 50.0, // Subtle animation
-                    child: FadeInAnimation(child: widget),
-                  ),
-                  children: [
-                    const SizedBox(height: 24),
-                    _buildHeader(context, post),
-                    const SizedBox(height: 24),
-                    _buildStatsRow(context, post),
-                    const SizedBox(height: 32),
-                    _buildSection(
-                      context,
-                      title: "Story",
-                      icon: Icons.article_outlined,
-                      content: Text(
-                        post.caption.isEmpty
-                            ? "No story available."
-                            : post.caption,
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              height: 1.7, // Better readability
-                              color: Theme.of(context)
-                                  .textTheme
-                                  .bodyLarge
-                                  ?.color
-                                  ?.withOpacity(0.85),
-                            ),
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-                    _buildSection(
-                      context,
-                      title: "Ratings",
-                      icon: Icons.star_half_rounded,
-                      content:
-                          _buildRatingsList(post), // Dynamic ratings creation
-                    ),
-                    if (hasRoute) ...[
-                      const SizedBox(height: 32),
-                      _buildSection(
-                        context,
-                        title: "Route",
-                        icon: Icons.route_outlined,
-                        content: _buildRouteMap(context, post),
-                      ),
-                    ],
-                    const SizedBox(height: 48), // Space at the end
-                  ],
-                ),
-              ),
-            ),
+  Widget _miniStat({
+    required IconData icon,
+    required int count,
+    required Color color,
+    bool filled = false,
+  }) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          color: filled ? color : color.withOpacity(0.7),
+          size: 19,
+        ),
+        const SizedBox(width: 4),
+        Text(
+          '$count',
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.w600,
+            color: color.withOpacity(0.85),
+            fontSize: 14,
           ),
         ),
       ],
     );
   }
 
-  /// Revamped app bar: modern, minimal, and functional.
-  Widget _buildSliverAppBar(BuildContext context, Post post) {
-    final theme = Theme.of(context);
-    return SliverAppBar(
-      expandedHeight: 350.0,
-      pinned: true,
-      stretch: true,
-      backgroundColor: theme.scaffoldBackgroundColor,
-      elevation: 0, // Seamless transition to content
-      iconTheme: const IconThemeData(color: Colors.white),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.ios_share_outlined),
-          onPressed: () {/* Share functionality */},
-        ),
-        IconButton(
-          icon: const Icon(Icons.bookmark_border_rounded),
-          onPressed: () {/* Save functionality */},
-        ),
-        const SizedBox(width: 8),
-      ],
-      flexibleSpace: FlexibleSpaceBar(
-        stretchModes: const [StretchMode.zoomBackground],
-        background: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (post.postImageUrl != null)
-              Image.network(
-                post.postImageUrl!,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) =>
-                    Container(color: Colors.grey.shade800),
-              )
-            else
+  Widget _buildHeaderImage(BuildContext context, Post post) {
+    if (post.postImageUrl != null) {
+      return SizedBox(
+        height: MediaQuery.of(context).size.height * 0.42,
+        width: double.infinity,
+        child: Image.network(
+          post.postImageUrl!,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) =>
               Container(color: Colors.grey.shade800),
-            // Subtle gradient to ensure icon visibility
-            DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(0.6),
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.2),
-                  ],
-                  stops: const [0.0, 0.4, 1.0],
-                ),
-              ),
+        ),
+      );
+    } else if (post.dailyRoutes != null && post.dailyRoutes!.isNotEmpty) {
+      final allPoints = post.dailyRoutes!.expand((r) => r.points).toList();
+      final bounds = LatLngBounds.fromPoints(allPoints);
+      return SizedBox(
+        height: MediaQuery.of(context).size.height * 0.42,
+        width: double.infinity,
+        child: FlutterMap(
+          options: MapOptions(
+            initialCameraFit: CameraFit.bounds(
+                bounds: bounds, padding: const EdgeInsets.all(40)),
+            interactionOptions:
+                const InteractionOptions(flags: InteractiveFlag.none),
+          ),
+          children: [
+            TileLayer(
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'com.example.treknoteflutter',
+            ),
+            PolylineLayer(
+              polylines: post.dailyRoutes!
+                  .map((route) => Polyline(
+                        points: route.points,
+                        color: Colors.deepOrange.withOpacity(0.85),
+                        strokeWidth: 5.0,
+                        borderColor: Colors.black.withOpacity(0.2),
+                        borderStrokeWidth: 1.5,
+                      ))
+                  .toList(),
             ),
           ],
         ),
-      ),
-    );
+      );
+    } else {
+      return Container(
+        height: MediaQuery.of(context).size.height * 0.42,
+        width: double.infinity,
+        color: Colors.grey.shade200,
+      );
+    }
   }
 
-  /// Combined header area: Title and author info.
-  Widget _buildHeader(BuildContext context, Post post) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          post.title,
-          style: GoogleFonts.poppins(
-              fontWeight: FontWeight.w700, fontSize: 28, height: 1.2),
-        ),
-        const SizedBox(height: 16),
-        _buildAuthorInfo(context, post),
-      ],
-    );
-  }
-
-  Widget _buildAuthorInfo(BuildContext context, Post post) {
+  Widget _buildUserCard(BuildContext context, Post post) {
     final theme = Theme.of(context);
     return Row(
       children: [
         CircleAvatar(
-          radius: 22,
+          radius: 28,
+          backgroundColor: theme.colorScheme.surfaceContainerHighest,
           backgroundImage: post.userAvatarUrl.isNotEmpty
               ? NetworkImage(post.userAvatarUrl)
               : null,
           child: post.userAvatarUrl.isEmpty
-              ? const Icon(Icons.person, size: 24)
+              ? Icon(Icons.person, color: theme.colorScheme.primary, size: 28)
               : null,
         ),
-        const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '@${post.username}',
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            Text(
-              'Published: ${DateFormat.yMMMd('en_US').format(post.timestamp)}',
-              style:
-                  theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  /// Stats are now integrated directly into the content without a separate card.
-  Widget _buildStatsRow(BuildContext context, Post post) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 8.0),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildStatItem(context, Icons.hiking_rounded,
-              '${post.distanceKm.toStringAsFixed(1)} km', 'Distance'),
-          _buildStatItem(
-              context,
-              Icons.night_shelter_outlined,
-              '${post.nights} ${post.nights == 1 ? "night" : "nights"}',
-              'Duration'),
-          _buildStatItem(context, Icons.location_on_outlined,
-              post.location.split(',').first, 'Location',
-              isLocation: true),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatItem(
-      BuildContext context, IconData icon, String value, String label,
-      {bool isLocation = false}) {
-    final theme = Theme.of(context);
-    return Flexible(
-      child: Column(
-        children: [
-          Icon(icon, color: theme.colorScheme.primary, size: 28),
-          const SizedBox(height: 8),
-          Text(value,
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
-              maxLines: isLocation ? 2 : 1),
-          const SizedBox(height: 2),
-          Text(label,
-              style:
-                  theme.textTheme.bodySmall?.copyWith(color: theme.hintColor)),
-        ],
-      ),
-    );
-  }
-
-  /// Generic section builder.
-  Widget _buildSection(BuildContext context,
-      {required String title,
-      required IconData icon,
-      required Widget content}) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon,
-                color: theme.textTheme.bodyLarge?.color?.withOpacity(0.7)),
-            const SizedBox(width: 12),
-            Text(title,
-                style: theme.textTheme.titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w600)),
-          ],
-        ),
-        const SizedBox(height: 20),
-        Padding(
-          padding: const EdgeInsets.only(left: 4.0), // Indent content
-          child: content,
-        ),
-      ],
-    );
-  }
-
-  /// Refactored ratings display: dynamic and clean.
-  Widget _buildRatingsList(Post post) {
-    // Convert Map to a List to maintain order
-    final ratings = [
-      MapEntry(
-          RatingType.experience, post.ratings[RatingType.experience] ?? 0.0),
-      MapEntry(
-          RatingType.difficulty, post.ratings[RatingType.difficulty] ?? 0.0),
-      MapEntry(RatingType.weather, post.ratings[RatingType.weather] ?? 0.0),
-    ];
-
-    return Column(
-      children: ratings.map((entry) {
-        final ratingType = entry.key;
-        final ratingValue = entry.value;
-        final ratingData = getRatingData(ratingType);
-        final label = ratingData['labels'][(ratingValue).toInt()] ?? '';
-
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 16.0),
-          child: DetailedRatingDisplay(
-            icon: ratingData['icon'],
-            title: ratingData['title'],
-            label: label,
-            ratingValue: ratingValue,
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  /// Visually improved map preview.
-  Widget _buildRouteMap(BuildContext context, Post post) {
-    final allPoints =
-        post.dailyRoutes!.expand((route) => route.points).toList();
-    final bounds = LatLngBounds.fromPoints(allPoints);
-    final arrowMarkers = generateArrowMarkersForDays(post.dailyRoutes!);
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => FullScreenMapPage(routes: post.dailyRoutes!),
-          ),
-        );
-      },
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: SizedBox(
-          height: 250,
-          child: Stack(
-            fit: StackFit.expand,
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              IgnorePointer(
-                child: FlutterMap(
-                  options: MapOptions(
-                    initialCameraFit: CameraFit.bounds(
-                      bounds: bounds,
-                      padding: const EdgeInsets.all(
-                          40.0), // Add padding around bounds
-                    ),
-                    interactionOptions:
-                        const InteractionOptions(flags: InteractiveFlag.none),
-                  ),
-                  children: [
-                    TileLayer(
-                      urlTemplate:
-                          'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-                    ),
-                    PolylineLayer(
-                      polylines: post.dailyRoutes!
-                          .map((route) => Polyline(
-                                points: route.points,
-                                color: route.routeColor.withOpacity(0.9),
-                                strokeWidth: 4.5,
-                                borderColor: Colors.black.withOpacity(0.2),
-                                borderStrokeWidth: 1.5,
-                              ))
-                          .toList(),
-                    ),
-                    MarkerLayer(markers: arrowMarkers),
-                  ],
-                ),
-              ),
-              // Prompt to make interaction clearer
-              Center(
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.6),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.zoom_out_map_rounded,
-                          color: Colors.white, size: 20),
-                      SizedBox(width: 8),
-                      Text(
-                        'Tap to explore map',
-                        style: TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              Text("@${post.username}",
+                  style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 17,
+                      color: theme.colorScheme.onSurface)),
+              Text(
+                  "Published: ${DateFormat.yMMMd('en_US').format(post.timestamp)}",
+                  style: GoogleFonts.lato(
+                      fontSize: 12.5,
+                      color: theme.colorScheme.onSurfaceVariant)),
             ],
           ),
         ),
+        SizedBox(
+          height: 36,
+          child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: theme.colorScheme.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(22)),
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              minimumSize: const Size(0, 36),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            icon: const Icon(Icons.person_add_alt_1, size: 18),
+            label: const Text("Follow",
+                style: TextStyle(fontWeight: FontWeight.w600)),
+            onPressed: () {
+              // TODO: Follow logic
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatsBar(BuildContext context, Post post) {
+    final theme = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 18),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(16),
       ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          _statItem(
+              Icons.hiking_rounded,
+              "${post.distanceKm.toStringAsFixed(1)} km",
+              theme.colorScheme.primary),
+          if (post.nights > 0)
+            _statItem(Icons.night_shelter_outlined, "${post.nights} nights",
+                theme.colorScheme.secondary),
+          if (post.weightKg != null)
+            _statItem(Icons.backpack, "${post.weightKg!.toStringAsFixed(1)} kg",
+                theme.colorScheme.tertiary),
+        ],
+      ),
+    );
+  }
+
+  Widget _statItem(IconData icon, String text, Color color) {
+    return Row(
+      children: [
+        Icon(icon, size: 19, color: color),
+        const SizedBox(width: 5),
+        Text(text,
+            style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600, color: color, fontSize: 14)),
+      ],
+    );
+  }
+
+  // Eye-candy ratings section
+  Widget _buildRatingsSection(BuildContext context, Post post) {
+    final theme = Theme.of(context);
+
+    String experienceHint(double v) {
+      if (v >= 4.5) return "Amazing";
+      if (v >= 3.5) return "Great";
+      if (v >= 2.5) return "OK";
+      if (v >= 1.5) return "Meh";
+      return "Poor";
+    }
+
+    String difficultyHint(double v) {
+      if (v >= 4.5) return "Extreme";
+      if (v >= 3.5) return "Hard";
+      if (v >= 2.5) return "Moderate";
+      if (v >= 1.5) return "Easy";
+      return "Very Easy";
+    }
+
+    String weatherHint(double v) {
+      if (v >= 4.5) return "Perfect";
+      if (v >= 3.5) return "Good";
+      if (v >= 2.5) return "Mixed";
+      if (v >= 1.5) return "Challenging";
+      return "Bad";
+    }
+
+    Widget ratingTile({
+      required IconData icon,
+      required String label,
+      required double rating,
+      required String hint,
+      required Color color,
+    }) {
+      return Container(
+        margin: const EdgeInsets.symmetric(vertical: 7),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface.withOpacity(0.93),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withOpacity(0.13), width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.07),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: color.withOpacity(0.13),
+              child: Icon(icon, color: color, size: 22),
+              radius: 20,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15.5,
+                        color: theme.colorScheme.onSurface,
+                      )),
+                  Text(
+                    hint,
+                    style: GoogleFonts.lato(
+                      fontSize: 13,
+                      color: color.withOpacity(0.8),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            StarRatingDisplay(
+              rating: rating,
+              size: 20,
+              showLabel: false,
+              color: color,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              rating.toStringAsFixed(1),
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600,
+                color: color,
+                fontSize: 15,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        ratingTile(
+          icon: Icons.emoji_events_rounded,
+          label: "Overall Experience",
+          rating: post.averageRating,
+          color: theme.colorScheme.primary,
+          hint: experienceHint(post.averageRating),
+        ),
+        ratingTile(
+          icon: Icons.terrain_rounded,
+          label: "Hike Difficulty",
+          rating: post.ratings['difficulty'] ?? 0,
+          color: Colors.orange,
+          hint: difficultyHint(post.ratings['difficulty'] ?? 0),
+        ),
+        ratingTile(
+          icon: Icons.wb_sunny_rounded,
+          label: "Weather Conditions",
+          rating: post.ratings['weather'] ?? 0,
+          color: Colors.blueAccent,
+          hint: weatherHint(post.ratings['weather'] ?? 0),
+        ),
+      ],
     );
   }
 }
