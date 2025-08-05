@@ -36,11 +36,13 @@ class PostCard extends StatefulWidget {
 class _PostCardState extends State<PostCard> {
   bool _isLiked = false;
   int _likeCount = 0;
+  bool _likeLoading = false;
 
   @override
   void initState() {
     super.initState();
     _updateStateFromWidget();
+    _listenToLikes();
   }
 
   @override
@@ -48,6 +50,7 @@ class _PostCardState extends State<PostCard> {
     super.didUpdateWidget(oldWidget);
     if (widget.post.id != oldWidget.post.id) {
       _updateStateFromWidget();
+      _listenToLikes();
     }
   }
 
@@ -60,23 +63,56 @@ class _PostCardState extends State<PostCard> {
     }
   }
 
-  void _toggleLike() {
+  void _listenToLikes() {
+    // Päivitä tykkäystila reaaliaikaisesti
+    FirebaseFirestore.instance
+        .collection('posts')
+        .doc(widget.post.id)
+        .snapshots()
+        .listen((doc) {
+      if (!mounted) return;
+      final data = doc.data() as Map<String, dynamic>?;
+      if (data == null) return;
+      final likes = List<String>.from(data['likes'] ?? []);
+      setState(() {
+        _likeCount = likes.length;
+        _isLiked = widget.currentUserId != null &&
+            likes.contains(widget.currentUserId);
+      });
+    });
+  }
+
+  Future<void> _toggleLike() async {
+    if (_likeLoading) return;
     if (widget.currentUserId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Please log in to like posts.")));
       return;
     }
     setState(() {
-      if (_isLiked) {
-        _likeCount--;
-        _isLiked = false;
-        widget.post.likes.remove(widget.currentUserId);
-      } else {
-        _likeCount++;
-        _isLiked = true;
-        widget.post.likes.add(widget.currentUserId!);
-      }
+      _likeLoading = true;
     });
+
+    final postRef =
+        FirebaseFirestore.instance.collection('posts').doc(widget.post.id);
+
+    await FirebaseFirestore.instance.runTransaction((transaction) async {
+      final freshSnap = await transaction.get(postRef);
+      final likes = List<String>.from(freshSnap['likes'] ?? []);
+      bool isLikedNow = likes.contains(widget.currentUserId);
+
+      if (isLikedNow) {
+        likes.remove(widget.currentUserId);
+      } else {
+        likes.add(widget.currentUserId!);
+      }
+      transaction.update(postRef, {'likes': likes});
+    });
+
+    setState(() {
+      _likeLoading = false;
+    });
+    // Reaaliaikainen listener päivittää _isLiked ja _likeCount
   }
 
   String _getTimeAgo(DateTime dateTime) {
@@ -357,16 +393,33 @@ class _PostCardState extends State<PostCard> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _socialAction(
-                        icon: _isLiked
-                            ? Icons.favorite_rounded
-                            : Icons.favorite_outline_rounded,
-                        color: _isLiked
-                            ? theme.colorScheme.error
-                            : theme.colorScheme.onSurfaceVariant,
-                        count: _likeCount,
-                        label: "Like",
+                      GestureDetector(
                         onTap: _toggleLike,
+                        child: Row(
+                          children: [
+                            Icon(
+                              _isLiked
+                                  ? Icons.favorite_rounded
+                                  : Icons.favorite_outline_rounded,
+                              color: _isLiked
+                                  ? theme.colorScheme.error
+                                  : theme.colorScheme.onSurfaceVariant,
+                              size: 22,
+                            ),
+                            const SizedBox(width: 4),
+                            SizedBox(
+                              width: 22, // Kiinteä leveys numerolle
+                              child: Text(
+                                '$_likeCount',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text("Like", style: GoogleFonts.lato(fontSize: 14)),
+                          ],
+                        ),
                       ),
                       // --- Kommenttien määrä reaaliaikaisesti ---
                       StreamBuilder<DocumentSnapshot>(
@@ -455,6 +508,8 @@ class _PostCardState extends State<PostCard> {
     String? label,
     VoidCallback? onTap,
   }) {
+    // Kiinteä leveys numerolle, jotta layout ei skaalaudu
+    const double numberWidth = 22;
     return GestureDetector(
       onTap: onTap,
       child: Row(
@@ -462,8 +517,14 @@ class _PostCardState extends State<PostCard> {
           Icon(icon, size: 22, color: color),
           if (count != null) ...[
             const SizedBox(width: 4),
-            Text('$count',
-                style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+            SizedBox(
+              width: numberWidth,
+              child: Text(
+                '$count',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+              ),
+            ),
           ],
           if (label != null) ...[
             const SizedBox(width: 4),

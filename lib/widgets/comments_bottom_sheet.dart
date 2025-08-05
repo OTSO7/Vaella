@@ -329,9 +329,10 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                                               comment.username,
                                               style: theme.textTheme.bodyMedium
                                                   ?.copyWith(
-                                                fontWeight: FontWeight.w600,
+                                                fontWeight: FontWeight.w700,
                                                 color:
                                                     theme.colorScheme.onSurface,
+                                                fontSize: 17,
                                               ),
                                             ),
                                             const SizedBox(height: 2),
@@ -341,6 +342,8 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                                                   ?.copyWith(
                                                 color: theme.colorScheme
                                                     .onSurfaceVariant,
+                                                fontSize: 14, // isompi fontti
+                                                height: 1.28,
                                               ),
                                             ),
                                           ],
@@ -485,9 +488,9 @@ class _ReactionChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(emoji, style: const TextStyle(fontSize: 10)),
+            Text(emoji, style: const TextStyle(fontSize: 12)),
             const SizedBox(width: 2),
-            Text('$count', style: const TextStyle(fontSize: 11)),
+            Text('$count', style: const TextStyle(fontSize: 13)),
           ],
         ),
       ),
