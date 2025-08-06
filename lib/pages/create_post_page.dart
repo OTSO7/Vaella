@@ -1,9 +1,6 @@
-// tiedosto: lib/pages/create_post_page.dart
-
 import 'dart:async';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -19,6 +16,7 @@ import '../providers/auth_provider.dart';
 import '../services/location_service.dart';
 import '../utils/rating_utils.dart';
 import '../widgets/map_picker_page.dart';
+import '../models/image_upload_helper.dart';
 
 class CreatePostPage extends StatefulWidget {
   final PostVisibility initialVisibility;
@@ -35,7 +33,6 @@ class CreatePostPage extends StatefulWidget {
 }
 
 class _CreatePostPageState extends State<CreatePostPage> {
-  // Sivutuksen ja lomakkeiden hallinta
   int _currentStep = 0;
   final PageController _pageController = PageController();
   final List<GlobalKey<FormState>> _formKeys = [
@@ -44,14 +41,13 @@ class _CreatePostPageState extends State<CreatePostPage> {
     GlobalKey<FormState>()
   ];
 
-  // Controllerit ja tilamuuttujat
   final _titleController = TextEditingController();
   final _captionController = TextEditingController();
   final _locationController = TextEditingController();
   final _distanceController = TextEditingController();
   final _nightsController = TextEditingController();
   final _weightController = TextEditingController();
-  XFile? _imageFile;
+  List<XFile> _imageFiles = [];
   DateTime? _startDate;
   DateTime? _endDate;
   late PostVisibility _selectedVisibility;
@@ -60,12 +56,10 @@ class _CreatePostPageState extends State<CreatePostPage> {
   bool _isLoading = false;
   bool _showPackWeightField = false;
 
-  // Arvostelujen tilamuuttujat
   double _weatherRating = 3.0;
   double _difficultyRating = 3.0;
   double _experienceRating = 3.0;
 
-  // Sijainninhaun muuttujat
   final LocationService _locationService = LocationService();
   List<LocationSuggestion> _suggestions = [];
   List<LocationSuggestion> _popularSuggestionsCache = [];
@@ -74,7 +68,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
   bool _isSearching = false;
   bool _isSelectingLocation = false;
 
-  // Suunnitelman linkityksen tilamuuttujat
   bool _linkPlanData = true;
   bool _includeRouteOnMap = true;
 
@@ -224,13 +217,62 @@ class _CreatePostPageState extends State<CreatePostPage> {
     }
   }
 
+  Future<void> _pickImages() async {
+    if (_isLoading) return;
+    final ImagePicker picker = ImagePicker();
+    try {
+      final List<XFile>? images = await picker.pickMultiImage(
+        imageQuality: 70,
+        maxWidth: 1920,
+        maxHeight: 1080,
+      );
+      if (images != null) {
+        final filtered = images
+            .where((img) => File(img.path).lengthSync() <= 8 * 1024 * 1024)
+            .toList();
+        if (filtered.length > 3) filtered.removeRange(3, filtered.length);
+        setState(() => _imageFiles = filtered);
+        if (images.length > 3) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Max 3 images allowed.')),
+          );
+        }
+        if (images
+            .any((img) => File(img.path).lengthSync() > 8 * 1024 * 1024)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Images must be max 8MB each.')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Failed to pick images: ${e.toString()}',
+                style: GoogleFonts.lato())));
+      }
+    }
+  }
+
+  Future<List<String>> _uploadImagesToBunnyCDN(List<XFile> images) async {
+    List<String> urls = [];
+    for (final img in images) {
+      final file = File(img.path);
+      if (file.lengthSync() > 8 * 1024 * 1024) {
+        throw Exception('Image too large (max 8MB)');
+      }
+      final url = await BunnyImageUploader.uploadImage(file);
+      urls.add(url);
+    }
+    return urls;
+  }
+
   Future<void> _createPost() async {
     setState(() => _isLoading = true);
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     try {
-      String? uploadedImageUrl;
-      if (_imageFile != null) {
-        uploadedImageUrl = await _uploadImageInternal(_imageFile!);
+      List<String> uploadedImageUrls = [];
+      if (_imageFiles.isNotEmpty) {
+        uploadedImageUrls = await _uploadImagesToBunnyCDN(_imageFiles);
       }
       final newPostRef = FirebaseFirestore.instance.collection('posts').doc();
       final newPost = Post(
@@ -238,7 +280,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
         userId: authProvider.userProfile!.uid,
         username: authProvider.userProfile!.username,
         userAvatarUrl: authProvider.userProfile!.photoURL ?? '',
-        postImageUrl: uploadedImageUrl,
+        postImageUrls: uploadedImageUrls,
         title: _titleController.text.trim(),
         caption: _captionController.text.trim(),
         timestamp: DateTime.now(),
@@ -275,7 +317,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
           _locationController.text.trim().toLowerCase();
 
       await newPostRef.set(postData);
-      // -----------------------------------------------------------------
 
       await authProvider.handlePostCreationSuccess();
       _showSuccessDialog();
@@ -283,20 +324,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
       _showErrorDialog(e.toString());
     } finally {
       if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<String?> _uploadImageInternal(XFile imageFile) async {
-    try {
-      final String fileName =
-          '${DateTime.now().millisecondsSinceEpoch}_${p.basename(imageFile.path)}';
-      final Reference storageRef =
-          FirebaseStorage.instance.ref().child('post_images/$fileName');
-      final metadata = SettableMetadata(contentType: 'image/jpeg');
-      await storageRef.putFile(File(imageFile.path), metadata);
-      return await storageRef.getDownloadURL();
-    } catch (e) {
-      throw Exception('Failed to upload image. Please try again.');
     }
   }
 
@@ -419,7 +446,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
       child: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         children: [
-          _buildSectionHeader(context, "1. Your Story & Photo"),
+          _buildSectionHeader(context, "1. Your Story & Photos"),
           const SizedBox(height: 16),
           _buildImagePicker(context),
           const SizedBox(height: 24),
@@ -560,6 +587,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
   Widget _buildSectionHeader(BuildContext context, String title) => Text(title,
       style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w600));
+
   Future<void> _openMapPicker() async {
     const LatLng defaultLocation = LatLng(62.5, 26.0);
     final LatLng? initialPoint = (_latitude != null && _longitude != null)
@@ -695,25 +723,76 @@ class _CreatePostPageState extends State<CreatePostPage> {
     );
   }
 
-  Future<void> _pickImage() async {
-    if (_isLoading) return;
-    final ImagePicker picker = ImagePicker();
-    try {
-      final XFile? image = await picker.pickImage(
-          source: ImageSource.gallery,
-          imageQuality: 70,
-          maxWidth: 1920,
-          maxHeight: 1080);
-      if (image != null) {
-        setState(() => _imageFile = image);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Failed to pick image: ${e.toString()}',
-                style: GoogleFonts.lato())));
-      }
-    }
+  Widget _buildImagePicker(BuildContext context) {
+    final theme = Theme.of(context);
+    return GestureDetector(
+      onTap: _pickImages,
+      child: AspectRatio(
+        aspectRatio: 16 / 9,
+        child: _imageFiles.isEmpty
+            ? Container(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: theme.dividerColor,
+                    width: 1.5,
+                  ),
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.add_a_photo_outlined,
+                          size: 40, color: theme.colorScheme.primary),
+                      const SizedBox(height: 8),
+                      Text('Add up to 3 photos (max 8MB each)',
+                          style: GoogleFonts.lato(fontSize: 16)),
+                    ],
+                  ),
+                ),
+              )
+            : Row(
+                children: _imageFiles
+                    .map((img) => Padding(
+                          padding: const EdgeInsets.all(4.0),
+                          child: Stack(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.file(
+                                  File(img.path),
+                                  width: 100,
+                                  height: 100,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                              Positioned(
+                                top: 2,
+                                right: 2,
+                                child: GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      _imageFiles.remove(img);
+                                    });
+                                  },
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.black54,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.close,
+                                        color: Colors.white, size: 18),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ))
+                    .toList(),
+              ),
+      ),
+    );
   }
 
   void _showDateRangePicker() {
@@ -799,45 +878,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
                 color: _startDate != null
                     ? theme.colorScheme.onSurface
                     : theme.hintColor)),
-      ),
-    );
-  }
-
-  Widget _buildImagePicker(BuildContext context) {
-    final theme = Theme.of(context);
-    return GestureDetector(
-      onTap: _pickImage,
-      child: AspectRatio(
-        aspectRatio: 16 / 9,
-        child: Container(
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color:
-                  _imageFile == null ? theme.dividerColor : Colors.transparent,
-              width: 1.5,
-            ),
-            image: _imageFile != null
-                ? DecorationImage(
-                    image: FileImage(File(_imageFile!.path)), fit: BoxFit.cover)
-                : null,
-          ),
-          child: _imageFile == null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.add_a_photo_outlined,
-                          size: 40, color: theme.colorScheme.primary),
-                      const SizedBox(height: 8),
-                      Text('Add a cover photo',
-                          style: GoogleFonts.lato(fontSize: 16)),
-                    ],
-                  ),
-                )
-              : null,
-        ),
       ),
     );
   }

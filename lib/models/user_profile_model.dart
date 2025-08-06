@@ -1,4 +1,3 @@
-// lib/models/user_profile_model.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -233,8 +232,8 @@ class UserProfile {
     String? displayName,
     String? email,
     String? photoURL,
-    ValueGetter<String?>? bio,
-    ValueGetter<String?>? bannerImageUrl,
+    String? bio,
+    String? bannerImageUrl,
     HikeStats? hikeStats,
     List<Achievement>? achievements,
     List<Sticker>? stickers,
@@ -253,9 +252,8 @@ class UserProfile {
       displayName: displayName ?? this.displayName,
       email: email ?? this.email,
       photoURL: photoURL ?? this.photoURL,
-      bio: bio != null ? bio() : this.bio,
-      bannerImageUrl:
-          bannerImageUrl != null ? bannerImageUrl() : this.bannerImageUrl,
+      bio: bio ?? this.bio,
+      bannerImageUrl: bannerImageUrl ?? this.bannerImageUrl,
       hikeStats: hikeStats ?? this.hikeStats,
       achievements: achievements ?? this.achievements,
       stickers: stickers ?? this.stickers,

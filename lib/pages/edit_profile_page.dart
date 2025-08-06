@@ -1,17 +1,15 @@
-// lib/pages/edit_profile_page.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:firebase_auth/firebase_auth.dart'
-    as fb_auth; // Alias to avoid conflict
+import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../models/user_profile_model.dart';
 import '../providers/auth_provider.dart' as local_auth;
+import '../models/image_upload_helper.dart'; // Bunny uploader
 
 class EditProfilePage extends StatefulWidget {
   final UserProfile initialProfile;
@@ -29,12 +27,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
   late TextEditingController _bioController;
   late TextEditingController _bannerImageUrlController;
 
-  String?
-      _profileImageDisplayUrl; // For displaying existing network or asset image
-  File? _pickedProfileImageFile; // New image picked by user
+  String? _profileImageDisplayUrl;
+  File? _pickedProfileImageFile;
 
-  String? _bannerImageDisplayUrl; // For displaying existing network banner
-  File? _pickedBannerImageFile; // New banner image picked by user
+  String? _bannerImageDisplayUrl;
+  File? _pickedBannerImageFile;
 
   bool _isLoading = false;
 
@@ -74,25 +71,23 @@ class _EditProfilePageState extends State<EditProfilePage> {
       setState(() {
         if (isProfileImage) {
           _pickedProfileImageFile = File(pickedFile.path);
-          _profileImageDisplayUrl =
-              null; // Clear network URL, FileImage will be used
+          _profileImageDisplayUrl = null;
         } else {
           _pickedBannerImageFile = File(pickedFile.path);
-          _bannerImageUrlController.text =
-              pickedFile.path; // Store path to indicate new file
-          _bannerImageDisplayUrl = null; // Clear network URL
+          _bannerImageUrlController.text = pickedFile.path;
+          _bannerImageDisplayUrl = null;
         }
       });
     }
   }
 
-  Future<String?> _uploadImage(File imageFile, String firebasePath) async {
-    // Note: No setState for _isLoading here, it's handled in _updateProfile
+  // --- KÄYTÄ BUNNY IMAGE UPLOADER ---
+  Future<String?> _uploadImage(File imageFile, String bunnyPrefix) async {
     try {
-      final ref = FirebaseStorage.instance.ref().child(firebasePath).child(
-          '${fb_auth.FirebaseAuth.instance.currentUser!.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg');
-      await ref.putFile(imageFile);
-      return await ref.getDownloadURL();
+      final fileName =
+          '${bunnyPrefix}_${fb_auth.FirebaseAuth.instance.currentUser!.uid}_${DateTime.now().millisecondsSinceEpoch}${imageFile.path.split('.').last.isNotEmpty ? '.' + imageFile.path.split('.').last : '.jpg'}';
+      return await BunnyImageUploader.uploadImage(imageFile,
+          fileName: fileName);
     } catch (e) {
       if (mounted) {
         _showErrorSnackBar('Image upload failed: ${e.toString()}');
@@ -122,7 +117,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
     String? finalBannerImageUrl = widget.initialProfile.bannerImageUrl;
 
     try {
-      // Username uniqueness check (if changed)
       final newUsername = _usernameController.text.trim().toLowerCase();
       if (newUsername != widget.initialProfile.username.toLowerCase()) {
         final existingUsernameDocs = await FirebaseFirestore.instance
@@ -143,7 +137,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
         finalProfilePhotoUrl =
             await _uploadImage(_pickedProfileImageFile!, 'profile_photos');
         if (finalProfilePhotoUrl == null) {
-          // Upload failed
           setState(() => _isLoading = false);
           return;
         }
@@ -154,29 +147,25 @@ class _EditProfilePageState extends State<EditProfilePage> {
         finalBannerImageUrl =
             await _uploadImage(_pickedBannerImageFile!, 'banner_images');
         if (finalBannerImageUrl == null) {
-          // Upload failed
           setState(() => _isLoading = false);
           return;
         }
       } else if (_bannerImageUrlController.text.trim().isEmpty) {
-        finalBannerImageUrl = null; // User cleared the banner URL
+        finalBannerImageUrl = null;
       } else {
-        // If controller text is not a local path and not empty, assume it's a network URL
         if (_pickedBannerImageFile_isValidUrl(_bannerImageUrlController.text)) {
           finalBannerImageUrl = _bannerImageUrlController.text.trim();
         }
       }
 
-      // KORJATTU KOHTA: Käytetään toValueGetter-apufunktiota
       final updatedProfile = widget.initialProfile.copyWith(
         username: newUsername,
         displayName: _displayNameController.text.trim(),
-        bio: toValueGetter(_bioController.text.trim()),
+        bio: _bioController.text.trim(),
         photoURL: finalProfilePhotoUrl,
-        bannerImageUrl: toValueGetter(finalBannerImageUrl),
+        bannerImageUrl: finalBannerImageUrl,
       );
 
-      // Tämä on nyt AuthProviderin vastuulla
       await authProvider.updateLocalUserProfile(updatedProfile);
 
       if (mounted) {

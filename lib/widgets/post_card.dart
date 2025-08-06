@@ -38,6 +38,9 @@ class _PostCardState extends State<PostCard> {
   int _likeCount = 0;
   bool _likeLoading = false;
 
+  // --- UUSI TILA: kumpi näkymä on aktiivinen ---
+  bool _showRouteMap = false;
+
   @override
   void initState() {
     super.initState();
@@ -51,6 +54,7 @@ class _PostCardState extends State<PostCard> {
     if (widget.post.id != oldWidget.post.id) {
       _updateStateFromWidget();
       _listenToLikes();
+      _showRouteMap = false; // Resetoi näkymä kun postaus vaihtuu
     }
   }
 
@@ -64,7 +68,6 @@ class _PostCardState extends State<PostCard> {
   }
 
   void _listenToLikes() {
-    // Päivitä tykkäystila reaaliaikaisesti
     FirebaseFirestore.instance
         .collection('posts')
         .doc(widget.post.id)
@@ -112,7 +115,6 @@ class _PostCardState extends State<PostCard> {
     setState(() {
       _likeLoading = false;
     });
-    // Reaaliaikainen listener päivittää _isLiked ja _likeCount
   }
 
   String _getTimeAgo(DateTime dateTime) {
@@ -129,12 +131,21 @@ class _PostCardState extends State<PostCard> {
     final theme = Theme.of(context);
     final isOwnPost = widget.currentUserId == widget.post.userId;
 
-    // Always show route as the "image" if available
+    // Käytä joko postImageUrl tai postImageUrls.first
+    final String? mainImageUrl = (widget.post.postImageUrl != null &&
+            widget.post.postImageUrl!.isNotEmpty)
+        ? widget.post.postImageUrl
+        : (widget.post.postImageUrls.isNotEmpty
+            ? widget.post.postImageUrls.first
+            : null);
+
     final bool hasRouteImage = widget.post.dailyRoutes != null &&
         widget.post.dailyRoutes!.isNotEmpty &&
-        widget.post.dailyRoutes!.any((r) => r.points.isNotEmpty);
+        widget.post.dailyRoutes!.any((r) =>
+            r != null && r.points != null && (r.points as List).isNotEmpty);
 
-    // --- HAE KÄYTTÄJÄN TIEDOT PROVIDERISTA ---
+    final bool hasPostImage = mainImageUrl != null && mainImageUrl.isNotEmpty;
+
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final userProfile = authProvider.userProfile;
     final currentUserId = authProvider.user?.uid ?? "";
@@ -217,7 +228,6 @@ class _PostCardState extends State<PostCard> {
                           ],
                         ),
                       ),
-                      // Save button
                       IconButton(
                         icon: Icon(Icons.bookmark_border_rounded,
                             color: theme.colorScheme.primary, size: 26),
@@ -226,7 +236,6 @@ class _PostCardState extends State<PostCard> {
                           // TODO: Implement save
                         },
                       ),
-                      // Three dots menu
                       if (isOwnPost)
                         PopupMenuButton<String>(
                           icon: Icon(Icons.more_vert,
@@ -249,7 +258,7 @@ class _PostCardState extends State<PostCard> {
                 ),
                 const SizedBox(height: 8),
 
-                // --- LOCATION (nyt kartan yläpuolelle) ---
+                // --- LOCATION ---
                 if (widget.post.location.isNotEmpty)
                   Padding(
                     padding:
@@ -276,8 +285,105 @@ class _PostCardState extends State<PostCard> {
                     ),
                   ),
 
-                // --- "IMAGE": Always show route map if available ---
-                if (hasRouteImage)
+                // --- IMAGE/ROUTE MAP SWITCHER ---
+                if (hasPostImage && hasRouteImage)
+                  Stack(
+                    children: [
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        child: _showRouteMap
+                            ? Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 12),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: AspectRatio(
+                                    aspectRatio: 16 / 9,
+                                    child: _RouteMapBackgroundFlutterMap7(
+                                      dailyRoutes: widget.post.dailyRoutes!,
+                                      borderRadius: 0,
+                                      fitPoints: true,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 12),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: AspectRatio(
+                                    aspectRatio: 16 / 9,
+                                    child: CachedNetworkImage(
+                                      imageUrl: mainImageUrl!,
+                                      fit: BoxFit.cover,
+                                      placeholder: (context, url) => Container(
+                                          color: theme
+                                              .colorScheme.surfaceContainer),
+                                      errorWidget: (context, url, error) =>
+                                          Container(
+                                              color: theme
+                                                  .colorScheme.surfaceVariant,
+                                              child: const Icon(
+                                                  Icons.broken_image_outlined)),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                      ),
+                      Positioned(
+                        right: 18,
+                        bottom: 18,
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _showRouteMap = !_showRouteMap;
+                            });
+                          },
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 250),
+                            child: _showRouteMap
+                                ? _MiniImageSquare(
+                                    imageUrl: mainImageUrl!,
+                                    onTap: () {
+                                      setState(() {
+                                        _showRouteMap = false;
+                                      });
+                                    },
+                                  )
+                                : _MiniRouteMapSquare(
+                                    dailyRoutes: widget.post.dailyRoutes!,
+                                    onTap: () {
+                                      setState(() {
+                                        _showRouteMap = true;
+                                      });
+                                    },
+                                  ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                else if (hasPostImage)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: AspectRatio(
+                        aspectRatio: 16 / 9,
+                        child: CachedNetworkImage(
+                          imageUrl: mainImageUrl!,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(
+                              color: theme.colorScheme.surfaceContainer),
+                          errorWidget: (context, url, error) => Container(
+                              color: theme.colorScheme.surfaceVariant,
+                              child: const Icon(Icons.broken_image_outlined)),
+                        ),
+                      ),
+                    ),
+                  )
+                else if (hasRouteImage)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     child: ClipRRect(
@@ -292,6 +398,7 @@ class _PostCardState extends State<PostCard> {
                       ),
                     ),
                   ),
+
                 // --- TITLE & CAPTION ---
                 Padding(
                   padding: const EdgeInsets.only(
@@ -377,7 +484,6 @@ class _PostCardState extends State<PostCard> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                // --- Hento separator ennen social baria ---
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Divider(
@@ -408,7 +514,7 @@ class _PostCardState extends State<PostCard> {
                             ),
                             const SizedBox(width: 4),
                             SizedBox(
-                              width: 22, // Kiinteä leveys numerolle
+                              width: 22,
                               child: Text(
                                 '$_likeCount',
                                 textAlign: TextAlign.center,
@@ -421,7 +527,6 @@ class _PostCardState extends State<PostCard> {
                           ],
                         ),
                       ),
-                      // --- Kommenttien määrä reaaliaikaisesti ---
                       StreamBuilder<DocumentSnapshot>(
                         stream: FirebaseFirestore.instance
                             .collection('posts')
@@ -508,7 +613,6 @@ class _PostCardState extends State<PostCard> {
     String? label,
     VoidCallback? onTap,
   }) {
-    // Kiinteä leveys numerolle, jotta layout ei skaalaudu
     const double numberWidth = 22;
     return GestureDetector(
       onTap: onTap,
@@ -536,9 +640,107 @@ class _PostCardState extends State<PostCard> {
   }
 }
 
+// --- PIENI KARTTANELIÖ ---
+class _MiniRouteMapSquare extends StatelessWidget {
+  final List<dynamic>? dailyRoutes;
+  final VoidCallback? onTap;
+
+  const _MiniRouteMapSquare({required this.dailyRoutes, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final allPoints = dailyRoutes == null
+        ? <LatLng>[]
+        : dailyRoutes!
+            .where((r) =>
+                r != null && r.points != null && (r.points as List).isNotEmpty)
+            .expand((r) => List<LatLng>.from(r.points ?? []))
+            .toList();
+    if (allPoints.isEmpty) {
+      return const SizedBox(width: 54, height: 54);
+    }
+    return GestureDetector(
+      onTap: onTap,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: SizedBox(
+          width: 54,
+          height: 54,
+          child: FlutterMap(
+            options: MapOptions(
+              initialCameraFit: CameraFit.bounds(
+                bounds: LatLngBounds.fromPoints(allPoints),
+                padding: const EdgeInsets.all(8.0),
+                maxZoom: 13,
+                minZoom: 5,
+              ),
+              interactionOptions:
+                  const InteractionOptions(flags: InteractiveFlag.none),
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.example.treknoteflutter',
+              ),
+              PolylineLayer<Object>(
+                polylines: dailyRoutes == null
+                    ? []
+                    : dailyRoutes!
+                        .where((route) =>
+                            route != null &&
+                            route.points != null &&
+                            (route.points as List).isNotEmpty)
+                        .map((route) => Polyline<Object>(
+                              points: List<LatLng>.from(route.points ?? []),
+                              color: Colors.deepOrange.withOpacity(0.85),
+                              strokeWidth: 3.0,
+                              borderColor: Colors.black.withOpacity(0.18),
+                              borderStrokeWidth: 1.0,
+                            ))
+                        .toList(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// --- PIENI KUVA NELIÖ ---
+class _MiniImageSquare extends StatelessWidget {
+  final String imageUrl;
+  final VoidCallback? onTap;
+
+  const _MiniImageSquare({required this.imageUrl, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: SizedBox(
+          width: 54,
+          height: 54,
+          child: CachedNetworkImage(
+            imageUrl: imageUrl,
+            fit: BoxFit.cover,
+            placeholder: (context, url) => Container(
+                color: Theme.of(context).colorScheme.surfaceContainer),
+            errorWidget: (context, url, error) => Container(
+                color: Theme.of(context).colorScheme.surfaceVariant,
+                child: const Icon(Icons.broken_image_outlined)),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // flutter_map 7.x -yhteensopiva taustakarttawidget
 class _RouteMapBackgroundFlutterMap7 extends StatelessWidget {
-  final List<dynamic> dailyRoutes;
+  final List<dynamic>? dailyRoutes;
   final double borderRadius;
   final bool fitPoints;
 
@@ -550,8 +752,10 @@ class _RouteMapBackgroundFlutterMap7 extends StatelessWidget {
   });
 
   List<LatLng> _collectAllPoints() {
+    if (dailyRoutes == null) return [];
     final List<LatLng> allPoints = [];
-    for (var dr in dailyRoutes) {
+    for (var dr in dailyRoutes!) {
+      if (dr == null || dr.points == null) continue;
       if (dr.points is List<LatLng>) {
         allPoints.addAll(dr.points);
       } else if (dr.points is List) {
@@ -581,8 +785,8 @@ class _RouteMapBackgroundFlutterMap7 extends StatelessWidget {
           initialCameraFit: CameraFit.bounds(
             bounds: LatLngBounds.fromPoints(allPoints),
             padding: const EdgeInsets.all(30.0),
-            maxZoom: 15, // Estää liiallisen zoomauksen sisään
-            minZoom: 5, // Estää liiallisen zoomauksen ulos
+            maxZoom: 15,
+            minZoom: 5,
           ),
           interactionOptions: const InteractionOptions(
             flags: InteractiveFlag.none,
@@ -593,18 +797,22 @@ class _RouteMapBackgroundFlutterMap7 extends StatelessWidget {
             urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
             userAgentPackageName: 'com.example.treknoteflutter',
           ),
-          PolylineLayer(
-            polylines: dailyRoutes
-                .where((route) =>
-                    route.points != null && (route.points as List).isNotEmpty)
-                .map((route) => Polyline(
-                      points: List<LatLng>.from(route.points),
-                      color: Colors.deepOrange.withOpacity(0.85),
-                      strokeWidth: 5.0,
-                      borderColor: Colors.black.withOpacity(0.18),
-                      borderStrokeWidth: 1.3,
-                    ))
-                .toList(),
+          PolylineLayer<Object>(
+            polylines: dailyRoutes == null
+                ? []
+                : dailyRoutes!
+                    .where((route) =>
+                        route != null &&
+                        route.points != null &&
+                        (route.points as List).isNotEmpty)
+                    .map((route) => Polyline<Object>(
+                          points: List<LatLng>.from(route.points ?? []),
+                          color: Colors.deepOrange.withOpacity(0.85),
+                          strokeWidth: 5.0,
+                          borderColor: Colors.black.withOpacity(0.18),
+                          borderStrokeWidth: 1.3,
+                        ))
+                    .toList(),
           ),
           MarkerLayer(
             markers: [

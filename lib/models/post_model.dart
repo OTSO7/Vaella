@@ -1,7 +1,5 @@
-// lib/models/post_model.dart
-
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'daily_route_model.dart'; // Varmista, että tämä on importattu
+import 'daily_route_model.dart';
 
 enum PostVisibility { public, friends, private }
 
@@ -11,6 +9,7 @@ class Post {
   final String username;
   final String userAvatarUrl;
   final String? postImageUrl;
+  final List<String> postImageUrls;
   final String title;
   final String caption;
   final DateTime timestamp;
@@ -38,6 +37,7 @@ class Post {
     required this.username,
     required this.userAvatarUrl,
     this.postImageUrl,
+    this.postImageUrls = const [],
     required this.title,
     required this.caption,
     required this.timestamp,
@@ -74,6 +74,7 @@ class Post {
     String? username,
     String? userAvatarUrl,
     String? postImageUrl,
+    List<String>? postImageUrls,
     String? title,
     String? caption,
     DateTime? timestamp,
@@ -101,6 +102,7 @@ class Post {
       username: username ?? this.username,
       userAvatarUrl: userAvatarUrl ?? this.userAvatarUrl,
       postImageUrl: postImageUrl ?? this.postImageUrl,
+      postImageUrls: postImageUrls ?? this.postImageUrls,
       title: title ?? this.title,
       caption: caption ?? this.caption,
       timestamp: timestamp ?? this.timestamp,
@@ -127,7 +129,6 @@ class Post {
   factory Post.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
 
-    // Reittien lukeminen tietokannasta
     List<DailyRoute>? routesFromDb;
     if (data['dailyRoutes'] != null && data['dailyRoutes'] is List) {
       routesFromDb = (data['dailyRoutes'] as List)
@@ -148,6 +149,7 @@ class Post {
       username: data['username'] ?? '',
       userAvatarUrl: data['userAvatarUrl'] ?? '',
       postImageUrl: data['postImageUrl'],
+      postImageUrls: List<String>.from(data['postImageUrls'] ?? []),
       title: data['title'] ?? 'Nimetön vaellus',
       caption: data['caption'] ?? '',
       timestamp: (data['timestamp'] as Timestamp).toDate(),
@@ -179,6 +181,7 @@ class Post {
       'username': username,
       'userAvatarUrl': userAvatarUrl,
       'postImageUrl': postImageUrl,
+      'postImageUrls': postImageUrls,
       'title': title,
       'caption': caption,
       'timestamp': Timestamp.fromDate(timestamp),
