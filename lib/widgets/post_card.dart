@@ -131,7 +131,6 @@ class _PostCardState extends State<PostCard> {
     final theme = Theme.of(context);
     final isOwnPost = widget.currentUserId == widget.post.userId;
 
-    // Käytä joko postImageUrl tai postImageUrls.first
     final String? mainImageUrl = (widget.post.postImageUrl != null &&
             widget.post.postImageUrl!.isNotEmpty)
         ? widget.post.postImageUrl
@@ -334,32 +333,25 @@ class _PostCardState extends State<PostCard> {
                       Positioned(
                         right: 18,
                         bottom: 18,
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _showRouteMap = !_showRouteMap;
-                            });
-                          },
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 250),
-                            child: _showRouteMap
-                                ? _MiniImageSquare(
-                                    imageUrl: mainImageUrl!,
-                                    onTap: () {
-                                      setState(() {
-                                        _showRouteMap = false;
-                                      });
-                                    },
-                                  )
-                                : _MiniRouteMapSquare(
-                                    dailyRoutes: widget.post.dailyRoutes!,
-                                    onTap: () {
-                                      setState(() {
-                                        _showRouteMap = true;
-                                      });
-                                    },
-                                  ),
-                          ),
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 250),
+                          child: _showRouteMap
+                              ? _MiniImageSquare(
+                                  imageUrl: mainImageUrl!,
+                                  onTap: () {
+                                    setState(() {
+                                      _showRouteMap = false;
+                                    });
+                                  },
+                                )
+                              : _MiniRouteMapSquare(
+                                  dailyRoutes: widget.post.dailyRoutes!,
+                                  onTap: () {
+                                    setState(() {
+                                      _showRouteMap = true;
+                                    });
+                                  },
+                                ),
                         ),
                       ),
                     ],

@@ -6,6 +6,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/post_model.dart';
 import '../widgets/star_rating_display.dart';
+import '../widgets/comments_bottom_sheet.dart';
 
 class PostDetailPage extends StatefulWidget {
   final String postId;
@@ -19,6 +20,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
   late Future<Post> _postFuture;
   bool _isLiked = false;
   int _likeCount = 0;
+  int _currentImage = 0;
 
   @override
   void initState() {
@@ -70,6 +72,15 @@ class _PostDetailPageState extends State<PostDetailPage> {
     });
   }
 
+  String _getTimeAgo(DateTime dateTime) {
+    final diff = DateTime.now().difference(dateTime);
+    if (diff.inDays > 7) return DateFormat('d MMM y').format(dateTime);
+    if (diff.inDays >= 1) return '${diff.inDays}d ago';
+    if (diff.inHours >= 1) return '${diff.inHours}h ago';
+    if (diff.inMinutes >= 1) return '${diff.inMinutes}m ago';
+    return 'Just now';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -82,188 +93,375 @@ class _PostDetailPageState extends State<PostDetailPage> {
             return const Center(child: CircularProgressIndicator());
           }
           final post = snapshot.data!;
-          // _isLiked ja _likeCount päivitetään initStatessa ja toggleLikessa
 
-          return Stack(
-            children: [
-              // Kansikuva
-              _buildHeaderImage(context, post),
-              // Sisältö
-              DraggableScrollableSheet(
-                initialChildSize: 0.68,
-                minChildSize: 0.68,
-                maxChildSize: 0.98,
-                builder: (context, scrollController) {
-                  return Container(
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surface,
-                      borderRadius:
-                          const BorderRadius.vertical(top: Radius.circular(32)),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.07),
-                          blurRadius: 16,
-                          offset: const Offset(0, -4),
-                        ),
-                      ],
-                    ),
-                    child: SingleChildScrollView(
-                      controller: scrollController,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 18),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Center(
-                              child: Container(
-                                width: 40,
-                                height: 4,
-                                margin: const EdgeInsets.only(bottom: 16),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[300],
-                                  borderRadius: BorderRadius.circular(2),
+          // Kuvakaruselli
+          final List<String> images = [
+            if (post.postImageUrl != null && post.postImageUrl!.isNotEmpty)
+              post.postImageUrl!,
+            ...post.postImageUrls.where((url) => url.isNotEmpty)
+          ];
+          final bool hasImages = images.isNotEmpty;
+          final bool hasRoute = post.dailyRoutes != null &&
+              post.dailyRoutes!.isNotEmpty &&
+              post.dailyRoutes!.any((r) =>
+                  r != null &&
+                  r.points != null &&
+                  (r.points as List).isNotEmpty);
+
+          return CustomScrollView(
+            slivers: [
+              SliverAppBar(
+                automaticallyImplyLeading: false,
+                backgroundColor: theme.colorScheme.background,
+                expandedHeight: MediaQuery.of(context).size.height * 0.42,
+                pinned: false,
+                flexibleSpace: FlexibleSpaceBar(
+                  background: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      hasImages
+                          ? PageView.builder(
+                              itemCount: images.length,
+                              controller:
+                                  PageController(initialPage: _currentImage),
+                              onPageChanged: (i) =>
+                                  setState(() => _currentImage = i),
+                              itemBuilder: (context, i) => ClipRRect(
+                                borderRadius: const BorderRadius.only(
+                                  bottomLeft: Radius.circular(36),
+                                  bottomRight: Radius.circular(36),
+                                ),
+                                child: Image.network(
+                                  images[i],
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      Container(color: Colors.grey.shade800),
                                 ),
                               ),
-                            ),
-                            _buildUserCard(context, post),
-                            const SizedBox(height: 18),
-                            // Likes & Views minimalistisesti oikeaan yläkulmaan
-                            Align(
-                              alignment: Alignment.topRight,
-                              child: Padding(
-                                padding: const EdgeInsets.only(bottom: 8.0),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    // LIKE BUTTON tässä, helposti löydettävä mutta ei liian keskeinen
-                                    GestureDetector(
-                                      onTap: () => _toggleLike(post),
-                                      child: AnimatedContainer(
-                                        duration:
-                                            const Duration(milliseconds: 180),
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 8, vertical: 6),
-                                        decoration: BoxDecoration(
-                                          color: _isLiked
-                                              ? theme.colorScheme.error
-                                                  .withOpacity(0.13)
-                                              : Colors.transparent,
-                                          borderRadius:
-                                              BorderRadius.circular(20),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              Icons.favorite,
-                                              color: _isLiked
-                                                  ? theme.colorScheme.error
-                                                  : theme.colorScheme.error
-                                                      .withOpacity(0.7),
-                                              size: 20,
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              '$_likeCount',
-                                              style: GoogleFonts.poppins(
-                                                fontWeight: FontWeight.w600,
-                                                color: theme.colorScheme.error
-                                                    .withOpacity(0.85),
-                                                fontSize: 14,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 16),
-                                    _miniStat(
-                                      icon: Icons.visibility_outlined,
-                                      count: post.views,
-                                      color: theme.colorScheme.primary,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            Text(
-                              post.title,
-                              style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 25,
-                                color: theme.colorScheme.onSurface,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Icon(Icons.location_on_rounded,
-                                    color: theme.colorScheme.primary, size: 20),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    post.location,
-                                    style: GoogleFonts.lato(
-                                        fontWeight: FontWeight.w600,
-                                        color: theme.colorScheme.primary,
-                                        fontSize: 15.5),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                            )
+                          : hasRoute
+                              ? ClipRRect(
+                                  borderRadius: const BorderRadius.only(
+                                    bottomLeft: Radius.circular(36),
+                                    bottomRight: Radius.circular(36),
+                                  ),
+                                  child: _RouteMapBackground(
+                                    dailyRoutes: post.dailyRoutes!,
+                                  ),
+                                )
+                              : Container(
+                                  color: Colors.grey.shade200,
+                                  child: Center(
+                                    child: Icon(Icons.image_not_supported,
+                                        size: 60, color: Colors.grey.shade400),
                                   ),
                                 ),
+                      // Kuvakarusellin indikaattorit
+                      if (hasImages && images.length > 1)
+                        Positioned(
+                          bottom: 18,
+                          left: 0,
+                          right: 0,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: List.generate(
+                              images.length,
+                              (i) => AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                margin:
+                                    const EdgeInsets.symmetric(horizontal: 4),
+                                width: _currentImage == i ? 22 : 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: _currentImage == i
+                                      ? theme.colorScheme.primary
+                                      : Colors.white.withOpacity(0.6),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      // Gradient overlay
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: Container(
+                            decoration: const BoxDecoration(
+                              borderRadius: BorderRadius.only(
+                                bottomLeft: Radius.circular(36),
+                                bottomRight: Radius.circular(36),
+                              ),
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.black54,
+                                  Colors.transparent,
+                                  Colors.transparent,
+                                  Colors.black38,
+                                ],
+                                stops: [0, 0.25, 0.7, 1],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Yläosan overlay: takaisin ja tykkäys
+                      Positioned(
+                        top: 36,
+                        left: 16,
+                        child: CircleAvatar(
+                          backgroundColor: Colors.black.withOpacity(0.45),
+                          child: IconButton(
+                            icon: const Icon(Icons.arrow_back,
+                                color: Colors.white),
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        top: 36,
+                        right: 16,
+                        child: GestureDetector(
+                          onTap: () => _toggleLike(post),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: _isLiked
+                                  ? theme.colorScheme.error.withOpacity(0.18)
+                                  : Colors.black.withOpacity(0.18),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _isLiked
+                                      ? Icons.favorite
+                                      : Icons.favorite_outline,
+                                  color: _isLiked
+                                      ? theme.colorScheme.error
+                                      : Colors.white,
+                                  size: 22,
+                                ),
+                                const SizedBox(width: 6),
                                 Text(
-                                  DateFormat('d MMM y').format(post.timestamp),
-                                  style: GoogleFonts.lato(
-                                    color: theme.colorScheme.onSurfaceVariant,
-                                    fontSize: 13,
+                                  '$_likeCount',
+                                  style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                    fontSize: 15,
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 18),
-                            _buildStatsBar(context, post),
-                            const SizedBox(height: 18),
-                            if (post.caption.isNotEmpty)
-                              Text(
-                                post.caption,
-                                style: GoogleFonts.lato(
-                                  fontSize: 16.5,
-                                  color: theme.colorScheme.onSurface,
-                                  height: 1.7,
-                                ),
-                              ),
-                            const SizedBox(height: 24),
-                            _buildRatingsSection(context, post),
-                            const SizedBox(height: 24),
-                          ],
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                },
-              ),
-              // Takaisin-nappi ja SHARE-nappi oikealle ylös
-              Positioned(
-                top: 36,
-                left: 16,
-                child: CircleAvatar(
-                  backgroundColor: Colors.black.withOpacity(0.45),
-                  child: IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
-                    onPressed: () => Navigator.of(context).pop(),
+                    ],
                   ),
                 ),
               ),
-              Positioned(
-                top: 36,
-                right: 16,
-                child: CircleAvatar(
-                  backgroundColor: Colors.black.withOpacity(0.45),
-                  child: IconButton(
-                    icon: const Icon(Icons.ios_share, color: Colors.white),
-                    onPressed: () {
-                      // TODO: Share logic
-                    },
+              // Sisältö
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Käyttäjäkortti
+                      Material(
+                        elevation: 4,
+                        borderRadius: BorderRadius.circular(22),
+                        color: theme.colorScheme.surface,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 18, vertical: 12),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(22),
+                            color: theme.colorScheme.surface,
+                          ),
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 26,
+                                backgroundColor:
+                                    theme.colorScheme.surfaceContainerHighest,
+                                backgroundImage: post.userAvatarUrl.isNotEmpty
+                                    ? NetworkImage(post.userAvatarUrl)
+                                    : null,
+                                child: post.userAvatarUrl.isEmpty
+                                    ? Icon(Icons.person,
+                                        color: theme.colorScheme.primary,
+                                        size: 26)
+                                    : null,
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text("@${post.username}",
+                                        style: GoogleFonts.poppins(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 17,
+                                            color:
+                                                theme.colorScheme.onSurface)),
+                                    Text(_getTimeAgo(post.timestamp),
+                                        style: GoogleFonts.lato(
+                                            fontSize: 12.5,
+                                            color: theme
+                                                .colorScheme.onSurfaceVariant)),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: Icon(Icons.ios_share,
+                                    color: theme.colorScheme.primary),
+                                onPressed: () {
+                                  // TODO: Share logic
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                      // Otsikko
+                      Text(
+                        post.title,
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 24,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // Sijainti ja päiväys
+                      Row(
+                        children: [
+                          Icon(Icons.location_on_rounded,
+                              color: theme.colorScheme.primary, size: 20),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              post.location,
+                              style: GoogleFonts.lato(
+                                  fontWeight: FontWeight.w600,
+                                  color: theme.colorScheme.primary,
+                                  fontSize: 15.5),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Text(
+                            DateFormat('d MMM y').format(post.timestamp),
+                            style: GoogleFonts.lato(
+                              color: theme.colorScheme.onSurfaceVariant,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      // Tilastot
+                      _buildStatsBar(context, post),
+                      const SizedBox(height: 18),
+                      // Kuvaus
+                      if (post.caption.isNotEmpty)
+                        Text(
+                          post.caption,
+                          style: GoogleFonts.lato(
+                            fontSize: 16.5,
+                            color: theme.colorScheme.onSurface,
+                            height: 1.7,
+                          ),
+                        ),
+                      const SizedBox(height: 24),
+                      // Arvostelut
+                      _buildRatingsSection(context, post),
+                      const SizedBox(height: 24),
+                      // Kommentit-nappi
+                      Center(
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: theme.colorScheme.primary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 22, vertical: 12),
+                            elevation: 0,
+                          ),
+                          icon: const Icon(Icons.mode_comment_outlined),
+                          label: Text("View Comments (${post.commentCount})",
+                              style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.w600)),
+                          onPressed: () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (context) => SizedBox(
+                                height:
+                                    MediaQuery.of(context).size.height * 0.7,
+                                child: CommentsBottomSheet(
+                                  postId: post.id,
+                                  currentUserId:
+                                      "CURRENT_USER_ID", // TODO: oikea id
+                                  currentUsername: post.username,
+                                  currentUserAvatarUrl: post.userAvatarUrl,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      // --- ROUTE MAP KORTTI ---
+                      if (hasRoute)
+                        Card(
+                          elevation: 4,
+                          margin: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(22)),
+                          child: Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: SizedBox(
+                              height: 200,
+                              width: double.infinity,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: _RouteMapBackground(
+                                  dailyRoutes: post.dailyRoutes!,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      if (!hasRoute)
+                        Center(
+                          child: Text(
+                            "No route data for this hike.",
+                            style: GoogleFonts.lato(
+                              color: theme.colorScheme.onSurfaceVariant,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 32),
+                      // Näytöt
+                      Center(
+                        child: _miniStat(
+                          icon: Icons.visibility_outlined,
+                          count: post.views,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
                   ),
                 ),
               ),
@@ -281,6 +479,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
     bool filled = false,
   }) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Icon(
           icon,
@@ -294,116 +493,6 @@ class _PostDetailPageState extends State<PostDetailPage> {
             fontWeight: FontWeight.w600,
             color: color.withOpacity(0.85),
             fontSize: 14,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildHeaderImage(BuildContext context, Post post) {
-    if (post.postImageUrl != null) {
-      return SizedBox(
-        height: MediaQuery.of(context).size.height * 0.42,
-        width: double.infinity,
-        child: Image.network(
-          post.postImageUrl!,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) =>
-              Container(color: Colors.grey.shade800),
-        ),
-      );
-    } else if (post.dailyRoutes != null && post.dailyRoutes!.isNotEmpty) {
-      final allPoints = post.dailyRoutes!.expand((r) => r.points).toList();
-      final bounds = LatLngBounds.fromPoints(allPoints);
-      return SizedBox(
-        height: MediaQuery.of(context).size.height * 0.42,
-        width: double.infinity,
-        child: FlutterMap(
-          options: MapOptions(
-            initialCameraFit: CameraFit.bounds(
-                bounds: bounds, padding: const EdgeInsets.all(40)),
-            interactionOptions:
-                const InteractionOptions(flags: InteractiveFlag.none),
-          ),
-          children: [
-            TileLayer(
-              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'com.example.treknoteflutter',
-            ),
-            PolylineLayer(
-              polylines: post.dailyRoutes!
-                  .map((route) => Polyline(
-                        points: route.points,
-                        color: Colors.deepOrange.withOpacity(0.85),
-                        strokeWidth: 5.0,
-                        borderColor: Colors.black.withOpacity(0.2),
-                        borderStrokeWidth: 1.5,
-                      ))
-                  .toList(),
-            ),
-          ],
-        ),
-      );
-    } else {
-      return Container(
-        height: MediaQuery.of(context).size.height * 0.42,
-        width: double.infinity,
-        color: Colors.grey.shade200,
-      );
-    }
-  }
-
-  Widget _buildUserCard(BuildContext context, Post post) {
-    final theme = Theme.of(context);
-    return Row(
-      children: [
-        CircleAvatar(
-          radius: 28,
-          backgroundColor: theme.colorScheme.surfaceContainerHighest,
-          backgroundImage: post.userAvatarUrl.isNotEmpty
-              ? NetworkImage(post.userAvatarUrl)
-              : null,
-          child: post.userAvatarUrl.isEmpty
-              ? Icon(Icons.person, color: theme.colorScheme.primary, size: 28)
-              : null,
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text("@${post.username}",
-                  style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 17,
-                      color: theme.colorScheme.onSurface)),
-              Text(
-                  "Published: ${DateFormat.yMMMd('en_US').format(post.timestamp)}",
-                  style: GoogleFonts.lato(
-                      fontSize: 12.5,
-                      color: theme.colorScheme.onSurfaceVariant)),
-            ],
-          ),
-        ),
-        SizedBox(
-          height: 36,
-          child: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: theme.colorScheme.primary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(22)),
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              minimumSize: const Size(0, 36),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            icon: const Icon(Icons.person_add_alt_1, size: 18),
-            label: const Text("Follow",
-                style: TextStyle(fontWeight: FontWeight.w600)),
-            onPressed: () {
-              // TODO: Follow logic
-            },
           ),
         ),
       ],
@@ -449,7 +538,6 @@ class _PostDetailPageState extends State<PostDetailPage> {
     );
   }
 
-  // Eye-candy ratings section
   Widget _buildRatingsSection(BuildContext context, Post post) {
     final theme = Theme.of(context);
 
@@ -571,6 +659,114 @@ class _PostDetailPageState extends State<PostDetailPage> {
           rating: post.ratings['weather'] ?? 0,
           color: Colors.blueAccent,
           hint: weatherHint(post.ratings['weather'] ?? 0),
+        ),
+      ],
+    );
+  }
+}
+
+// --- ROUTE MAP KOMPONENTTI ---
+class _RouteMapBackground extends StatelessWidget {
+  final List<dynamic> dailyRoutes;
+
+  const _RouteMapBackground({required this.dailyRoutes});
+
+  List<LatLng> _collectAllPoints() {
+    final List<LatLng> allPoints = [];
+    for (var dr in dailyRoutes) {
+      if (dr == null || dr.points == null) continue;
+      if (dr.points is List<LatLng>) {
+        allPoints.addAll(dr.points);
+      } else if (dr.points is List) {
+        for (var p in dr.points) {
+          if (p is LatLng) {
+            allPoints.add(p);
+          } else if (p is List && p.length == 2) {
+            allPoints.add(LatLng(p[0] as double, p[1] as double));
+          }
+        }
+      }
+    }
+    return allPoints;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final allPoints = _collectAllPoints();
+    if (allPoints.isEmpty) {
+      return Container(
+        color: Theme.of(context).colorScheme.surfaceContainer,
+        child: Center(
+          child: Icon(Icons.route, color: Colors.grey.shade400, size: 40),
+        ),
+      );
+    }
+
+    return FlutterMap(
+      options: MapOptions(
+        initialCameraFit: CameraFit.bounds(
+          bounds: LatLngBounds.fromPoints(allPoints),
+          padding: const EdgeInsets.all(30.0),
+          maxZoom: 15,
+          minZoom: 5,
+        ),
+        interactionOptions: const InteractionOptions(
+          flags: InteractiveFlag.none,
+        ),
+      ),
+      children: [
+        TileLayer(
+          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          userAgentPackageName: 'com.example.treknoteflutter',
+        ),
+        PolylineLayer<Object>(
+          polylines: dailyRoutes
+              .where((route) =>
+                  route != null &&
+                  route.points != null &&
+                  (route.points as List).isNotEmpty)
+              .map((route) => Polyline<Object>(
+                    points: List<LatLng>.from(route.points ?? []),
+                    color: Colors.deepOrange.withOpacity(0.85),
+                    strokeWidth: 5.0,
+                    borderColor: Colors.black.withOpacity(0.18),
+                    borderStrokeWidth: 1.3,
+                  ))
+              .toList(),
+        ),
+        MarkerLayer(
+          markers: [
+            if (allPoints.isNotEmpty)
+              Marker(
+                point: allPoints.first,
+                width: 24,
+                height: 24,
+                child: Icon(Icons.place,
+                    color: Colors.green.shade600,
+                    size: 22,
+                    shadows: [
+                      Shadow(
+                          color: Colors.black.withOpacity(0.7),
+                          blurRadius: 4,
+                          offset: Offset(0, 1))
+                    ]),
+              ),
+            if (allPoints.length > 1)
+              Marker(
+                point: allPoints.last,
+                width: 24,
+                height: 24,
+                child: Icon(Icons.flag_rounded,
+                    color: Colors.red.shade700,
+                    size: 22,
+                    shadows: [
+                      Shadow(
+                          color: Colors.black.withOpacity(0.7),
+                          blurRadius: 4,
+                          offset: Offset(0, 1))
+                    ]),
+              ),
+          ],
         ),
       ],
     );
