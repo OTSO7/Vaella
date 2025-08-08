@@ -39,6 +39,54 @@ class AuthProvider with ChangeNotifier {
 
   // --- KÄYTTÄJIEN JA SEURAAMISEN HALLINTA ---
 
+  // TÄRKEÄÄ: Jotta tämä haku toimisi, sinun on luotava Firestore-indeksi.
+  // Mene Firebase-konsoliin -> Firestore Database -> Indexes.
+  // Luo uusi indeksi:
+  // - Collection ID: users
+  // - Fields to index: username (Ascending)
+  Future<List<UserProfile>> searchUsersByUsername(String query) async {
+    if (!isLoggedIn || query.isEmpty) return [];
+    final currentUserId = _user!.uid;
+
+    try {
+      final querySnapshot = await _firestore
+          .collection('users')
+          .where('username', isGreaterThanOrEqualTo: query.toLowerCase())
+          .where('username',
+              isLessThan: query.toLowerCase() +
+                  '\uf8ff') // \uf8ff is a high Unicode character
+          .limit(15)
+          .get();
+
+      if (querySnapshot.docs.isEmpty) {
+        return [];
+      }
+
+      final List<UserProfile> results = [];
+      for (var doc in querySnapshot.docs) {
+        if (doc.id == currentUserId) continue; // Don't show self in results
+
+        final userProfile = UserProfile.fromFirestore(doc);
+
+        if (_userProfile?.followingIds.contains(userProfile.uid) ?? false) {
+          userProfile.relationToCurrentUser = UserRelation.following;
+        } else {
+          userProfile.relationToCurrentUser = UserRelation.notFollowing;
+        }
+        results.add(userProfile);
+      }
+      return results;
+    } catch (e) {
+      // This will print the error to the console, which is often a missing index warning.
+      debugPrint('--- FIRESTORE SEARCH ERROR ---');
+      debugPrint('Error searching users by username: $e');
+      debugPrint(
+          'This likely means you are missing a Firestore index for the "users" collection on the "username" field (Ascending).');
+      debugPrint('------------------------------');
+      return []; // Return an empty list on error to prevent the app from crashing.
+    }
+  }
+
   Future<UserProfile> fetchUserProfileById(String userId) async {
     try {
       final userDoc = await _firestore.collection('users').doc(userId).get();
@@ -47,7 +95,6 @@ class AuthProvider with ChangeNotifier {
       }
       UserProfile profile = UserProfile.fromFirestore(userDoc);
 
-      // Määritä suhde nykyiseen käyttäjään
       if (!isLoggedIn) {
         profile.relationToCurrentUser = UserRelation.unknown;
       } else if (userId == _user!.uid) {
@@ -61,7 +108,7 @@ class AuthProvider with ChangeNotifier {
       }
       return profile;
     } catch (e) {
-      print('Error fetching profile for $userId: $e');
+      debugPrint('Error fetching profile for $userId: $e');
       rethrow;
     }
   }
@@ -77,7 +124,6 @@ class AuthProvider with ChangeNotifier {
     try {
       await _firestore.runTransaction((transaction) async {
         if (isCurrentlyFollowing) {
-          // Unfollow
           transaction.update(currentUserRef, {
             'followingIds': FieldValue.arrayRemove([otherUserId])
           });
@@ -85,7 +131,6 @@ class AuthProvider with ChangeNotifier {
             'followerIds': FieldValue.arrayRemove([currentUserId])
           });
         } else {
-          // Follow
           transaction.update(currentUserRef, {
             'followingIds': FieldValue.arrayUnion([otherUserId])
           });
@@ -94,7 +139,6 @@ class AuthProvider with ChangeNotifier {
           });
         }
       });
-      // Päivitä paikallinen tila välittömästi
       if (_userProfile != null) {
         if (isCurrentlyFollowing) {
           _userProfile!.followingIds.remove(otherUserId);
@@ -104,7 +148,7 @@ class AuthProvider with ChangeNotifier {
         notifyListeners();
       }
     } catch (e) {
-      print("Error toggling follow status: $e");
+      debugPrint("Error toggling follow status: $e");
       rethrow;
     }
   }
@@ -128,7 +172,7 @@ class AuthProvider with ChangeNotifier {
         notifyListeners();
       }
     } catch (e) {
-      print('Error synchronizing post count: $e');
+      debugPrint('Error synchronizing post count: $e');
     }
   }
 
@@ -144,8 +188,9 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<void> handlePostDeletionSuccess() async {
-    if (_userProfile == null || !isLoggedIn || _userProfile!.postsCount <= 0)
+    if (_userProfile == null || !isLoggedIn || _userProfile!.postsCount <= 0) {
       return;
+    }
     await _firestore.collection('users').doc(_user!.uid).update({
       'postsCount': FieldValue.increment(-1),
     });
@@ -220,7 +265,7 @@ class AuthProvider with ChangeNotifier {
             .set(_userProfile!.toFirestore());
       }
     } catch (e) {
-      print('Error fetching user profile: $e');
+      debugPrint('Error fetching user profile: $e');
       _userProfile = null;
     } finally {
       notifyListeners();
@@ -246,7 +291,7 @@ class AuthProvider with ChangeNotifier {
           .doc(_user!.uid)
           .update(updatedProfile.toFirestore());
     } catch (e) {
-      print('Error updating user profile in Firestore: $e');
+      debugPrint('Error updating user profile in Firestore: $e');
     }
   }
 

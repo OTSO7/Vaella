@@ -540,7 +540,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  // --- KORJATTU HAKUPALKKI: Ongelmallinen Material-widget on poistettu ---
   Widget _buildSearchAndFilterBar(ThemeData theme) {
     bool isFilterActive = _currentSortOption != SortOption.newest;
     return Positioned(
@@ -548,11 +547,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       left: 15,
       right: 15,
       child: Container(
-        // Material-widget poistettu
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(25.0),
           boxShadow: [
-            // Varjostus lisätty suoraan tänne
             BoxShadow(
               color: Colors.black.withOpacity(0.2),
               blurRadius: 10,
@@ -585,6 +582,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                             EdgeInsets.symmetric(horizontal: 15, vertical: 14),
                       ),
                     ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.person_add_alt_1_outlined),
+                    onPressed: () => context.push('/find-users'),
+                    tooltip: 'Find Users',
                   ),
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 200),

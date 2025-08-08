@@ -24,6 +24,7 @@ import 'pages/packing_list_page.dart';
 import 'pages/route_planner_page.dart';
 import 'pages/post_detail_page.dart';
 import 'pages/profile_full_screen_map_page.dart';
+import 'pages/find_users_page.dart';
 
 import 'widgets/main_scaffold.dart';
 import 'widgets/user_hikes_map_section.dart';
@@ -60,6 +61,12 @@ class AppRouter extends StatelessWidget {
           name: 'register',
           parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) => const RegisterPage(),
+        ),
+        GoRoute(
+          path: '/find-users',
+          name: 'find-users',
+          parentNavigatorKey: _rootNavigatorKey,
+          builder: (context, state) => const FindUsersPage(),
         ),
         GoRoute(
           path: '/create-post',
@@ -173,6 +180,19 @@ class AppRouter extends StatelessWidget {
             final items = extra['items'] as List<MapDisplayItem>;
             return ProfileFullScreenMapPage(
                 userId: userId, initialItems: items);
+          },
+        ),
+        GoRoute(
+          path: '/profile/:userId',
+          name: 'userProfile',
+          parentNavigatorKey: _rootNavigatorKey,
+          builder: (context, state) {
+            final userId = state.pathParameters['userId'];
+            if (userId == null) {
+              return const Scaffold(
+                  body: Center(child: Text('User ID missing.')));
+            }
+            return ProfilePage(userId: userId);
           },
         ),
 
