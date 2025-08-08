@@ -1,4 +1,3 @@
-// lib/providers/auth_provider.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -46,7 +45,7 @@ class AuthProvider with ChangeNotifier {
       if (!userDoc.exists || userDoc.data() == null) {
         throw Exception('User not found.');
       }
-      UserProfile profile = UserProfile.fromFirestore(userDoc.data()!, userId);
+      UserProfile profile = UserProfile.fromFirestore(userDoc);
 
       // Määritä suhde nykyiseen käyttäjään
       if (!isLoggedIn) {
@@ -197,10 +196,10 @@ class AuthProvider with ChangeNotifier {
       return;
     }
     try {
-      DocumentSnapshot<Map<String, dynamic>> userDoc =
+      DocumentSnapshot userDoc =
           await _firestore.collection('users').doc(_user!.uid).get();
       if (userDoc.exists && userDoc.data() != null) {
-        _userProfile = UserProfile.fromFirestore(userDoc.data()!, _user!.uid);
+        _userProfile = UserProfile.fromFirestore(userDoc);
         await synchronizePostsCount();
       } else {
         _userProfile = UserProfile(
@@ -213,6 +212,7 @@ class AuthProvider with ChangeNotifier {
           level: 1,
           experience: 0,
           postsCount: 0,
+          hikeStats: HikeStats(),
         );
         await _firestore
             .collection('users')
@@ -312,6 +312,7 @@ class AuthProvider with ChangeNotifier {
           level: 1,
           experience: 0,
           postsCount: 0,
+          hikeStats: HikeStats(),
         );
         await _firestore
             .collection('users')

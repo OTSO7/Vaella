@@ -1,5 +1,3 @@
-// lib/app_router.dart
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -25,8 +23,10 @@ import 'pages/hike_plan_hub_page.dart';
 import 'pages/packing_list_page.dart';
 import 'pages/route_planner_page.dart';
 import 'pages/post_detail_page.dart';
+import 'pages/profile_full_screen_map_page.dart';
 
 import 'widgets/main_scaffold.dart';
+import 'widgets/user_hikes_map_section.dart';
 
 // Päänavigaattorin avain, jota käytetään näyttämään sivuja pohjanavigaation päällä.
 final _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
@@ -66,10 +66,6 @@ class AppRouter extends StatelessWidget {
           name: 'createPost',
           parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) {
-            // KORJATTU: Käsittelee 'extra'-parametrin dynaamisesti ja turvallisesti.
-            // Tämä reitti voidaan kutsua kahdella tavalla:
-            // 1. Pelkällä PostVisibility-oliolla (esim. etusivun FAB-napista).
-            // 2. Map-oliolla, joka sisältää sekä HikePlanin että PostVisibilityn (suoritetun vaelluksen jälkeen).
             PostVisibility visibility = PostVisibility.public;
             HikePlan? hikePlan;
 
@@ -109,7 +105,7 @@ class AppRouter extends StatelessWidget {
           },
         ),
         GoRoute(
-          path: '/hike-plan/:planId',
+          path: '/hike-plan-hub',
           name: 'hikePlanHub',
           parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) {
@@ -161,9 +157,26 @@ class AppRouter extends StatelessWidget {
             return PostDetailPage(postId: postId);
           },
         ),
+        GoRoute(
+          path: '/profile/map',
+          name: 'profileMapFullScreen',
+          parentNavigatorKey: _rootNavigatorKey,
+          builder: (context, state) {
+            final extra = state.extra as Map<String, dynamic>?;
+            if (extra == null ||
+                extra['userId'] == null ||
+                extra['items'] == null) {
+              return const Scaffold(
+                  body: Center(child: Text("Map data missing.")));
+            }
+            final userId = extra['userId'] as String;
+            final items = extra['items'] as List<MapDisplayItem>;
+            return ProfileFullScreenMapPage(
+                userId: userId, initialItems: items);
+          },
+        ),
 
         // --- Alaosan navigaatiopalkin sisältävät reitit (Shell Route) ---
-        // Tämä luo pohjanavigaation, jossa jokaisella välilehdellä on oma navigaatiohistoriansa.
         StatefulShellRoute.indexedStack(
           builder: (context, state, navigationShell) {
             return MainScaffoldWithBottomNav(navigationShell: navigationShell);
@@ -212,24 +225,18 @@ class AppRouter extends StatelessWidget {
           ],
         ),
       ],
-      // Uudelleenohjauslogiikka, joka perustuu käyttäjän kirjautumistilaan.
+      // Uudelleenohjauslogiikka
       redirect: (context, state) {
         final isLoggedIn = authProvider.isLoggedIn;
         final location = state.matchedLocation;
         final isAuthRoute = location == '/login' || location == '/register';
 
-        // Jos käyttäjä ei ole kirjautunut EIKÄ ole menossa kirjautumis- tai rekisteröintisivulle, ohjataan kirjautumiseen.
         if (!isLoggedIn && !isAuthRoute) return '/login';
-
-        // Jos käyttäjä ON kirjautunut ja yrittää mennä kirjautumis- tai rekisteröintisivulle, ohjataan etusivulle.
         if (isLoggedIn && isAuthRoute) return '/home';
-
-        // Muissa tapauksissa navigointi sallitaan.
         return null;
       },
     );
 
-    // Sovelluksen teema pysyy ennallaan.
     final themeData = ThemeData(
       brightness: Brightness.dark,
       scaffoldBackgroundColor: const Color(0xFF1A1A1A),
