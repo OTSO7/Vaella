@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:shimmer/shimmer.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'followers_following_list_page.dart';
 
 import '../providers/auth_provider.dart';
 import '../providers/follow_provider.dart';
@@ -22,7 +23,6 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage>
     with TickerProviderStateMixin {
   late TabController _tabController;
-  late Future<user_model.UserProfile> _profileFuture;
   late String _profileOwnerId;
 
   @override
@@ -31,15 +31,6 @@ class _ProfilePageState extends State<ProfilePage>
     _tabController = TabController(length: 3, vsync: this);
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     _profileOwnerId = widget.userId ?? authProvider.user?.uid ?? '';
-    _profileFuture = _fetchProfile();
-  }
-
-  Future<user_model.UserProfile> _fetchProfile() {
-    if (_profileOwnerId.isEmpty) {
-      return Future.error("User not found.");
-    }
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    return authProvider.fetchUserProfileById(_profileOwnerId);
   }
 
   @override
@@ -49,7 +40,6 @@ class _ProfilePageState extends State<ProfilePage>
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       setState(() {
         _profileOwnerId = widget.userId ?? authProvider.user?.uid ?? '';
-        _profileFuture = _fetchProfile();
       });
     }
   }
@@ -67,37 +57,29 @@ class _ProfilePageState extends State<ProfilePage>
     final bool isOwnProfile =
         widget.userId == null || widget.userId == authProvider.user?.uid;
 
-    final loggedInUserProfile = context.watch<AuthProvider>().userProfile;
-
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
-      body: FutureBuilder<user_model.UserProfile>(
-        future: _profileFuture,
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('users')
+            .doc(_profileOwnerId)
+            .snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting &&
+          if (snapshot.connectionState == ConnectionState.waiting ||
               !snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (snapshot.hasError || !snapshot.hasData) {
+          if (snapshot.hasError ||
+              !snapshot.hasData ||
+              snapshot.data == null ||
+              snapshot.data!.data() == null) {
             return _buildErrorOrLoginView(context, snapshot.error);
           }
 
-          user_model.UserProfile user = snapshot.data!;
-
-          if (!isOwnProfile && loggedInUserProfile != null) {
-            final isFollowing =
-                loggedInUserProfile.followingIds.contains(user.uid);
-            user.relationToCurrentUser = isFollowing
-                ? user_model.UserRelation.following
-                : user_model.UserRelation.notFollowing;
-          }
+          final user = user_model.UserProfile.fromFirestore(snapshot.data!);
 
           return RefreshIndicator(
-            onRefresh: () async {
-              setState(() {
-                _profileFuture = _fetchProfile();
-              });
-            },
+            onRefresh: () async {},
             child: NestedScrollView(
               headerSliverBuilder: (context, innerBoxIsScrolled) {
                 return [
@@ -153,7 +135,7 @@ class _ProfilePageState extends State<ProfilePage>
   }
 }
 
-// --- UUSI BANNERI ---
+// --- BANNERI ---
 class _ProfileBanner extends StatelessWidget {
   final user_model.UserProfile user;
   final bool isOwnProfile;
@@ -166,8 +148,45 @@ class _ProfileBanner extends StatelessWidget {
       expandedHeight: 160.0,
       floating: false,
       pinned: true,
-      leading: !isOwnProfile
+      leading: isOwnProfile
           ? Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Material(
+                color: Colors.black.withOpacity(0.3),
+                shape: const CircleBorder(),
+                clipBehavior: Clip.antiAlias,
+                child: IconButton(
+                  tooltip: 'Log out',
+                  icon: const Icon(Icons.logout, color: Colors.white),
+                  onPressed: () async {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text("Log out"),
+                        content:
+                            const Text("Are you sure you want to log out?"),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            child: const Text("Cancel"),
+                          ),
+                          ElevatedButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            child: const Text("Log out"),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed == true) {
+                      await Provider.of<AuthProvider>(context, listen: false)
+                          .logout();
+                      if (context.mounted) context.go('/login');
+                    }
+                  },
+                ),
+              ),
+            )
+          : Padding(
               padding: const EdgeInsets.all(8.0),
               child: Material(
                 color: Colors.black.withOpacity(0.3),
@@ -179,8 +198,7 @@ class _ProfileBanner extends StatelessWidget {
                   onPressed: () => context.pop(),
                 ),
               ),
-            )
-          : null,
+            ),
       automaticallyImplyLeading: false,
       backgroundColor: theme.colorScheme.surface,
       flexibleSpace: FlexibleSpaceBar(
@@ -209,11 +227,20 @@ class _ProfileBanner extends StatelessWidget {
   }
 }
 
-// --- UUSI PROFIILIN YLÄOSA ---
+// --- PROFIILIN YLÄOSA ---
 class _ProfileHeader extends StatelessWidget {
   final user_model.UserProfile user;
   final bool isOwnProfile;
   const _ProfileHeader({required this.user, required this.isOwnProfile});
+
+  String getLevelTitle(int level) {
+    if (level >= 50) return "Legendary Hiker";
+    if (level >= 40) return "Trail Master";
+    if (level >= 30) return "Summit Seeker";
+    if (level >= 20) return "Pathfinder";
+    if (level >= 10) return "Explorer";
+    return "Rookie";
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -262,8 +289,45 @@ class _ProfileHeader extends StatelessWidget {
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
-          const SizedBox(height: 12),
-          _LevelDisplayChip(level: user.level),
+          const SizedBox(height: 10),
+          // --- VANHAN TYYLIN LEVEL DISPLAY ---
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(top: 2, bottom: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withOpacity(0.13),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.emoji_events_rounded,
+                    color: theme.colorScheme.primary, size: 22),
+                const SizedBox(width: 10),
+                Text(
+                  'Level ${user.level}',
+                  style: GoogleFonts.poppins(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    getLevelTitle(user.level),
+                    style: GoogleFonts.lato(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                      letterSpacing: 0.2,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
           if (user.bio != null && user.bio!.isNotEmpty) ...[
             const SizedBox(height: 12),
             Text(
@@ -288,7 +352,10 @@ class _ProfileHeader extends StatelessWidget {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                 ),
-                onPressed: () => context.push('/profile/edit', extra: user),
+                onPressed: () => context.push(
+                  '/profile/edit',
+                  extra: user,
+                ),
               ),
             )
           else
@@ -296,160 +363,6 @@ class _ProfileHeader extends StatelessWidget {
               width: double.infinity,
               child: _FollowButton(user: user),
             ),
-        ],
-      ),
-    );
-  }
-}
-
-// --- UUSI LEVEL-NÄYTTÖ (STATEFUL ANIMAATIOLLA) ---
-class _LevelDisplayChip extends StatefulWidget {
-  final int level;
-  const _LevelDisplayChip({required this.level});
-
-  String _getLevelTitle(int currentLevel) {
-    if (currentLevel >= 100) return "Legendary Hiker";
-    if (currentLevel >= 90) return "Supreme Voyager";
-    if (currentLevel >= 80) return "Master Explorer";
-    if (currentLevel >= 70) return "Grand Adventurer";
-    if (currentLevel >= 60) return "Elite Navigator";
-    if (currentLevel >= 50) return "Mountain Virtuoso";
-    if (currentLevel >= 40) return "Seasoned Trekker";
-    if (currentLevel >= 30) return "Peak Seeker";
-    if (currentLevel >= 20) return "Highland Strider";
-    if (currentLevel >= 15) return "Pathfinder";
-    if (currentLevel >= 10) return "Explorer";
-    if (currentLevel >= 5) return "Novice";
-    return "Newbie";
-  }
-
-  @override
-  State<_LevelDisplayChip> createState() => _LevelDisplayChipState();
-}
-
-class _LevelDisplayChipState extends State<_LevelDisplayChip>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _shineAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 4),
-    )..repeat();
-
-    _shineAnimation = Tween<double>(begin: -1.5, end: 1.5).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: Curves.easeInOut,
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final levelTitle = widget._getLevelTitle(widget.level);
-    final isLegendary = widget.level >= 100;
-    final isEpic = widget.level >= 50 && !isLegendary;
-
-    Color chipColor = theme.colorScheme.surfaceVariant;
-    Color textColor = theme.colorScheme.onSurfaceVariant;
-    Color iconColor = Colors.amber;
-
-    if (isLegendary) {
-      chipColor = const Color(0xFF3C2F0E);
-      textColor = const Color(0xFFFFF8E1);
-      iconColor = const Color(0xFFFFD700);
-    } else if (isEpic) {
-      chipColor = const Color(0xFF311B92);
-      textColor = const Color(0xFFEDE7F6);
-      iconColor = const Color(0xFFB39DDB);
-    }
-
-    Widget titleWidget;
-
-    if (isLegendary) {
-      titleWidget = AnimatedBuilder(
-        animation: _shineAnimation,
-        builder: (context, child) {
-          return ShaderMask(
-            shaderCallback: (bounds) {
-              return LinearGradient(
-                transform:
-                    GradientRotation(_shineAnimation.value * 3.14159), // Pi
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  textColor,
-                  Colors.white,
-                  textColor,
-                ],
-                stops: const [0.4, 0.5, 0.6],
-              ).createShader(bounds);
-            },
-            blendMode: BlendMode.srcIn,
-            child: child,
-          );
-        },
-        child: Text(
-          levelTitle,
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w600,
-            fontSize: 12,
-            color: textColor,
-            letterSpacing: 0.3,
-            shadows: [
-              Shadow(
-                blurRadius: 12.0,
-                color: Colors.amber.withOpacity(0.5),
-                offset: const Offset(0, 0),
-              ),
-            ],
-          ),
-        ),
-      );
-    } else {
-      titleWidget = Text(
-        levelTitle,
-        style: GoogleFonts.poppins(
-          fontWeight: FontWeight.w600,
-          fontSize: 12,
-          color: textColor,
-          letterSpacing: 0.3,
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: chipColor,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          titleWidget,
-          const SizedBox(width: 8),
-          Icon(Icons.stars, color: iconColor, size: 16),
-          const SizedBox(width: 4),
-          Text(
-            'Level ${widget.level}',
-            style: GoogleFonts.lato(
-              fontWeight: FontWeight.bold,
-              fontSize: 12,
-              color: textColor,
-            ),
-          ),
         ],
       ),
     );
@@ -553,41 +466,80 @@ class _FollowButton extends StatelessWidget {
   }
 }
 
+// --- RESPONSIIIVINEN, ISOMPI KLIKKIALUE ---
 class _ProfileStatsBar extends StatelessWidget {
   final user_model.UserProfile user;
   const _ProfileStatsBar({required this.user});
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
-        _StatItem(
-          label: "Posts",
-          value: user.postsCount,
+        // Posts (ei klikattava)
+        Expanded(
+          child: _StatItem(
+            label: "Posts",
+            value: user.postsCount,
+            onTap: null,
+          ),
         ),
-        _StatItem(
-          label: "Followers",
-          value: user.followerIds.length,
+        // Followers (laaja klikattava alue)
+        Expanded(
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () {
+                context.push('/profile/${user.uid}/followers');
+              },
+              child: _StatItem(
+                label: "Followers",
+                value: user.followerIds.length,
+                onTap: () {
+                  context.push('/profile/${user.uid}/followers');
+                },
+              ),
+            ),
+          ),
         ),
-        _StatItem(
-          label: "Following",
-          value: user.followingIds.length,
+        // Following (laaja klikattava alue)
+        Expanded(
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () {
+                context.push('/profile/${user.uid}/following');
+              },
+              child: _StatItem(
+                label: "Following",
+                value: user.followingIds.length,
+                onTap: () {
+                  context.push('/profile/${user.uid}/following');
+                },
+              ),
+            ),
+          ),
         ),
       ],
     );
   }
 }
 
+// --- StatItem, jossa koko alue klikattava jos onTap annettu ---
 class _StatItem extends StatelessWidget {
   final String label;
   final int value;
-  const _StatItem({required this.label, required this.value});
+  final VoidCallback? onTap;
+  const _StatItem({required this.label, required this.value, this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
+    final content = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
@@ -606,6 +558,20 @@ class _StatItem extends StatelessWidget {
           ),
         ),
       ],
+    );
+    if (onTap != null) {
+      return InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          child: content,
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: content,
     );
   }
 }

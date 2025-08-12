@@ -133,7 +133,7 @@ class _LoginPageState extends State<LoginPage>
                           Hero(
                             tag: 'appLogo',
                             child: Image.asset(
-                              'assets/images/white2.png',
+                              'assets/images/white3.png',
                               height: screenHeight * 0.25,
                               fit: BoxFit.contain,
                             ),
