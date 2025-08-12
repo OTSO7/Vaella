@@ -11,6 +11,9 @@ class AuthProvider with ChangeNotifier {
   UserProfile? _userProfile;
   bool _isLoading = false;
 
+  // Lisätty: notifier vain kirjautumistilan muutoksille
+  final ValueNotifier<bool> authStateNotifier = ValueNotifier(false);
+
   fb_auth.User? get user => _user;
   UserProfile? get userProfile => _userProfile;
   bool get isLoggedIn => _user != null;
@@ -34,16 +37,15 @@ class AuthProvider with ChangeNotifier {
     } else {
       _userProfile = null;
     }
+    // Ilmoita vain kirjautumistilan muutoksesta
+    authStateNotifier.value = _user != null;
     _setLoading(false);
   }
 
   // --- KÄYTTÄJIEN JA SEURAAMISEN HALLINTA ---
 
-  // TÄRKEÄÄ: Jotta tämä haku toimisi, sinun on luotava Firestore-indeksi.
-  // Mene Firebase-konsoliin -> Firestore Database -> Indexes.
-  // Luo uusi indeksi:
-  // - Collection ID: users
-  // - Fields to index: username (Ascending)
+  List<String> get currentFollowingIds => _userProfile?.followingIds ?? [];
+
   Future<List<UserProfile>> searchUsersByUsername(String query) async {
     if (!isLoggedIn || query.isEmpty) return [];
     final currentUserId = _user!.uid;
@@ -77,13 +79,12 @@ class AuthProvider with ChangeNotifier {
       }
       return results;
     } catch (e) {
-      // This will print the error to the console, which is often a missing index warning.
       debugPrint('--- FIRESTORE SEARCH ERROR ---');
       debugPrint('Error searching users by username: $e');
       debugPrint(
           'This likely means you are missing a Firestore index for the "users" collection on the "username" field (Ascending).');
       debugPrint('------------------------------');
-      return []; // Return an empty list on error to prevent the app from crashing.
+      return [];
     }
   }
 
@@ -145,7 +146,7 @@ class AuthProvider with ChangeNotifier {
         } else {
           _userProfile!.followingIds.add(otherUserId);
         }
-        notifyListeners();
+        // notifyListeners(); // POISTA TÄMÄ
       }
     } catch (e) {
       debugPrint("Error toggling follow status: $e");

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../models/user_profile_model.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/user_search_list_tile.dart';
+import '../providers/follow_provider.dart';
 
 class FindUsersPage extends StatefulWidget {
   const FindUsersPage({super.key});
@@ -106,10 +107,6 @@ class _FindUsersPageState extends State<FindUsersPage> {
                         icon: const Icon(Icons.clear),
                         onPressed: () {
                           _searchController.clear();
-                          setState(() {
-                            _searchResults = [];
-                            _lastSearchQuery = '';
-                          });
                         },
                       )
                     : null,
@@ -134,8 +131,6 @@ class _FindUsersPageState extends State<FindUsersPage> {
     }
 
     if (_searchResults.isNotEmpty) {
-      // KORJATTU KOHTA: Käytetään LayoutBuilderia antamaan ListView.builderille
-      // selkeät rajoitteet, mikä voi estää "child.hasSize" -virheet.
       return LayoutBuilder(
         builder: (context, constraints) {
           return ListView.builder(
@@ -143,9 +138,22 @@ class _FindUsersPageState extends State<FindUsersPage> {
             itemCount: _searchResults.length,
             itemBuilder: (context, index) {
               final user = _searchResults[index];
-              return UserSearchListTile(
-                userProfile: user,
-                onTap: () => context.push('/profile/${user.uid}'),
+              return Consumer<FollowProvider>(
+                builder: (context, followProvider, child) {
+                  final isFollowing = followProvider.isFollowing(user.uid);
+                  return UserSearchListTile(
+                    userProfile: user,
+                    isFollowing: isFollowing,
+                    onFollowToggle: (follow) async {
+                      final authProvider =
+                          Provider.of<AuthProvider>(context, listen: false);
+                      await authProvider.toggleFollowStatus(
+                          user.uid, isFollowing);
+                      followProvider.setFollowing(user.uid, !isFollowing);
+                    },
+                    onTap: () => context.push('/profile/${user.uid}'),
+                  );
+                },
               );
             },
           );
@@ -153,7 +161,6 @@ class _FindUsersPageState extends State<FindUsersPage> {
       );
     }
 
-    // Näytetään ohje, kun hakukenttä on tyhjä
     return _buildInitialPrompt(theme);
   }
 

@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
 
 import '../providers/auth_provider.dart';
+import '../providers/follow_provider.dart';
 import '../models/user_profile_model.dart' as user_model;
 import '../widgets/user_posts_section.dart';
 import '../widgets/user_hikes_map_section.dart';
@@ -498,133 +499,24 @@ class _ProfilePopupMenu extends StatelessWidget {
   }
 }
 
-class _FollowButton extends StatefulWidget {
+// --- FollowButton, FollowProviderilla ---
+class _FollowButton extends StatelessWidget {
   final user_model.UserProfile user;
   const _FollowButton({required this.user});
 
   @override
-  State<_FollowButton> createState() => _FollowButtonState();
-}
-
-class _FollowButtonState extends State<_FollowButton> {
-  bool _isLoading = false;
-  late bool _isFollowing;
-
-  @override
-  void initState() {
-    super.initState();
-    _isFollowing =
-        widget.user.relationToCurrentUser == user_model.UserRelation.following;
-  }
-
-  @override
-  void didUpdateWidget(covariant _FollowButton oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.user.relationToCurrentUser !=
-        oldWidget.user.relationToCurrentUser) {
-      setState(() {
-        _isFollowing = widget.user.relationToCurrentUser ==
-            user_model.UserRelation.following;
-      });
-    }
-  }
-
-  Future<void> _handleFollowToggle() async {
-    if (_isLoading) return;
-
-    if (_isFollowing) {
-      // Unfollow action with confirmation
-      final confirm = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text('Unfollow @${widget.user.username}?'),
-          content: const Text(
-              'Their posts will no longer appear in your feed. Are you sure?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: TextButton.styleFrom(
-                  foregroundColor: Theme.of(context).colorScheme.error),
-              child: const Text('Unfollow'),
-            ),
-          ],
-        ),
-      );
-
-      if (confirm != true) return;
-    }
-
-    setState(() => _isLoading = true);
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-
-    try {
-      await authProvider.toggleFollowStatus(widget.user.uid, _isFollowing);
-      // The UI will update via didUpdateWidget when the provider notifies listeners
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    return Consumer<FollowProvider>(
+      builder: (context, followProvider, child) {
+        final isFollowing = followProvider.isFollowing(user.uid);
+        final theme = Theme.of(context);
 
-    Widget buttonChild;
-    if (_isLoading) {
-      buttonChild = const SizedBox(
-        width: 20,
-        height: 20,
-        child: CircularProgressIndicator(strokeWidth: 2.0, color: Colors.white),
-      );
-    } else if (_isFollowing) {
-      buttonChild = const Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.check, size: 18),
-          SizedBox(width: 6),
-          Text("Following")
-        ],
-      );
-    } else {
-      buttonChild = const Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.person_add_alt_1_outlined, size: 18),
-          SizedBox(width: 6),
-          Text("Follow")
-        ],
-      );
-    }
-
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 300),
-      transitionBuilder: (child, animation) {
-        return ScaleTransition(
-          scale: animation,
-          child: FadeTransition(opacity: animation, child: child),
-        );
-      },
-      child: SizedBox(
-        key: ValueKey<bool>(_isFollowing), // Change key to trigger animation
-        width: double.infinity,
-        child: ElevatedButton(
+        return ElevatedButton(
           style: ElevatedButton.styleFrom(
-            backgroundColor: _isFollowing
+            backgroundColor: isFollowing
                 ? theme.colorScheme.surfaceVariant
                 : theme.colorScheme.primary,
-            foregroundColor: _isFollowing
+            foregroundColor: isFollowing
                 ? theme.colorScheme.onSurfaceVariant
                 : theme.colorScheme.onPrimary,
             shape:
@@ -632,10 +524,31 @@ class _FollowButtonState extends State<_FollowButton> {
             elevation: 0,
             padding: const EdgeInsets.symmetric(vertical: 12),
           ),
-          onPressed: _handleFollowToggle,
-          child: buttonChild,
-        ),
-      ),
+          onPressed: () async {
+            final authProvider =
+                Provider.of<AuthProvider>(context, listen: false);
+            await authProvider.toggleFollowStatus(user.uid, isFollowing);
+            followProvider.setFollowing(user.uid, !isFollowing);
+          },
+          child: isFollowing
+              ? const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.check, size: 18),
+                    SizedBox(width: 6),
+                    Text("Following")
+                  ],
+                )
+              : const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.person_add_alt_1_outlined, size: 18),
+                    SizedBox(width: 6),
+                    Text("Follow")
+                  ],
+                ),
+        );
+      },
     );
   }
 }

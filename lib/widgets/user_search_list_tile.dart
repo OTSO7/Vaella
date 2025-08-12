@@ -2,15 +2,18 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/user_profile_model.dart';
-import 'modern/interactive_follow_button.dart';
 
 class UserSearchListTile extends StatelessWidget {
   final UserProfile userProfile;
+  final bool isFollowing;
+  final Future<void> Function(bool follow) onFollowToggle;
   final VoidCallback onTap;
 
   const UserSearchListTile({
     super.key,
     required this.userProfile,
+    required this.isFollowing,
+    required this.onFollowToggle,
     required this.onTap,
   });
 
@@ -18,7 +21,6 @@ class UserSearchListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // Turvalliset arvot tekstikentille
     final safeDisplayName = (userProfile.displayName.isNotEmpty)
         ? userProfile.displayName
         : 'Unknown';
@@ -93,9 +95,37 @@ class UserSearchListTile extends StatelessWidget {
                       minWidth: 80,
                       maxWidth: 120,
                     ),
-                    child: InteractiveFollowButton(
-                      targetUserId: userProfile.uid,
-                      initialRelation: userProfile.relationToCurrentUser,
+                    child: ElevatedButton(
+                      onPressed: () => onFollowToggle(!isFollowing),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isFollowing
+                            ? theme.colorScheme.surfaceVariant
+                            : theme.colorScheme.primary,
+                        foregroundColor: isFollowing
+                            ? theme.colorScheme.onSurfaceVariant
+                            : theme.colorScheme.onPrimary,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: isFollowing
+                          ? const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.check, size: 18),
+                                SizedBox(width: 6),
+                                Text("Following")
+                              ],
+                            )
+                          : const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.person_add_alt_1_outlined, size: 18),
+                                SizedBox(width: 6),
+                                Text("Follow")
+                              ],
+                            ),
                     ),
                   ),
                 ],

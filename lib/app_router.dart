@@ -37,19 +37,15 @@ class AppRouter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context, listen: true);
-
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final router = GoRouter(
       navigatorKey: _rootNavigatorKey,
       initialLocation: '/home',
       debugLogDiagnostics: true,
-      // Kuuntelee AuthProviderin muutoksia ja suorittaa uudelleenohjauksen tarvittaessa.
-      refreshListenable: authProvider,
+      // KÄYTÄ TÄTÄ: vain kirjautumistilan muutokset triggeröivät redirectin
+      refreshListenable: authProvider.authStateNotifier,
       routes: [
         // --- Alaosan navigaatiopalkin ulkopuoliset reitit ---
-        // Nämä reitit käyttävät _rootNavigatorKey-avainta, jotta ne avautuvat
-        // koko näytön kokoisina päänavigaation päälle.
-
         GoRoute(
           path: '/login',
           name: 'login',
