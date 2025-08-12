@@ -29,7 +29,9 @@ import 'pages/followers_following_list_page.dart';
 import 'widgets/main_scaffold.dart';
 import 'widgets/user_hikes_map_section.dart';
 
+// Navigator-avaimet juuri- ja shell-navigaattoreille
 final _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
+final _shellNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shell');
 
 class AppRouter extends StatelessWidget {
   const AppRouter({super.key});
@@ -44,6 +46,49 @@ class AppRouter extends StatelessWidget {
       debugLogDiagnostics: true,
       refreshListenable: authProvider.authStateNotifier,
       routes: [
+        // --- SHELL-REITTI ALANAVIGAATIOPALKILLE ---
+        // Tämä reitti hallitsee pääsivuja, joilla on yhteinen navigaatiopalkki.
+        StatefulShellRoute.indexedStack(
+          builder: (context, state, navigationShell) {
+            return MainScaffoldWithBottomNav(navigationShell: navigationShell);
+          },
+          branches: <StatefulShellBranch>[
+            // 1. Home-haara
+            StatefulShellBranch(
+              navigatorKey: _shellNavigatorKey, // Yhteinen avain haaroille
+              routes: <RouteBase>[
+                GoRoute(
+                  path: '/home',
+                  builder: (context, state) => const HomePage(),
+                ),
+              ],
+            ),
+            // 2. Notes-haara
+            StatefulShellBranch(
+              routes: <RouteBase>[
+                GoRoute(
+                  path: '/notes',
+                  builder: (context, state) => const NotesPage(),
+                ),
+              ],
+            ),
+            // 3. Profile-haara
+            StatefulShellBranch(
+              routes: <RouteBase>[
+                GoRoute(
+                  path: '/profile',
+                  // Näyttää oletuksena oman profiilin
+                  builder: (context, state) => const ProfilePage(),
+                ),
+              ],
+            ),
+          ],
+        ),
+
+        // --- YLÄTASON REitit (AVAUTUVAT SHELLIN PÄÄLLE) ---
+        // Nämä reitit avautuvat koko näytölle, peittäen alareunan navigaatiopalkin.
+
+        // Auth-reitit
         GoRoute(
           path: '/login',
           builder: (context, state) => const LoginPage(),
@@ -52,12 +97,81 @@ class AppRouter extends StatelessWidget {
           path: '/register',
           builder: (context, state) => const RegisterPage(),
         ),
+
+        // Profiiliin liittyvät sivut
+        GoRoute(
+          path: '/profile/edit',
+          parentNavigatorKey: _rootNavigatorKey,
+          builder: (context, state) {
+            final userProfile = state.extra as UserProfile?;
+            if (userProfile == null) {
+              return const Scaffold(
+                  body: Center(child: Text("Profile data missing.")));
+            }
+            return EditProfilePage(initialProfile: userProfile);
+          },
+        ),
+        GoRoute(
+          path: '/profile/map',
+          parentNavigatorKey: _rootNavigatorKey,
+          builder: (context, state) {
+            final extra = state.extra as Map<String, dynamic>?;
+            if (extra == null ||
+                extra['userId'] == null ||
+                extra['items'] == null) {
+              return const Scaffold(
+                  body: Center(child: Text("Map data missing.")));
+            }
+            final userId = extra['userId'] as String;
+            final items = extra['items'] as List<MapDisplayItem>;
+            return ProfileFullScreenMapPage(
+                userId: userId, initialItems: items);
+          },
+        ),
+        GoRoute(
+          path: '/profile/:userId', // Muiden käyttäjien profiilit
+          parentNavigatorKey: _rootNavigatorKey,
+          builder: (context, state) {
+            final userId = state.pathParameters['userId'];
+            if (userId == null) {
+              return const Scaffold(
+                  body: Center(child: Text('User ID missing.')));
+            }
+            return ProfilePage(userId: userId);
+          },
+        ),
+        GoRoute(
+          path: '/profile/:userId/followers',
+          parentNavigatorKey: _rootNavigatorKey,
+          builder: (context, state) {
+            final userId = state.pathParameters['userId']!;
+            return FollowersFollowingListPage(
+              userId: userId,
+              listType: UserListType.followers,
+            );
+          },
+        ),
+        GoRoute(
+          path: '/profile/:userId/following',
+          parentNavigatorKey: _rootNavigatorKey,
+          builder: (context, state) {
+            final userId = state.pathParameters['userId']!;
+            return FollowersFollowingListPage(
+              userId: userId,
+              listType: UserListType.following,
+            );
+          },
+        ),
+
+        // Muut toiminnalliset sivut
         GoRoute(
           path: '/find-users',
+          parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) => const FindUsersPage(),
         ),
         GoRoute(
           path: '/create-post',
+          parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) {
             PostVisibility visibility = PostVisibility.public;
             HikePlan? hikePlan;
@@ -78,11 +192,20 @@ class AppRouter extends StatelessWidget {
           },
         ),
         GoRoute(
-          path: '/route-planner',
-          builder: (context, state) => const RoutePlannerPage(),
+          path: '/post/:id',
+          parentNavigatorKey: _rootNavigatorKey,
+          builder: (context, state) {
+            final postId = state.pathParameters['id'];
+            if (postId == null) {
+              return const Scaffold(
+                  body: Center(child: Text('Post ID missing.')));
+            }
+            return PostDetailPage(postId: postId);
+          },
         ),
         GoRoute(
           path: '/users/:userId/posts',
+          parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) {
             final userId = state.pathParameters['userId'];
             final username = state.extra as String?;
@@ -93,8 +216,16 @@ class AppRouter extends StatelessWidget {
             return UserPostsListPage(userId: userId, username: username);
           },
         ),
+
+        // Reittisuunnitteluun liittyvät sivut
+        GoRoute(
+          path: '/route-planner',
+          parentNavigatorKey: _rootNavigatorKey,
+          builder: (context, state) => const RoutePlannerPage(),
+        ),
         GoRoute(
           path: '/hike-plan-hub',
+          parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) {
             final plan = state.extra as HikePlan?;
             if (plan == null) {
@@ -106,6 +237,7 @@ class AppRouter extends StatelessWidget {
         ),
         GoRoute(
           path: '/hike-plan/:planId/weather',
+          parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) {
             final hikePlan = state.extra as HikePlan?;
             if (hikePlan == null) {
@@ -117,6 +249,7 @@ class AppRouter extends StatelessWidget {
         ),
         GoRoute(
           path: '/hike-plan/:planId/packingList',
+          parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) {
             final planId = state.pathParameters['planId']!;
             final hikePlan = state.extra as HikePlan?;
@@ -127,117 +260,8 @@ class AppRouter extends StatelessWidget {
             return PackingListPage(planId: planId, initialPlan: hikePlan);
           },
         ),
-        GoRoute(
-          path: '/post/:id',
-          builder: (context, state) {
-            final postId = state.pathParameters['id'];
-            if (postId == null) {
-              return const Scaffold(
-                  body: Center(child: Text('Post ID missing.')));
-            }
-            return PostDetailPage(postId: postId);
-          },
-        ),
-        GoRoute(
-          path: '/profile/map',
-          builder: (context, state) {
-            final extra = state.extra as Map<String, dynamic>?;
-            if (extra == null ||
-                extra['userId'] == null ||
-                extra['items'] == null) {
-              return const Scaffold(
-                  body: Center(child: Text("Map data missing.")));
-            }
-            final userId = extra['userId'] as String;
-            final items = extra['items'] as List<MapDisplayItem>;
-            return ProfileFullScreenMapPage(
-                userId: userId, initialItems: items);
-          },
-        ),
-        GoRoute(
-          path: '/profile/:userId',
-          builder: (context, state) {
-            final userId = state.pathParameters['userId'];
-            if (userId == null) {
-              return const Scaffold(
-                  body: Center(child: Text('User ID missing.')));
-            }
-            return ProfilePage(userId: userId);
-          },
-        ),
-        GoRoute(
-          path: '/profile/:userId/followers',
-          builder: (context, state) {
-            final userId = state.pathParameters['userId']!;
-            return FollowersFollowingListPage(
-              userId: userId,
-              listType: UserListType.followers,
-            );
-          },
-        ),
-        GoRoute(
-          path: '/profile/:userId/following',
-          builder: (context, state) {
-            final userId = state.pathParameters['userId']!;
-            return FollowersFollowingListPage(
-              userId: userId,
-              listType: UserListType.following,
-            );
-          },
-        ),
-        // --- Alaosan navigaatiopalkin sisältävät reitit (Shell Route) ---
-        StatefulShellRoute.indexedStack(
-          builder: (context, state, navigationShell) {
-            return MainScaffoldWithBottomNav(navigationShell: navigationShell);
-          },
-          branches: <StatefulShellBranch>[
-            StatefulShellBranch(routes: <RouteBase>[
-              GoRoute(
-                path: '/home',
-                builder: (context, state) => const HomePage(),
-              ),
-            ]),
-            StatefulShellBranch(routes: <RouteBase>[
-              GoRoute(
-                path: '/notes',
-                builder: (context, state) => const NotesPage(),
-              ),
-            ]),
-            StatefulShellBranch(routes: <RouteBase>[
-              GoRoute(
-                path: '/profile',
-                builder: (context, state) {
-                  // Jos extra-parametri on annettu, välitä se ProfilePage:lle
-                  final userProfile = state.extra as UserProfile?;
-                  if (userProfile != null) {
-                    return ProfilePage(userId: userProfile.uid);
-                  }
-                  return const ProfilePage();
-                },
-                routes: [
-                  GoRoute(
-                    path: 'edit',
-                    builder: (context, state) {
-                      // Korjaus: Jos extra puuttuu, haetaan AuthProviderista nykyinen profiili
-                      UserProfile? userProfile = state.extra as UserProfile?;
-                      if (userProfile == null) {
-                        final authProvider =
-                            Provider.of<AuthProvider>(context, listen: false);
-                        userProfile = authProvider.userProfile;
-                      }
-                      if (userProfile == null) {
-                        return const Scaffold(
-                            body: Center(child: Text("Profile data missing.")));
-                      }
-                      return EditProfilePage(initialProfile: userProfile);
-                    },
-                  ),
-                ],
-              ),
-            ]),
-          ],
-        ),
       ],
+      // --- UUDELLEENOHJAUSLOGIIKKA ---
       redirect: (context, state) {
         final isLoggedIn = authProvider.isLoggedIn;
         final location = state.matchedLocation;
@@ -249,6 +273,7 @@ class AppRouter extends StatelessWidget {
       },
     );
 
+    // --- TEEMA-ASETUKSET ---
     final themeData = ThemeData(
       brightness: Brightness.dark,
       scaffoldBackgroundColor: const Color(0xFF1A1A1A),
@@ -322,6 +347,7 @@ class AppRouter extends StatelessWidget {
       ),
     );
 
+    // --- MATERIALAPP.ROUTER ---
     return MaterialApp.router(
       title: 'Vaella',
       debugShowCheckedModeBanner: false,

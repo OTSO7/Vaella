@@ -171,7 +171,7 @@ class _LoginPageState extends State<LoginPage>
                               return null;
                             },
                           ),
-                          SizedBox(height: screenHeight * 0.025),
+                          SizedBox(height: screenHeight * 0.04),
                           TextFormField(
                             controller: _passwordController,
                             style: const TextStyle(color: Colors.white),

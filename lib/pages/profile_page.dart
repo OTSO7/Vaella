@@ -57,6 +57,10 @@ class _ProfilePageState extends State<ProfilePage>
     final bool isOwnProfile =
         widget.userId == null || widget.userId == authProvider.user?.uid;
 
+    if (_profileOwnerId.isEmpty) {
+      return _buildErrorOrLoginView(context, "User not found.");
+    }
+
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
       body: StreamBuilder<DocumentSnapshot>(
@@ -65,21 +69,23 @@ class _ProfilePageState extends State<ProfilePage>
             .doc(_profileOwnerId)
             .snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting ||
+          if (snapshot.connectionState == ConnectionState.waiting &&
               !snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError ||
               !snapshot.hasData ||
               snapshot.data == null ||
-              snapshot.data!.data() == null) {
+              !snapshot.data!.exists) {
             return _buildErrorOrLoginView(context, snapshot.error);
           }
 
           final user = user_model.UserProfile.fromFirestore(snapshot.data!);
 
           return RefreshIndicator(
-            onRefresh: () async {},
+            onRefresh: () async {
+              // The stream will automatically refresh, but you can add other logic here
+            },
             child: NestedScrollView(
               headerSliverBuilder: (context, innerBoxIsScrolled) {
                 return [
@@ -119,7 +125,7 @@ class _ProfilePageState extends State<ProfilePage>
         children: [
           Text(
             error != null
-                ? "Error: ${error.toString()}"
+                ? "Error loading profile: ${error.toString()}"
                 : "Please log in to see your profile.",
             style: GoogleFonts.lato(),
             textAlign: TextAlign.center,
@@ -233,15 +239,6 @@ class _ProfileHeader extends StatelessWidget {
   final bool isOwnProfile;
   const _ProfileHeader({required this.user, required this.isOwnProfile});
 
-  String getLevelTitle(int level) {
-    if (level >= 50) return "Legendary Hiker";
-    if (level >= 40) return "Trail Master";
-    if (level >= 30) return "Summit Seeker";
-    if (level >= 20) return "Pathfinder";
-    if (level >= 10) return "Explorer";
-    return "Rookie";
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -289,45 +286,9 @@ class _ProfileHeader extends StatelessWidget {
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
-          const SizedBox(height: 10),
-          // --- VANHAN TYYLIN LEVEL DISPLAY ---
-          Container(
-            width: double.infinity,
-            margin: const EdgeInsets.only(top: 2, bottom: 2),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withOpacity(0.13),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.emoji_events_rounded,
-                    color: theme.colorScheme.primary, size: 22),
-                const SizedBox(width: 10),
-                Text(
-                  'Level ${user.level}',
-                  style: GoogleFonts.poppins(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Text(
-                    getLevelTitle(user.level),
-                    style: GoogleFonts.lato(
-                      color: theme.colorScheme.primary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                      letterSpacing: 0.2,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          const SizedBox(height: 12),
+          // --- UUSI LEVEL DISPLAY ---
+          _LevelDisplayChip(level: user.level),
           if (user.bio != null && user.bio!.isNotEmpty) ...[
             const SizedBox(height: 12),
             Text(
@@ -363,6 +324,160 @@ class _ProfileHeader extends StatelessWidget {
               width: double.infinity,
               child: _FollowButton(user: user),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+// --- UUSI LEVEL-NÄYTTÖ (STATEFUL ANIMAATIOLLA) ---
+class _LevelDisplayChip extends StatefulWidget {
+  final int level;
+  const _LevelDisplayChip({required this.level});
+
+  String _getLevelTitle(int currentLevel) {
+    if (currentLevel >= 100) return "Legendary Hiker";
+    if (currentLevel >= 90) return "Supreme Voyager";
+    if (currentLevel >= 80) return "Master Explorer";
+    if (currentLevel >= 70) return "Grand Adventurer";
+    if (currentLevel >= 60) return "Elite Navigator";
+    if (currentLevel >= 50) return "Mountain Virtuoso";
+    if (currentLevel >= 40) return "Seasoned Trekker";
+    if (currentLevel >= 30) return "Peak Seeker";
+    if (currentLevel >= 20) return "Highland Strider";
+    if (currentLevel >= 15) return "Pathfinder";
+    if (currentLevel >= 10) return "Explorer";
+    if (currentLevel >= 5) return "Novice";
+    return "Newbie";
+  }
+
+  @override
+  State<_LevelDisplayChip> createState() => _LevelDisplayChipState();
+}
+
+class _LevelDisplayChipState extends State<_LevelDisplayChip>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _shineAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat();
+
+    _shineAnimation = Tween<double>(begin: -1.5, end: 1.5).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeInOut,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final levelTitle = widget._getLevelTitle(widget.level);
+    final isLegendary = widget.level >= 100;
+    final isEpic = widget.level >= 50 && !isLegendary;
+
+    Color chipColor = theme.colorScheme.surfaceVariant;
+    Color textColor = theme.colorScheme.onSurfaceVariant;
+    Color iconColor = Colors.amber;
+
+    if (isLegendary) {
+      chipColor = const Color(0xFF3C2F0E);
+      textColor = const Color(0xFFFFF8E1);
+      iconColor = const Color(0xFFFFD700);
+    } else if (isEpic) {
+      chipColor = const Color(0xFF311B92);
+      textColor = const Color(0xFFEDE7F6);
+      iconColor = const Color(0xFFB39DDB);
+    }
+
+    Widget titleWidget;
+
+    if (isLegendary) {
+      titleWidget = AnimatedBuilder(
+        animation: _shineAnimation,
+        builder: (context, child) {
+          return ShaderMask(
+            shaderCallback: (bounds) {
+              return LinearGradient(
+                transform:
+                    GradientRotation(_shineAnimation.value * 3.14159), // Pi
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  textColor,
+                  Colors.white,
+                  textColor,
+                ],
+                stops: const [0.4, 0.5, 0.6],
+              ).createShader(bounds);
+            },
+            blendMode: BlendMode.srcIn,
+            child: child,
+          );
+        },
+        child: Text(
+          levelTitle,
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+            color: textColor,
+            letterSpacing: 0.3,
+            shadows: [
+              Shadow(
+                blurRadius: 12.0,
+                color: Colors.amber.withOpacity(0.5),
+                offset: const Offset(0, 0),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      titleWidget = Text(
+        levelTitle,
+        style: GoogleFonts.poppins(
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
+          color: textColor,
+          letterSpacing: 0.3,
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: chipColor,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          titleWidget,
+          const SizedBox(width: 8),
+          Icon(Icons.stars, color: iconColor, size: 16),
+          const SizedBox(width: 4),
+          Text(
+            'Level ${widget.level}',
+            style: GoogleFonts.lato(
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+              color: textColor,
+            ),
+          ),
         ],
       ),
     );
@@ -473,8 +588,6 @@ class _ProfileStatsBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
@@ -488,40 +601,22 @@ class _ProfileStatsBar extends StatelessWidget {
         ),
         // Followers (laaja klikattava alue)
         Expanded(
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () {
-                context.push('/profile/${user.uid}/followers');
-              },
-              child: _StatItem(
-                label: "Followers",
-                value: user.followerIds.length,
-                onTap: () {
-                  context.push('/profile/${user.uid}/followers');
-                },
-              ),
-            ),
+          child: _StatItem(
+            label: "Followers",
+            value: user.followerIds.length,
+            onTap: () {
+              context.push('/profile/${user.uid}/followers');
+            },
           ),
         ),
         // Following (laaja klikattava alue)
         Expanded(
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () {
-                context.push('/profile/${user.uid}/following');
-              },
-              child: _StatItem(
-                label: "Following",
-                value: user.followingIds.length,
-                onTap: () {
-                  context.push('/profile/${user.uid}/following');
-                },
-              ),
-            ),
+          child: _StatItem(
+            label: "Following",
+            value: user.followingIds.length,
+            onTap: () {
+              context.push('/profile/${user.uid}/following');
+            },
           ),
         ),
       ],
@@ -560,12 +655,15 @@ class _StatItem extends StatelessWidget {
       ],
     );
     if (onTap != null) {
-      return InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8.0),
-          child: content,
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: content,
+          ),
         ),
       );
     }

@@ -106,7 +106,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       Hero(
                         tag: 'appLogo',
                         child: Image.asset(
-                          'assets/images/white2.png',
+                          'assets/images/white3.png',
                           height: screenHeight * 0.2,
                           fit: BoxFit.contain,
                         ),
@@ -117,7 +117,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         textAlign: TextAlign.center,
                         style: textTheme.headlineLarge?.copyWith(
                           color: Colors.white,
-                          fontSize: 38,
+                          fontSize: 30,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 1.5,
                           shadows: [
