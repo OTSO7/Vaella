@@ -158,7 +158,6 @@ class _ProfileBanner extends StatelessWidget {
           ? Padding(
               padding: const EdgeInsets.all(8.0),
               child: Material(
-                color: Colors.black.withOpacity(0.3),
                 shape: const CircleBorder(),
                 clipBehavior: Clip.antiAlias,
                 child: IconButton(

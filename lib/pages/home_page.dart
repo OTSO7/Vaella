@@ -513,25 +513,30 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       top: _isNotificationVisible ? searchBarHeight : searchBarHeight - 50,
       left: 15,
       right: 15,
-      child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 300),
-        opacity: _isNotificationVisible ? 1.0 : 0.0,
-        child: Material(
-          elevation: 4.0,
-          borderRadius:
-              const BorderRadius.vertical(bottom: Radius.circular(16)),
-          color: Colors.transparent,
-          child: ClipRRect(
+      child: IgnorePointer(
+        ignoring:
+            !_isNotificationVisible, // Avainkohta: Estää kosketukset, kun palkki ei ole näkyvissä
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 300),
+          opacity: _isNotificationVisible ? 1.0 : 0.0,
+          child: Material(
+            elevation: 4.0,
             borderRadius:
                 const BorderRadius.vertical(bottom: Radius.circular(16)),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              color: color,
-              child: Text(
-                _notificationMessage,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                    color: Colors.white, fontWeight: FontWeight.w500),
+            color: Colors.transparent,
+            child: ClipRRect(
+              borderRadius:
+                  const BorderRadius.vertical(bottom: Radius.circular(16)),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                color: color,
+                child: Text(
+                  _notificationMessage,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                      color: Colors.white, fontWeight: FontWeight.w500),
+                ),
               ),
             ),
           ),
@@ -546,72 +551,64 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       top: MediaQuery.of(context).padding.top + 15,
       left: 15,
       right: 15,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(25.0),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 10,
-              spreadRadius: 1,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(25.0),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 8.0, sigmaY: 8.0),
+          child: Container(
+            height: 56, // Asetetaan kiinteä korkeus
+            decoration: BoxDecoration(
+              color: theme.cardColor.withOpacity(0.6),
+              border: Border.all(color: Colors.white.withOpacity(0.2)),
+              borderRadius: BorderRadius.circular(25.0),
             ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(25.0),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 8.0, sigmaY: 8.0),
-            child: Container(
-              decoration: BoxDecoration(
-                color: theme.cardColor.withOpacity(0.6),
-                border: Border.all(color: Colors.white.withOpacity(0.2)),
-              ),
-              child: Row(
-                children: [
-                  const Padding(
-                      padding: EdgeInsets.only(left: 15.0),
-                      child: Icon(Icons.search)),
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      focusNode: _searchFocusNode,
-                      decoration: const InputDecoration(
-                        hintText: "Search trips or places...",
-                        border: InputBorder.none,
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 15, vertical: 14),
-                      ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(left: 15.0),
+                  child: Icon(Icons.search),
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    focusNode: _searchFocusNode,
+                    decoration: const InputDecoration(
+                      hintText: "Search trips or places...",
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.only(
+                          left: 15, right: 15, bottom: 2), // Säädetty padding
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.person_add_alt_1_outlined),
-                    onPressed: () => context.push('/find-users'),
-                    tooltip: 'Find Users',
-                  ),
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 200),
-                    child: _isLoading
-                        ? const Padding(
-                            padding: EdgeInsets.all(12.0),
-                            child: SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2.5)),
-                          )
-                        : IconButton(
-                            key: const ValueKey('filter_button'),
-                            icon: Icon(
-                              Icons.filter_list_rounded,
-                              color: isFilterActive
-                                  ? theme.colorScheme.secondary
-                                  : null,
-                            ),
-                            onPressed: _showFilterSheet,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.person_add_alt_1_outlined),
+                  onPressed: () => context.push('/find-users'),
+                  tooltip: 'Find Users',
+                ),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: _isLoading
+                      ? const Padding(
+                          padding: EdgeInsets.all(12.0),
+                          child: SizedBox(
+                              width: 24,
+                              height: 24,
+                              child:
+                                  CircularProgressIndicator(strokeWidth: 2.5)),
+                        )
+                      : IconButton(
+                          key: const ValueKey('filter_button'),
+                          icon: Icon(
+                            Icons.filter_list_rounded,
+                            color: isFilterActive
+                                ? theme.colorScheme.secondary
+                                : null,
                           ),
-                  ),
-                ],
-              ),
+                          onPressed: _showFilterSheet,
+                        ),
+                ),
+              ],
             ),
           ),
         ),
