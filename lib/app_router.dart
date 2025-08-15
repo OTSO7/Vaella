@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'providers/auth_provider.dart';
+import 'providers/route_planner_provider.dart';
 import 'models/post_model.dart';
 import 'models/user_profile_model.dart';
 import 'models/hike_plan_model.dart';
@@ -25,6 +26,7 @@ import 'pages/post_detail_page.dart';
 import 'pages/profile_full_screen_map_page.dart';
 import 'pages/find_users_page.dart';
 import 'pages/followers_following_list_page.dart';
+// import 'pages/meal_planner_page.dart'; // POISTETTU VÄLIAIKAISESTI
 
 import 'widgets/main_scaffold.dart';
 import 'widgets/user_hikes_map_section.dart';
@@ -191,6 +193,7 @@ class AppRouter extends StatelessWidget {
             );
           },
         ),
+
         GoRoute(
           path: '/post/:id',
           parentNavigatorKey: _rootNavigatorKey,
@@ -237,6 +240,7 @@ class AppRouter extends StatelessWidget {
         ),
         GoRoute(
           path: '/hike-plan/:planId/weather',
+          name: 'weatherPage',
           parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) {
             final hikePlan = state.extra as HikePlan?;
@@ -249,6 +253,7 @@ class AppRouter extends StatelessWidget {
         ),
         GoRoute(
           path: '/hike-plan/:planId/packingList',
+          name: 'packingListPage',
           parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) {
             final planId = state.pathParameters['planId']!;
@@ -260,6 +265,27 @@ class AppRouter extends StatelessWidget {
             return PackingListPage(planId: planId, initialPlan: hikePlan);
           },
         ),
+        // POISTETTU VÄLIAIKAISESTI: Uusi reitti ateriasuunnitelmalle
+        /*
+        GoRoute(
+          path: '/hike-plan/:planId/meal-planner',
+          name: 'mealPlannerPage',
+          parentNavigatorKey: _rootNavigatorKey,
+          builder: (context, state) {
+            // Ateriasuunnitelma käyttää RoutePlannerProvideria, joten
+            // varmistetaan, että se on alustettu.
+            final provider = context.read<RoutePlannerProvider>();
+            if (provider.plan.id != state.pathParameters['planId']) {
+              // Jos providerissa on väärä suunnitelma, näytä virhe.
+              // Oikea tapa olisi ladata suunnitelma tässä, mutta
+              // nykyisellä logiikalla se ladataan Hub-sivulla.
+              return const Scaffold(
+                  body: Center(child: Text('Meal plan data mismatch.')));
+            }
+            return const MealPlannerPage();
+          },
+        ),
+        */
       ],
       // --- UUDELLEENOHJAUSLOGIIKKA ---
       redirect: (context, state) {

@@ -496,15 +496,26 @@ class _HikePlanHubPageState extends State<HikePlanHubPage> {
           onTap: () => GoRouter.of(context).pushNamed('packingListPage',
               pathParameters: {'planId': _currentPlan.id}, extra: _currentPlan),
         ),
+        // KORJATTU: Meal Plan -nappi otettu käyttöön
         _dashboardTile(
           icon: Icons.restaurant_menu_outlined,
           color: Colors.purple.shade400,
           title: "Meal Plan",
-          subtitle: "Coming soon!",
-          onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                  content: Text("Meal Plan feature is under development."))),
-          enabled: false,
+          subtitle: "Foods & nutrition",
+          onTap: () {
+            // Käytetään samaa logiikkaa kuin reittisuunnittelussa
+            context.read<RoutePlannerProvider>().loadPlan(_currentPlan);
+            context.pushNamed('mealPlannerPage',
+                pathParameters: {'planId': _currentPlan.id}).then((_) {
+              // Päivitetään tila palatessa, jos muutoksia on tehty
+              if (mounted) {
+                setState(() {
+                  _currentPlan = context.read<RoutePlannerProvider>().plan;
+                });
+              }
+            });
+          },
+          enabled: true,
         ),
       ],
     );
