@@ -11,6 +11,7 @@ import '../models/user_profile_model.dart' as user_model;
 import '../widgets/user_posts_section.dart';
 import '../widgets/user_hikes_map_section.dart';
 import '../widgets/modern/stats_and_achievements_section.dart';
+import '../widgets/modern/experience_bar.dart';
 
 class ProfilePage extends StatefulWidget {
   final String? userId;
@@ -250,17 +251,20 @@ class _ProfileHeader extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              CircleAvatar(
-                radius: 42,
-                backgroundColor: theme.dividerColor,
+              _LegendaryAura(
+                enabled: user.level >= 100,
                 child: CircleAvatar(
-                  radius: 40,
-                  backgroundColor: theme.colorScheme.surfaceVariant,
-                  backgroundImage:
-                      (user.photoURL != null && user.photoURL!.isNotEmpty)
-                          ? NetworkImage(user.photoURL!)
-                          : const AssetImage('assets/images/default_avatar.png')
-                              as ImageProvider,
+                  radius: 42,
+                  backgroundColor: theme.dividerColor,
+                  child: CircleAvatar(
+                    radius: 40,
+                    backgroundColor: theme.colorScheme.surfaceVariant,
+                    backgroundImage:
+                        (user.photoURL != null && user.photoURL!.isNotEmpty)
+                            ? NetworkImage(user.photoURL!)
+                            : const AssetImage('assets/images/default_avatar.png')
+                                as ImageProvider,
+                  ),
                 ),
               ),
               const SizedBox(width: 16),
@@ -286,8 +290,10 @@ class _ProfileHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          // --- UUSI LEVEL DISPLAY ---
+          // --- UUSI LEVEL DISPLAY + PROGRESS ---
           _LevelDisplayChip(level: user.level),
+          const SizedBox(height: 10),
+          ExperienceBar(userProfile: user),
           if (user.bio != null && user.bio!.isNotEmpty) ...[
             const SizedBox(height: 12),
             Text(
@@ -479,6 +485,90 @@ class _LevelDisplayChipState extends State<_LevelDisplayChip>
           ),
         ],
       ),
+    );
+  }
+}
+
+// --- Legendary title aura animation around avatar (2025 flair) ---
+class _LegendaryAura extends StatefulWidget {
+  final Widget child;
+  final bool enabled;
+  const _LegendaryAura({required this.child, required this.enabled});
+
+  @override
+  State<_LegendaryAura> createState() => _LegendaryAuraState();
+}
+
+class _LegendaryAuraState extends State<_LegendaryAura>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scale;
+  late Animation<double> _opacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    )..repeat(reverse: true);
+
+    _scale = Tween<double>(begin: 0.95, end: 1.10).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+    _opacity = Tween<double>(begin: 0.30, end: 0.75).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _LegendaryAura oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.enabled != widget.enabled) {
+      if (widget.enabled) {
+        _controller.repeat(reverse: true);
+      } else {
+        _controller.stop();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.enabled) return widget.child;
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) {
+            return Transform.scale(
+              scale: _scale.value,
+              child: Container(
+                width: 94,
+                height: 94,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      const Color(0xFFFFD700).withOpacity(_opacity.value),
+                      const Color(0x00FFD700),
+                    ],
+                    stops: const [0.0, 1.0],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        widget.child,
+      ],
     );
   }
 }

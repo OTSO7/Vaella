@@ -9,6 +9,7 @@ import 'star_rating_display.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'comments_bottom_sheet.dart';
+import 'user_avatar.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -190,18 +191,13 @@ class _PostCardState extends State<PostCard> {
                       GestureDetector(
                         onTap: () =>
                             context.push('/profile/${widget.post.userId}'),
-                        child: CircleAvatar(
+                        child: UserAvatar(
+                          userId: widget.post.userId,
                           radius: 22,
+                          initialUrl: widget.post.userAvatarUrl,
                           backgroundColor:
                               theme.colorScheme.surfaceContainerHighest,
-                          backgroundImage: widget.post.userAvatarUrl.isNotEmpty
-                              ? CachedNetworkImageProvider(
-                                  widget.post.userAvatarUrl)
-                              : null,
-                          child: widget.post.userAvatarUrl.isEmpty
-                              ? Icon(Icons.person,
-                                  color: theme.colorScheme.primary, size: 22)
-                              : null,
+                          placeholderColor: theme.colorScheme.primary,
                         ),
                       ),
                       const SizedBox(width: 10),

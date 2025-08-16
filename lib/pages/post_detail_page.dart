@@ -7,6 +7,9 @@ import 'package:latlong2/latlong.dart';
 import '../models/post_model.dart';
 import '../widgets/star_rating_display.dart';
 import '../widgets/comments_bottom_sheet.dart';
+import '../widgets/user_avatar.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
 
 class PostDetailPage extends StatefulWidget {
   final String postId;
@@ -36,8 +39,9 @@ class _PostDetailPageState extends State<PostDetailPage> {
     if (!doc.exists) throw Exception("Post not found");
     final post = Post.fromFirestore(doc);
     _likeCount = post.likes.length;
-    _isLiked = post.likes
-        .contains("CURRENT_USER_ID"); // TODO: Replace with real user id
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final uid = auth.user?.uid;
+    _isLiked = uid != null && post.likes.contains(uid);
     FirebaseFirestore.instance
         .collection('posts')
         .doc(widget.postId)
@@ -46,7 +50,9 @@ class _PostDetailPageState extends State<PostDetailPage> {
   }
 
   Future<void> _toggleLike(Post post) async {
-    final userId = "CURRENT_USER_ID"; // TODO: Replace with real user id
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final userId = auth.user?.uid;
+    if (userId == null) return;
     final postRef =
         FirebaseFirestore.instance.collection('posts').doc(widget.postId);
 
@@ -284,18 +290,13 @@ class _PostDetailPageState extends State<PostDetailPage> {
                           ),
                           child: Row(
                             children: [
-                              CircleAvatar(
+                              UserAvatar(
+                                userId: post.userId,
                                 radius: 26,
-                                backgroundColor:
-                                    theme.colorScheme.surfaceContainerHighest,
-                                backgroundImage: post.userAvatarUrl.isNotEmpty
-                                    ? NetworkImage(post.userAvatarUrl)
-                                    : null,
-                                child: post.userAvatarUrl.isEmpty
-                                    ? Icon(Icons.person,
-                                        color: theme.colorScheme.primary,
-                                        size: 26)
-                                    : null,
+                                initialUrl: post.userAvatarUrl,
+                                backgroundColor: theme
+                                    .colorScheme.surfaceContainerHighest,
+                                placeholderColor: theme.colorScheme.primary,
                               ),
                               const SizedBox(width: 14),
                               Expanded(
@@ -409,10 +410,9 @@ class _PostDetailPageState extends State<PostDetailPage> {
                                     MediaQuery.of(context).size.height * 0.7,
                                 child: CommentsBottomSheet(
                                   postId: post.id,
-                                  currentUserId:
-                                      "CURRENT_USER_ID", // TODO: oikea id
-                                  currentUsername: post.username,
-                                  currentUserAvatarUrl: post.userAvatarUrl,
+                                  currentUserId: Provider.of<AuthProvider>(context, listen: false).user?.uid ?? '',
+                                  currentUsername: Provider.of<AuthProvider>(context, listen: false).userProfile?.username ?? post.username,
+                                  currentUserAvatarUrl: Provider.of<AuthProvider>(context, listen: false).userProfile?.photoURL ?? post.userAvatarUrl,
                                 ),
                               ),
                             );

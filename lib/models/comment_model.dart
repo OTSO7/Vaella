@@ -8,7 +8,8 @@ class Comment {
   final String userAvatarUrl;
   final String text;
   final DateTime timestamp;
-  final List<Map<String, dynamic>> reactions; // <-- uusi kenttä
+  final List<String> likes; // users who liked this comment
+  final int likesCount;
 
   Comment({
     required this.id,
@@ -18,7 +19,8 @@ class Comment {
     required this.userAvatarUrl,
     required this.text,
     required this.timestamp,
-    this.reactions = const [],
+    this.likes = const [],
+    this.likesCount = 0,
   });
 
   factory Comment.fromFirestore(DocumentSnapshot doc) {
@@ -31,10 +33,10 @@ class Comment {
       userAvatarUrl: data['userAvatarUrl'] ?? '',
       text: data['text'],
       timestamp: (data['timestamp'] as Timestamp).toDate(),
-      reactions: (data['reactions'] as List<dynamic>?)
-              ?.map((e) => Map<String, dynamic>.from(e))
-              .toList() ??
-          [],
+      likes: List<String>.from(data['likes'] ?? []),
+      likesCount: (data['likesCount'] is int)
+          ? data['likesCount'] as int
+          : (data['likes'] is List ? (data['likes'] as List).length : 0),
     );
   }
 
@@ -46,7 +48,8 @@ class Comment {
       'userAvatarUrl': userAvatarUrl,
       'text': text,
       'timestamp': Timestamp.fromDate(timestamp),
-      'reactions': reactions,
+      'likes': likes,
+      'likesCount': likesCount,
     };
   }
 }

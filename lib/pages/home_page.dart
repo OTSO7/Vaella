@@ -16,6 +16,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../providers/auth_provider.dart';
 import '../models/post_model.dart';
 import '../widgets/post_card.dart';
+import '../widgets/user_avatar.dart';
 import '../widgets/select_visibility_modal.dart';
 import '../widgets/star_rating_display.dart';
 import '../models/daily_route_model.dart';
@@ -401,14 +402,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     final post = posts[index];
                     return ListTile(
                       contentPadding: EdgeInsets.zero,
-                      leading: CircleAvatar(
+                      leading: UserAvatar(
+                        userId: post.userId,
                         radius: 24,
-                        backgroundImage: post.userAvatarUrl.isNotEmpty
-                            ? NetworkImage(post.userAvatarUrl)
-                            : null,
-                        child: post.userAvatarUrl.isEmpty
-                            ? const Icon(Icons.person, size: 24)
-                            : null,
+                        initialUrl: post.userAvatarUrl,
                       ),
                       title: Text(post.title,
                           style:
@@ -814,14 +811,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         : theme.colorScheme.primary,
                     width: isSelected ? 3 : 2),
               ),
-              child: CircleAvatar(
+              child: UserAvatar(
+                userId: post.userId,
                 radius: 16,
-                backgroundImage: post.userAvatarUrl.isNotEmpty
-                    ? NetworkImage(post.userAvatarUrl)
-                    : null,
-                child: post.userAvatarUrl.isEmpty
-                    ? const Icon(Icons.person, size: 18)
-                    : null,
+                initialUrl: post.userAvatarUrl,
               ),
             ),
             ClipPath(
@@ -912,11 +905,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                             ])),
                     const SizedBox(height: 8),
                     Row(children: [
-                      CircleAvatar(
+                      UserAvatar(
+                        userId: post.userId,
                         radius: 12,
-                        backgroundImage: post.userAvatarUrl.isNotEmpty
-                            ? NetworkImage(post.userAvatarUrl)
-                            : null,
+                        initialUrl: post.userAvatarUrl,
                       ),
                       const SizedBox(width: 8),
                       Text(
