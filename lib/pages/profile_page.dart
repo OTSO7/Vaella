@@ -15,7 +15,8 @@ import '../widgets/modern/experience_bar.dart';
 
 class ProfilePage extends StatefulWidget {
   final String? userId;
-  const ProfilePage({super.key, this.userId});
+  final bool forceBack;
+  const ProfilePage({super.key, this.userId, this.forceBack = false});
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -90,7 +91,7 @@ class _ProfilePageState extends State<ProfilePage>
             child: NestedScrollView(
               headerSliverBuilder: (context, innerBoxIsScrolled) {
                 return [
-                  _ProfileBanner(user: user, isOwnProfile: isOwnProfile),
+                  _ProfileBanner(user: user, isOwnProfile: isOwnProfile, forceBack: widget.forceBack),
                   SliverToBoxAdapter(
                     child:
                         _ProfileHeader(user: user, isOwnProfile: isOwnProfile),
@@ -146,7 +147,8 @@ class _ProfilePageState extends State<ProfilePage>
 class _ProfileBanner extends StatelessWidget {
   final user_model.UserProfile user;
   final bool isOwnProfile;
-  const _ProfileBanner({required this.user, required this.isOwnProfile});
+  final bool forceBack;
+  const _ProfileBanner({required this.user, required this.isOwnProfile, this.forceBack = false});
 
   @override
   Widget build(BuildContext context) {
@@ -155,43 +157,8 @@ class _ProfileBanner extends StatelessWidget {
       expandedHeight: 160.0,
       floating: false,
       pinned: true,
-      leading: isOwnProfile
-          ? Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Material(
-                shape: const CircleBorder(),
-                clipBehavior: Clip.antiAlias,
-                child: IconButton(
-                  tooltip: 'Log out',
-                  icon: const Icon(Icons.logout, color: Colors.white),
-                  onPressed: () async {
-                    final confirmed = await showDialog<bool>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text("Log out"),
-                        content:
-                            const Text("Are you sure you want to log out?"),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(false),
-                            child: const Text("Cancel"),
-                          ),
-                          ElevatedButton(
-                            onPressed: () => Navigator.of(context).pop(true),
-                            child: const Text("Log out"),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (confirmed == true) {
-                      await Provider.of<AuthProvider>(context, listen: false)
-                          .logout();
-                      if (context.mounted) context.go('/login');
-                    }
-                  },
-                ),
-              ),
-            )
+      leading: (isOwnProfile && !forceBack)
+          ? null
           : Padding(
               padding: const EdgeInsets.all(8.0),
               child: Material(
@@ -583,8 +550,7 @@ class _SettingsButton extends StatelessWidget {
       child: IconButton(
         icon: const Icon(Icons.settings_outlined, color: Colors.white),
         onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Settings page coming soon!")));
+          context.push('/settings');
         },
       ),
     );

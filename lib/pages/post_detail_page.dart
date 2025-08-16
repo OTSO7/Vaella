@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:go_router/go_router.dart';
 import '../models/post_model.dart';
 import '../widgets/star_rating_display.dart';
 import '../widgets/comments_bottom_sheet.dart';
@@ -85,6 +86,11 @@ class _PostDetailPageState extends State<PostDetailPage> {
     if (diff.inHours >= 1) return '${diff.inHours}h ago';
     if (diff.inMinutes >= 1) return '${diff.inMinutes}m ago';
     return 'Just now';
+  }
+
+  void _goToUserProfile(String userId) {
+    // Force the opened profile page to display a back button even if it's the current user's profile
+    context.push('/profile/$userId', extra: {'forceBack': true});
   }
 
   @override
@@ -228,40 +234,13 @@ class _PostDetailPageState extends State<PostDetailPage> {
                       Positioned(
                         top: 36,
                         right: 16,
-                        child: GestureDetector(
-                          onTap: () => _toggleLike(post),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: _isLiked
-                                  ? theme.colorScheme.error.withOpacity(0.18)
-                                  : Colors.black.withOpacity(0.18),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  _isLiked
-                                      ? Icons.favorite
-                                      : Icons.favorite_outline,
-                                  color: _isLiked
-                                      ? theme.colorScheme.error
-                                      : Colors.white,
-                                  size: 22,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  '$_likeCount',
-                                  style: GoogleFonts.poppins(
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
-                                    fontSize: 15,
-                                  ),
-                                ),
-                              ],
-                            ),
+                        child: CircleAvatar(
+                          backgroundColor: Colors.black.withOpacity(0.45),
+                          child: IconButton(
+                            icon: const Icon(Icons.ios_share, color: Colors.white),
+                            onPressed: () {
+                              // TODO: Share logic
+                            },
                           ),
                         ),
                       ),
@@ -290,17 +269,24 @@ class _PostDetailPageState extends State<PostDetailPage> {
                           ),
                           child: Row(
                             children: [
-                              UserAvatar(
-                                userId: post.userId,
-                                radius: 26,
-                                initialUrl: post.userAvatarUrl,
-                                backgroundColor: theme
-                                    .colorScheme.surfaceContainerHighest,
-                                placeholderColor: theme.colorScheme.primary,
+                              InkWell(
+                                onTap: () => _goToUserProfile(post.userId),
+                                borderRadius: BorderRadius.circular(30),
+                                child: UserAvatar(
+                                  userId: post.userId,
+                                  radius: 26,
+                                  initialUrl: post.userAvatarUrl,
+                                  backgroundColor: theme
+                                      .colorScheme.surfaceContainerHighest,
+                                  placeholderColor: theme.colorScheme.primary,
+                                ),
                               ),
                               const SizedBox(width: 14),
                               Expanded(
-                                child: Column(
+                                child: InkWell(
+                                  onTap: () => _goToUserProfile(post.userId),
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text("@${post.username}",
@@ -317,12 +303,48 @@ class _PostDetailPageState extends State<PostDetailPage> {
                                   ],
                                 ),
                               ),
-                              IconButton(
-                                icon: Icon(Icons.ios_share,
-                                    color: theme.colorScheme.primary),
-                                onPressed: () {
-                                  // TODO: Share logic
-                                },
+                              ),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Opacity(
+                                    opacity: 0.7,
+                                    child: _miniStat(
+                                      icon: Icons.visibility_outlined,
+                                      count: post.views,
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  InkWell(
+                                    onTap: () => _toggleLike(post),
+                                    borderRadius: BorderRadius.circular(14),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: theme.colorScheme.secondary.withOpacity(0.12),
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            _isLiked ? Icons.favorite : Icons.favorite_outline,
+                                            color: _isLiked ? theme.colorScheme.error : theme.colorScheme.secondary,
+                                            size: 18,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            '$_likeCount',
+                                            style: GoogleFonts.poppins(
+                                              fontWeight: FontWeight.w700,
+                                              color: _isLiked ? theme.colorScheme.error : theme.colorScheme.secondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -451,16 +473,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                             ),
                           ),
                         ),
-                      const SizedBox(height: 32),
-                      // Näytöt
-                      Center(
-                        child: _miniStat(
-                          icon: Icons.visibility_outlined,
-                          count: post.views,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
                     ],
                   ),
                 ),

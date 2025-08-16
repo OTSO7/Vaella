@@ -332,7 +332,7 @@ class _NotesPageState extends State<NotesPage> with TickerProviderStateMixin {
         ),
         title: Hero(
           tag: 'appLogoNotes',
-          child: Image.asset('assets/images/white2.png',
+          child: Image.asset('assets/images/white3.png',
               height: 80, fit: BoxFit.contain),
         ),
         centerTitle: true,

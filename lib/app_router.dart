@@ -26,6 +26,7 @@ import 'pages/post_detail_page.dart';
 import 'pages/profile_full_screen_map_page.dart';
 import 'pages/find_users_page.dart';
 import 'pages/followers_following_list_page.dart';
+import 'pages/settings_page.dart';
 // import 'pages/meal_planner_page.dart'; // POISTETTU VÄLIAIKAISESTI
 
 import 'widgets/main_scaffold.dart';
@@ -139,7 +140,14 @@ class AppRouter extends StatelessWidget {
               return const Scaffold(
                   body: Center(child: Text('User ID missing.')));
             }
-            return ProfilePage(userId: userId);
+            bool forceBack = false;
+            final extra = state.extra;
+            if (extra is Map<String, dynamic>) {
+              forceBack = extra['forceBack'] == true;
+            } else if (extra is bool) {
+              forceBack = extra;
+            }
+            return ProfilePage(userId: userId, forceBack: forceBack);
           },
         ),
         GoRoute(
@@ -218,6 +226,11 @@ class AppRouter extends StatelessWidget {
             }
             return UserPostsListPage(userId: userId, username: username);
           },
+        ),
+        GoRoute(
+          path: '/settings',
+          parentNavigatorKey: _rootNavigatorKey,
+          builder: (context, state) => const SettingsPage(),
         ),
 
         // Reittisuunnitteluun liittyvät sivut
