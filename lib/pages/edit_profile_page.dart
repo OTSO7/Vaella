@@ -85,7 +85,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   Future<String?> _uploadImage(File imageFile, String bunnyPrefix) async {
     try {
       final fileName =
-          '${bunnyPrefix}_${fb_auth.FirebaseAuth.instance.currentUser!.uid}_${DateTime.now().millisecondsSinceEpoch}${imageFile.path.split('.').last.isNotEmpty ? '.' + imageFile.path.split('.').last : '.jpg'}';
+          '${bunnyPrefix}_${fb_auth.FirebaseAuth.instance.currentUser!.uid}_${DateTime.now().millisecondsSinceEpoch}${imageFile.path.split('.').last.isNotEmpty ? '.${imageFile.path.split('.').last}' : '.jpg'}';
       return await BunnyImageUploader.uploadImage(imageFile,
           fileName: fileName);
     } catch (e) {

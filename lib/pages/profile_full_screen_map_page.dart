@@ -1,12 +1,9 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
 import 'package:go_router/go_router.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
-import '../models/user_profile_model.dart' as user_model;
 import '../models/post_model.dart';
 import '../models/hike_plan_model.dart';
 import '../providers/route_planner_provider.dart';

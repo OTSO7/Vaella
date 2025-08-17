@@ -97,7 +97,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: theme.colorScheme.background,
+      backgroundColor: theme.colorScheme.surface,
       body: FutureBuilder<Post>(
         future: _postFuture,
         builder: (context, snapshot) {
@@ -115,16 +115,14 @@ class _PostDetailPageState extends State<PostDetailPage> {
           final bool hasImages = images.isNotEmpty;
           final bool hasRoute = post.dailyRoutes != null &&
               post.dailyRoutes!.isNotEmpty &&
-              post.dailyRoutes!.any((r) =>
-                  r != null &&
-                  r.points != null &&
-                  (r.points as List).isNotEmpty);
+              post.dailyRoutes!.any(
+                  (r) => r.points != null && (r.points as List).isNotEmpty);
 
           return CustomScrollView(
             slivers: [
               SliverAppBar(
                 automaticallyImplyLeading: false,
-                backgroundColor: theme.colorScheme.background,
+                backgroundColor: theme.colorScheme.surface,
                 expandedHeight: MediaQuery.of(context).size.height * 0.42,
                 pinned: false,
                 flexibleSpace: FlexibleSpaceBar(
@@ -237,7 +235,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
                         child: CircleAvatar(
                           backgroundColor: Colors.black.withOpacity(0.45),
                           child: IconButton(
-                            icon: const Icon(Icons.ios_share, color: Colors.white),
+                            icon: const Icon(Icons.ios_share,
+                                color: Colors.white),
                             onPressed: () {
                               // TODO: Share logic
                             },
@@ -276,8 +275,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
                                   userId: post.userId,
                                   radius: 26,
                                   initialUrl: post.userAvatarUrl,
-                                  backgroundColor: theme
-                                      .colorScheme.surfaceContainerHighest,
+                                  backgroundColor:
+                                      theme.colorScheme.surfaceContainerHighest,
                                   placeholderColor: theme.colorScheme.primary,
                                 ),
                               ),
@@ -287,22 +286,23 @@ class _PostDetailPageState extends State<PostDetailPage> {
                                   onTap: () => _goToUserProfile(post.userId),
                                   borderRadius: BorderRadius.circular(12),
                                   child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text("@${post.username}",
-                                        style: GoogleFonts.poppins(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 17,
-                                            color:
-                                                theme.colorScheme.onSurface)),
-                                    Text(_getTimeAgo(post.timestamp),
-                                        style: GoogleFonts.lato(
-                                            fontSize: 12.5,
-                                            color: theme
-                                                .colorScheme.onSurfaceVariant)),
-                                  ],
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text("@${post.username}",
+                                          style: GoogleFonts.poppins(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 17,
+                                              color:
+                                                  theme.colorScheme.onSurface)),
+                                      Text(_getTimeAgo(post.timestamp),
+                                          style: GoogleFonts.lato(
+                                              fontSize: 12.5,
+                                              color: theme.colorScheme
+                                                  .onSurfaceVariant)),
+                                    ],
+                                  ),
                                 ),
-                              ),
                               ),
                               Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -320,16 +320,22 @@ class _PostDetailPageState extends State<PostDetailPage> {
                                     onTap: () => _toggleLike(post),
                                     borderRadius: BorderRadius.circular(14),
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 8),
                                       decoration: BoxDecoration(
-                                        color: theme.colorScheme.secondary.withOpacity(0.12),
+                                        color: theme.colorScheme.secondary
+                                            .withOpacity(0.12),
                                         borderRadius: BorderRadius.circular(14),
                                       ),
                                       child: Row(
                                         children: [
                                           Icon(
-                                            _isLiked ? Icons.favorite : Icons.favorite_outline,
-                                            color: _isLiked ? theme.colorScheme.error : theme.colorScheme.secondary,
+                                            _isLiked
+                                                ? Icons.favorite
+                                                : Icons.favorite_outline,
+                                            color: _isLiked
+                                                ? theme.colorScheme.error
+                                                : theme.colorScheme.secondary,
                                             size: 18,
                                           ),
                                           const SizedBox(width: 6),
@@ -337,7 +343,9 @@ class _PostDetailPageState extends State<PostDetailPage> {
                                             '$_likeCount',
                                             style: GoogleFonts.poppins(
                                               fontWeight: FontWeight.w700,
-                                              color: _isLiked ? theme.colorScheme.error : theme.colorScheme.secondary,
+                                              color: _isLiked
+                                                  ? theme.colorScheme.error
+                                                  : theme.colorScheme.secondary,
                                             ),
                                           ),
                                         ],
@@ -432,9 +440,24 @@ class _PostDetailPageState extends State<PostDetailPage> {
                                     MediaQuery.of(context).size.height * 0.7,
                                 child: CommentsBottomSheet(
                                   postId: post.id,
-                                  currentUserId: Provider.of<AuthProvider>(context, listen: false).user?.uid ?? '',
-                                  currentUsername: Provider.of<AuthProvider>(context, listen: false).userProfile?.username ?? post.username,
-                                  currentUserAvatarUrl: Provider.of<AuthProvider>(context, listen: false).userProfile?.photoURL ?? post.userAvatarUrl,
+                                  currentUserId: Provider.of<AuthProvider>(
+                                              context,
+                                              listen: false)
+                                          .user
+                                          ?.uid ??
+                                      '',
+                                  currentUsername: Provider.of<AuthProvider>(
+                                              context,
+                                              listen: false)
+                                          .userProfile
+                                          ?.username ??
+                                      post.username,
+                                  currentUserAvatarUrl:
+                                      Provider.of<AuthProvider>(context,
+                                                  listen: false)
+                                              .userProfile
+                                              ?.photoURL ??
+                                          post.userAvatarUrl,
                                 ),
                               ),
                             );
@@ -604,8 +627,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
           children: [
             CircleAvatar(
               backgroundColor: color.withOpacity(0.13),
-              child: Icon(icon, color: color, size: 22),
               radius: 20,
+              child: Icon(icon, color: color, size: 22),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -761,7 +784,7 @@ class _RouteMapBackground extends StatelessWidget {
                       Shadow(
                           color: Colors.black.withOpacity(0.7),
                           blurRadius: 4,
-                          offset: Offset(0, 1))
+                          offset: const Offset(0, 1))
                     ]),
               ),
             if (allPoints.length > 1)
@@ -776,7 +799,7 @@ class _RouteMapBackground extends StatelessWidget {
                       Shadow(
                           color: Colors.black.withOpacity(0.7),
                           blurRadius: 4,
-                          offset: Offset(0, 1))
+                          offset: const Offset(0, 1))
                     ]),
               ),
           ],

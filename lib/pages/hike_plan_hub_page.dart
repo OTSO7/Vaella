@@ -288,7 +288,8 @@ class _HikePlanHubPageState extends State<HikePlanHubPage> {
               _buildStatusChip(_currentPlan.status, theme),
               const Spacer(),
               if (_currentPlan.status == HikeStatus.completed)
-                Icon(Icons.celebration_rounded, color: Colors.green, size: 28),
+                const Icon(Icons.celebration_rounded,
+                    color: Colors.green, size: 28),
               if (_currentPlan.status == HikeStatus.cancelled)
                 Icon(Icons.block_rounded,
                     color: AppColors.errorColor(context), size: 28),

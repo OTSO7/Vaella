@@ -55,8 +55,8 @@ class AuthProvider with ChangeNotifier {
           .collection('users')
           .where('username', isGreaterThanOrEqualTo: query.toLowerCase())
           .where('username',
-              isLessThan: query.toLowerCase() +
-                  '\uf8ff') // \uf8ff is a high Unicode character
+              isLessThan:
+                  '${query.toLowerCase()}\uf8ff') // \uf8ff is a high Unicode character
           .limit(15)
           .get();
 

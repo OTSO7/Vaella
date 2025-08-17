@@ -73,7 +73,7 @@ class LevelDisplayCard extends StatelessWidget {
             child: LinearProgressIndicator(
               value: experienceProgress,
               minHeight: 8,
-              backgroundColor: theme.colorScheme.surfaceVariant,
+              backgroundColor: theme.colorScheme.surfaceContainerHighest,
               valueColor:
                   AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
             ),

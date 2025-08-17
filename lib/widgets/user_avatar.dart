@@ -31,8 +31,9 @@ class UserAvatar extends StatelessWidget {
       final hasUrl = (url != null && url.isNotEmpty);
       final avatar = CircleAvatar(
         radius: radius,
-        backgroundColor: backgroundColor ?? theme.colorScheme.surfaceContainerHighest,
-        backgroundImage: hasUrl ? NetworkImage(url!) : null,
+        backgroundColor:
+            backgroundColor ?? theme.colorScheme.surfaceContainerHighest,
+        backgroundImage: hasUrl ? NetworkImage(url) : null,
         child: !hasUrl
             ? Icon(
                 placeholderIcon,
@@ -60,7 +61,10 @@ class UserAvatar extends StatelessWidget {
     }
 
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance.collection('users').doc(userId).snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return buildAvatar(initialUrl);

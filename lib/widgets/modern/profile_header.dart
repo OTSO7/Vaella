@@ -135,7 +135,7 @@ class _ProfileHeaderState extends State<ProfileHeader>
               backgroundColor: theme.scaffoldBackgroundColor,
               child: CircleAvatar(
                 radius: 45,
-                backgroundColor: theme.colorScheme.surfaceVariant,
+                backgroundColor: theme.colorScheme.surfaceContainerHighest,
                 backgroundImage: (widget.userProfile.photoURL != null &&
                         widget.userProfile.photoURL!.isNotEmpty)
                     ? NetworkImage(widget.userProfile.photoURL!)
@@ -167,8 +167,8 @@ class _ProfileHeaderState extends State<ProfileHeader>
       borderColor = const Color(0xFF7E57C2);
       textColor = const Color(0xFFEDE7F6);
     } else {
-      startColor = theme.colorScheme.surfaceVariant;
-      endColor = theme.colorScheme.surfaceVariant.withOpacity(0.7);
+      startColor = theme.colorScheme.surfaceContainerHighest;
+      endColor = theme.colorScheme.surfaceContainerHighest.withOpacity(0.7);
       borderColor = theme.colorScheme.outline.withOpacity(0.5);
       textColor = theme.colorScheme.onSurfaceVariant;
     }

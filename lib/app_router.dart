@@ -5,7 +5,6 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'providers/auth_provider.dart';
-import 'providers/route_planner_provider.dart';
 import 'models/post_model.dart';
 import 'models/user_profile_model.dart';
 import 'models/hike_plan_model.dart';

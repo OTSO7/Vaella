@@ -221,7 +221,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
     if (_isLoading) return;
     final ImagePicker picker = ImagePicker();
     try {
-      final List<XFile>? images = await picker.pickMultiImage(
+      final List<XFile> images = await picker.pickMultiImage(
         imageQuality: 70,
         maxWidth: 1920,
         maxHeight: 1080,
@@ -234,13 +234,13 @@ class _CreatePostPageState extends State<CreatePostPage> {
         setState(() => _imageFiles = filtered);
         if (images.length > 3) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Max 3 images allowed.')),
+            const SnackBar(content: Text('Max 3 images allowed.')),
           );
         }
         if (images
             .any((img) => File(img.path).lengthSync() > 8 * 1024 * 1024)) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Images must be max 8MB each.')),
+            const SnackBar(content: Text('Images must be max 8MB each.')),
           );
         }
       }
@@ -777,7 +777,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                     });
                                   },
                                   child: Container(
-                                    decoration: BoxDecoration(
+                                    decoration: const BoxDecoration(
                                       color: Colors.black54,
                                       shape: BoxShape.circle,
                                     ),

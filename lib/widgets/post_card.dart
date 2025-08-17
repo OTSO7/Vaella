@@ -75,7 +75,7 @@ class _PostCardState extends State<PostCard> {
         .snapshots()
         .listen((doc) {
       if (!mounted) return;
-      final data = doc.data() as Map<String, dynamic>?;
+      final data = doc.data();
       if (data == null) return;
       final likes = List<String>.from(data['likes'] ?? []);
       setState(() {
@@ -141,8 +141,8 @@ class _PostCardState extends State<PostCard> {
 
     final bool hasRouteImage = widget.post.dailyRoutes != null &&
         widget.post.dailyRoutes!.isNotEmpty &&
-        widget.post.dailyRoutes!.any((r) =>
-            r != null && r.points != null && (r.points as List).isNotEmpty);
+        widget.post.dailyRoutes!
+            .any((r) => r.points != null && (r.points as List).isNotEmpty);
 
     final bool hasPostImage = mainImageUrl != null && mainImageUrl.isNotEmpty;
 
@@ -310,15 +310,15 @@ class _PostCardState extends State<PostCard> {
                                   child: AspectRatio(
                                     aspectRatio: 16 / 9,
                                     child: CachedNetworkImage(
-                                      imageUrl: mainImageUrl!,
+                                      imageUrl: mainImageUrl,
                                       fit: BoxFit.cover,
                                       placeholder: (context, url) => Container(
                                           color: theme
                                               .colorScheme.surfaceContainer),
                                       errorWidget: (context, url, error) =>
                                           Container(
-                                              color: theme
-                                                  .colorScheme.surfaceVariant,
+                                              color: theme.colorScheme
+                                                  .surfaceContainerHighest,
                                               child: const Icon(
                                                   Icons.broken_image_outlined)),
                                     ),
@@ -333,7 +333,7 @@ class _PostCardState extends State<PostCard> {
                           duration: const Duration(milliseconds: 250),
                           child: _showRouteMap
                               ? _MiniImageSquare(
-                                  imageUrl: mainImageUrl!,
+                                  imageUrl: mainImageUrl,
                                   onTap: () {
                                     setState(() {
                                       _showRouteMap = false;
@@ -360,12 +360,12 @@ class _PostCardState extends State<PostCard> {
                       child: AspectRatio(
                         aspectRatio: 16 / 9,
                         child: CachedNetworkImage(
-                          imageUrl: mainImageUrl!,
+                          imageUrl: mainImageUrl,
                           fit: BoxFit.cover,
                           placeholder: (context, url) => Container(
                               color: theme.colorScheme.surfaceContainer),
                           errorWidget: (context, url, error) => Container(
-                              color: theme.colorScheme.surfaceVariant,
+                              color: theme.colorScheme.surfaceContainerHighest,
                               child: const Icon(Icons.broken_image_outlined)),
                         ),
                       ),
@@ -717,7 +717,7 @@ class _MiniImageSquare extends StatelessWidget {
             placeholder: (context, url) => Container(
                 color: Theme.of(context).colorScheme.surfaceContainer),
             errorWidget: (context, url, error) => Container(
-                color: Theme.of(context).colorScheme.surfaceVariant,
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 child: const Icon(Icons.broken_image_outlined)),
           ),
         ),
@@ -733,7 +733,6 @@ class _RouteMapBackgroundFlutterMap7 extends StatelessWidget {
   final bool fitPoints;
 
   const _RouteMapBackgroundFlutterMap7({
-    super.key,
     required this.dailyRoutes,
     this.borderRadius = 16,
     this.fitPoints = false,
@@ -816,7 +815,7 @@ class _RouteMapBackgroundFlutterMap7 extends StatelessWidget {
                         Shadow(
                             color: Colors.black.withOpacity(0.7),
                             blurRadius: 4,
-                            offset: Offset(0, 1))
+                            offset: const Offset(0, 1))
                       ]),
                 ),
               if (allPoints.length > 1)
@@ -831,7 +830,7 @@ class _RouteMapBackgroundFlutterMap7 extends StatelessWidget {
                         Shadow(
                             color: Colors.black.withOpacity(0.7),
                             blurRadius: 4,
-                            offset: Offset(0, 1))
+                            offset: const Offset(0, 1))
                       ]),
                 ),
             ],

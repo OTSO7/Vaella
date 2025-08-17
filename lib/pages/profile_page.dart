@@ -91,7 +91,10 @@ class _ProfilePageState extends State<ProfilePage>
             child: NestedScrollView(
               headerSliverBuilder: (context, innerBoxIsScrolled) {
                 return [
-                  _ProfileBanner(user: user, isOwnProfile: isOwnProfile, forceBack: widget.forceBack),
+                  _ProfileBanner(
+                      user: user,
+                      isOwnProfile: isOwnProfile,
+                      forceBack: widget.forceBack),
                   SliverToBoxAdapter(
                     child:
                         _ProfileHeader(user: user, isOwnProfile: isOwnProfile),
@@ -148,7 +151,8 @@ class _ProfileBanner extends StatelessWidget {
   final user_model.UserProfile user;
   final bool isOwnProfile;
   final bool forceBack;
-  const _ProfileBanner({required this.user, required this.isOwnProfile, this.forceBack = false});
+  const _ProfileBanner(
+      {required this.user, required this.isOwnProfile, this.forceBack = false});
 
   @override
   Widget build(BuildContext context) {
@@ -177,7 +181,7 @@ class _ProfileBanner extends StatelessWidget {
       flexibleSpace: FlexibleSpaceBar(
         background: Container(
           decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceVariant,
+            color: theme.colorScheme.surfaceContainerHighest,
             image:
                 user.bannerImageUrl != null && user.bannerImageUrl!.isNotEmpty
                     ? DecorationImage(
@@ -225,12 +229,12 @@ class _ProfileHeader extends StatelessWidget {
                   backgroundColor: theme.dividerColor,
                   child: CircleAvatar(
                     radius: 40,
-                    backgroundColor: theme.colorScheme.surfaceVariant,
-                    backgroundImage:
-                        (user.photoURL != null && user.photoURL!.isNotEmpty)
-                            ? NetworkImage(user.photoURL!)
-                            : const AssetImage('assets/images/default_avatar.png')
-                                as ImageProvider,
+                    backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                    backgroundImage: (user.photoURL != null &&
+                            user.photoURL!.isNotEmpty)
+                        ? NetworkImage(user.photoURL!)
+                        : const AssetImage('assets/images/default_avatar.png')
+                            as ImageProvider,
                   ),
                 ),
               ),
@@ -361,7 +365,7 @@ class _LevelDisplayChipState extends State<_LevelDisplayChip>
     final isLegendary = widget.level >= 100;
     final isEpic = widget.level >= 50 && !isLegendary;
 
-    Color chipColor = theme.colorScheme.surfaceVariant;
+    Color chipColor = theme.colorScheme.surfaceContainerHighest;
     Color textColor = theme.colorScheme.onSurfaceVariant;
     Color iconColor = Colors.amber;
 
@@ -597,7 +601,7 @@ class _FollowButton extends StatelessWidget {
         return ElevatedButton(
           style: ElevatedButton.styleFrom(
             backgroundColor: isFollowing
-                ? theme.colorScheme.surfaceVariant
+                ? theme.colorScheme.surfaceContainerHighest
                 : theme.colorScheme.primary,
             foregroundColor: isFollowing
                 ? theme.colorScheme.onSurfaceVariant

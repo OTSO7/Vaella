@@ -28,7 +28,7 @@ class SettingsPage extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                 children: [
-                  _SectionHeader(label: 'Account'),
+                  const _SectionHeader(label: 'Account'),
                   _SettingsTile(
                     icon: Icons.person_outline,
                     title: 'Profile',
@@ -42,7 +42,7 @@ class SettingsPage extends StatelessWidget {
                     onTap: () {},
                   ),
                   const SizedBox(height: 12),
-                  _SectionHeader(label: 'Notifications'),
+                  const _SectionHeader(label: 'Notifications'),
                   _SwitchTile(
                     icon: Icons.notifications_outlined,
                     title: 'Push notifications',
@@ -56,7 +56,7 @@ class SettingsPage extends StatelessWidget {
                     onChanged: (v) {},
                   ),
                   const SizedBox(height: 12),
-                  _SectionHeader(label: 'About'),
+                  const _SectionHeader(label: 'About'),
                   _SettingsTile(
                     icon: Icons.info_outline,
                     title: 'App information',
@@ -95,7 +95,8 @@ class SettingsPage extends StatelessWidget {
                       context: context,
                       builder: (context) => AlertDialog(
                         title: const Text('Log out'),
-                        content: const Text('Are you sure you want to log out?'),
+                        content:
+                            const Text('Are you sure you want to log out?'),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.of(context).pop(false),
@@ -109,7 +110,8 @@ class SettingsPage extends StatelessWidget {
                       ),
                     );
                     if (confirmed == true) {
-                      await Provider.of<AuthProvider>(context, listen: false).logout();
+                      await Provider.of<AuthProvider>(context, listen: false)
+                          .logout();
                       if (context.mounted) context.go('/login');
                     }
                   },
@@ -172,7 +174,8 @@ class _SettingsTile extends StatelessWidget {
           style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
         ),
         subtitle: subtitle != null ? Text(subtitle!) : null,
-        trailing: Icon(Icons.chevron_right_rounded, color: theme.colorScheme.onSurface.withOpacity(0.6)),
+        trailing: Icon(Icons.chevron_right_rounded,
+            color: theme.colorScheme.onSurface.withOpacity(0.6)),
         onTap: onTap,
       ),
     );

@@ -76,20 +76,20 @@ class _InteractiveFollowButtonState extends State<InteractiveFollowButton> {
     if (_isFollowing) {
       return OutlinedButton(
         onPressed: _handleFollowToggle,
-        child: const Text('Following'),
         style: OutlinedButton.styleFrom(
           side: BorderSide(color: Theme.of(context).colorScheme.primary),
         ),
+        child: const Text('Following'),
       );
     } else {
       return ElevatedButton(
         onPressed: _handleFollowToggle,
-        child: const Text('Follow'),
         style: ElevatedButton.styleFrom(
           elevation: 0,
           backgroundColor: Theme.of(context).colorScheme.primary,
           foregroundColor: Theme.of(context).colorScheme.onPrimary,
         ),
+        child: const Text('Follow'),
       );
     }
   }

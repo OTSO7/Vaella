@@ -49,7 +49,7 @@ class ExperienceBar extends StatelessWidget {
           child: LinearProgressIndicator(
             value: progress,
             minHeight: 8,
-            backgroundColor: theme.colorScheme.surfaceVariant,
+            backgroundColor: theme.colorScheme.surfaceContainerHighest,
             valueColor:
                 AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
           ),

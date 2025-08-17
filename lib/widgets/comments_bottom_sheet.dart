@@ -39,7 +39,7 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
 
     await FirebaseFirestore.instance.runTransaction((transaction) async {
       final snap = await transaction.get(commentRef);
-      final data = snap.data() as Map<String, dynamic>? ?? {};
+      final data = snap.data() ?? {};
       final List likes = List.from(data['likes'] ?? []);
       if (likes.contains(userId)) {
         likes.remove(userId);

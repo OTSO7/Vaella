@@ -9,7 +9,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
-import 'package:flutter_map_marker_cluster/src/node/marker_node.dart';
 import 'package:latlong2/latlong.dart' hide Path;
 import 'package:url_launcher/url_launcher.dart';
 
@@ -19,7 +18,6 @@ import '../widgets/post_card.dart';
 import '../widgets/user_avatar.dart';
 import '../widgets/select_visibility_modal.dart';
 import '../widgets/star_rating_display.dart';
-import '../models/daily_route_model.dart';
 import '../utils/map_helpers.dart';
 
 enum HomeView { map, feed }
@@ -119,9 +117,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   void _subscribeToPostsRealtime() {
     final db = FirebaseFirestore.instance;
-    final baseQuery = db
-        .collection('posts')
-        .where('visibility', isEqualTo: 'public');
+    final baseQuery =
+        db.collection('posts').where('visibility', isEqualTo: 'public');
 
     _postsRealtimeSub?.cancel();
     _postsRealtimeSub = baseQuery.snapshots().listen((_) {
