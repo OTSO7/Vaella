@@ -72,6 +72,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   HomeView _currentView = HomeView.map;
   Post? _selectedPost;
   Timer? _debounce;
+  Timer? _realtimeRefreshDebounce;
+  StreamSubscription<QuerySnapshot>? _postsRealtimeSub;
   SortOption _currentSortOption = SortOption.newest;
 
   List<Post> _posts = [];
@@ -89,6 +91,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _fetchPosts();
+    _subscribeToPostsRealtime();
     _searchController.addListener(_onSearchChanged);
   }
 
@@ -99,6 +102,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     _mapController.dispose();
     _searchFocusNode.dispose();
     _debounce?.cancel();
+    _realtimeRefreshDebounce?.cancel();
+    _postsRealtimeSub?.cancel();
     _notificationTimer?.cancel();
     super.dispose();
   }
@@ -109,6 +114,24 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       if (mounted) {
         _fetchPosts();
       }
+    });
+  }
+
+  void _subscribeToPostsRealtime() {
+    final db = FirebaseFirestore.instance;
+    final baseQuery = db
+        .collection('posts')
+        .where('visibility', isEqualTo: 'public');
+
+    _postsRealtimeSub?.cancel();
+    _postsRealtimeSub = baseQuery.snapshots().listen((_) {
+      if (!mounted) return;
+      _realtimeRefreshDebounce?.cancel();
+      _realtimeRefreshDebounce = Timer(const Duration(milliseconds: 250), () {
+        if (mounted) _fetchPosts();
+      });
+    }, onError: (error) {
+      // Silent fail; we still have manual fetches via search/filter
     });
   }
 
