@@ -1,0 +1,139 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <style>
+    html, body, #cesiumContainer { width:100%; height:100%; margin:0; padding:0; overflow:hidden; background:#000; }
+    .loading { position:absolute; top:12px; left:12px; background:#0008; color:#fff; padding:8px 10px; border-radius:8px; font-family:sans-serif; z-index:10; }
+  </style>
+  <link href="https://unpkg.com/cesium/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <script src="https://unpkg.com/cesium/Build/Cesium/Cesium.js"></script>
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+  <div class="loading" id="loading">Initializing…</div>
+  <script>
+    // Replace with your Bunny CDN terrain base URL (no trailing slash)
+    const TERRAIN_BASE_URL = "https://vaella.v-cdn.net/terrain";
+
+    // Create Cesium viewer with custom terrain and OSM imagery
+    const viewer = new Cesium.Viewer("cesiumContainer", {
+      baseLayerPicker: false,
+      geocoder: false,
+      homeButton: false,
+      sceneModePicker: false,
+      navigationHelpButton: false,
+      animation: false,
+      timeline: false,
+      fullscreenButton: false,
+      terrain: new Cesium.CesiumTerrainProvider({
+        url: TERRAIN_BASE_URL,
+        requestVertexNormals: true
+      }),
+      imageryProvider: new Cesium.UrlTemplateImageryProvider({
+        url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        credit: '© OpenStreetMap'
+      })
+    });
+
+    viewer.scene.globe.enableLighting = true;
+    viewer.scene.globe.depthTestAgainstTerrain = true;
+
+    function toRadians(deg) { return deg * Math.PI / 180.0; }
+
+    // Handle messages from Flutter: expects a JSON string with { type: 'route', data: <GeoJSON Feature/FeatureCollection> }
+    window.addEventListener("message", async (event) => {
+      try {
+        const payload = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (payload && payload.type === "route") {
+          const geojson = payload.data;
+          document.getElementById('loading').innerText = "Loading route…";
+
+          const ds = await Cesium.GeoJsonDataSource.load(geojson, {
+            stroke: Cesium.Color.CYAN,
+            strokeWidth: 3,
+            clampToGround: true
+          });
+          viewer.dataSources.add(ds);
+
+          // Assume a single LineString or first line of a FeatureCollection
+          const ent = ds.entities.values[0];
+          if (!ent || !ent.polyline) {
+            document.getElementById('loading').innerText = "Invalid route";
+            return;
+          }
+
+          // Extract route positions
+          const polyPositions = ent.polyline.positions.getValue(Cesium.JulianDate.now());
+          const positions = Cesium.PolylinePipeline.generateCartesianArc({ positions: polyPositions });
+
+          if (!positions || positions.length < 2) {
+            document.getElementById('loading').innerText = "Route too short";
+            return;
+          }
+
+          // Fit view initially
+          viewer.zoomTo(ds);
+
+          // Downsample to ~max 500 steps
+          const step = Math.max(5, Math.floor(positions.length / 500));
+          const samples = [];
+          for (let i = 0; i < positions.length; i += step) samples.push(positions[i]);
+          if (samples[samples.length - 1] !== positions[positions.length - 1]) {
+            samples.push(positions[positions.length - 1]);
+          }
+
+          // Sample terrain heights so camera stays above ground
+          document.getElementById('loading').innerText = "Sampling terrain…";
+          const cartographics = samples.map(p => Cesium.Cartographic.fromCartesian(p));
+          await Cesium.sampleTerrainMostDetailed(viewer.terrainProvider, cartographics);
+
+          const cameraHeightOffset = 120.0; // meters above ground
+          const pitch = Cesium.Math.toRadians(-20);
+
+          document.getElementById('loading').style.display = "none";
+
+          let idx = 0;
+          const fly = () => {
+            if (idx >= cartographics.length) return;
+
+            const c = cartographics[idx];
+            const nextIdx = Math.min(idx + 1, cartographics.length - 1);
+            const nextC = cartographics[nextIdx];
+
+            const dest = Cesium.Cartesian3.fromRadians(
+              c.longitude, c.latitude, (c.height || 0) + cameraHeightOffset
+            );
+
+            // Compute heading from current to next sample
+            const dLon = nextC.longitude - c.longitude;
+            const y = Math.sin(dLon) * Math.cos(nextC.latitude);
+            const x = Math.cos(c.latitude) * Math.sin(nextC.latitude) - Math.sin(c.latitude) * Math.cos(nextC.latitude) * Math.cos(dLon);
+            const heading = Math.atan2(y, x);
+
+            viewer.camera.flyTo({
+              destination: dest,
+              orientation: {
+                heading: heading,
+                pitch: pitch,
+                roll: 0.0
+              },
+              duration: 0.5,
+              complete: () => { idx++; fly(); }
+            });
+          };
+
+          fly();
+        }
+      } catch (e) {
+        console.error(e);
+        document.getElementById('loading').innerText = "Error loading route";
+      }
+    }, false);
+
+    // Dev helper example:
+    // window.postMessage(JSON.stringify({type:"route", data: { "type":"Feature","geometry":{"type":"LineString","coordinates":[[24.93,60.17],[25.0,60.2],[25.05,60.22]]}}}));
+  </script>
+</body>
+</html>

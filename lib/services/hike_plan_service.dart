@@ -115,7 +115,7 @@ class HikePlanService {
     }
   }
 
-  Future<void> updateHikePlan(HikePlan plan) async {
+  Future<HikePlan> updateHikePlan(HikePlan plan) async {
     print('HikePlanService: Attempting to update plan ${plan.id}');
     String? userId = getUserId();
     if (userId == null) {
@@ -125,18 +125,25 @@ class HikePlanService {
     }
 
     print('HikePlanService: Updating plan ${plan.id} for user $userId');
+    final planData = plan.toFirestore();
     print(
         'HikePlanService: Plan packingList data being sent: ${plan.packingList.map((item) => item.name).toList()}');
-    print('HikePlanService: Plan toFirestore() map: ${plan.toFirestore()}');
+    print('HikePlanService: Plan toFirestore() map: $planData');
 
     try {
-      await _firestore
+      final planRef = _firestore
           .collection('users')
           .doc(userId)
           .collection('plans')
-          .doc(plan.id)
-          .update(plan.toFirestore());
+          .doc(plan.id);
+
+      await planRef.update(planData);
       print('HikePlanService: Plan ${plan.id} updated successfully.');
+
+      // Fetch the updated document from Firestore to ensure we have the latest data
+      final updatedDoc = await planRef.get();
+      // Return the updated HikePlan object
+      return HikePlan.fromFirestore(updatedDoc);
     } catch (e) {
       print('HikePlanService: Error updating plan ${plan.id}: $e');
       rethrow;

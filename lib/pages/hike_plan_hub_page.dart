@@ -504,17 +504,9 @@ class _HikePlanHubPageState extends State<HikePlanHubPage> {
           title: "Meal Plan",
           subtitle: "Foods & nutrition",
           onTap: () {
-            // Käytetään samaa logiikkaa kuin reittisuunnittelussa
-            context.read<RoutePlannerProvider>().loadPlan(_currentPlan);
-            context.pushNamed('mealPlannerPage',
-                pathParameters: {'planId': _currentPlan.id}).then((_) {
-              // Päivitetään tila palatessa, jos muutoksia on tehty
-              if (mounted) {
-                setState(() {
-                  _currentPlan = context.read<RoutePlannerProvider>().plan;
-                });
-              }
-            });
+            context.pushNamed('foodPlannerPage',
+                pathParameters: {'planId': _currentPlan.id},
+                extra: _currentPlan);
           },
           enabled: true,
         ),

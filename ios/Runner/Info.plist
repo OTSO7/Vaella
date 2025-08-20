@@ -45,5 +45,7 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Kameran käyttöä tarvitaan viivakoodien skannaukseen ruokien makrojen hakemiseksi.</string>
 </dict>
 </plist>

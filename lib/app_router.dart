@@ -26,7 +26,7 @@ import 'pages/profile_full_screen_map_page.dart';
 import 'pages/find_users_page.dart';
 import 'pages/followers_following_list_page.dart';
 import 'pages/settings_page.dart';
-// import 'pages/meal_planner_page.dart'; // POISTETTU VÄLIAIKAISESTI
+import 'pages/food_planner_page.dart';
 
 import 'widgets/main_scaffold.dart';
 import 'widgets/user_hikes_map_section.dart';
@@ -248,6 +248,16 @@ class AppRouter extends StatelessWidget {
                   body: Center(child: Text('Hike plan not found!')));
             }
             return HikePlanHubPage(initialPlan: plan);
+          },
+        ),
+        GoRoute(
+          path: '/hike-plan/:planId/food-planner',
+          name: 'foodPlannerPage',
+          parentNavigatorKey: _rootNavigatorKey,
+          builder: (context, state) {
+            final planId = state.pathParameters['planId']!;
+            final hikePlan = state.extra as HikePlan?;
+            return FoodPlannerPage(planId: planId, initialPlan: hikePlan);
           },
         ),
         GoRoute(
