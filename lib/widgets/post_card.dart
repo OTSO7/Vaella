@@ -141,8 +141,7 @@ class _PostCardState extends State<PostCard> {
 
     final bool hasRouteImage = widget.post.dailyRoutes != null &&
         widget.post.dailyRoutes!.isNotEmpty &&
-        widget.post.dailyRoutes!
-            .any((r) => r.points != null && (r.points as List).isNotEmpty);
+        widget.post.dailyRoutes!.any((r) => (r.points as List).isNotEmpty);
 
     final bool hasPostImage = mainImageUrl != null && mainImageUrl.isNotEmpty;
 

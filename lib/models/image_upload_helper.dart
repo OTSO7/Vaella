@@ -11,9 +11,8 @@ class BunnyImageUploader {
   /// Palauttaa CDN-urlin, jos onnistuu. Heittää poikkeuksen jos epäonnistuu.
   static Future<String> uploadImage(File file, {String? fileName}) async {
     final int fileSize = await file.length();
-    fileName ??= DateTime.now().millisecondsSinceEpoch.toString() +
-        '_' +
-        file.path.split('/').last;
+    fileName ??=
+        '${DateTime.now().millisecondsSinceEpoch}_${file.path.split('/').last}';
     final uri = Uri.parse('$apiEndpoint$fileName');
     final bytes = await file.readAsBytes();
 

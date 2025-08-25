@@ -5,12 +5,14 @@ class NutritionInfoDialog extends StatefulWidget {
   final String foodName;
   final Map<String, double>? initialMacros;
   final Function(Map<String, double>) onSave;
+  final String? subtitle; // Optional hint like "Enter values per 100 g/ml"
 
   const NutritionInfoDialog({
     super.key,
     required this.foodName,
     this.initialMacros,
     required this.onSave,
+    this.subtitle,
   });
 
   @override
@@ -74,6 +76,16 @@ class _NutritionInfoDialogState extends State<NutritionInfoDialog> {
               color: theme.colorScheme.onSurface.withOpacity(0.8),
             ),
           ),
+          if (widget.subtitle != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              widget.subtitle!,
+              style: GoogleFonts.lato(
+                fontSize: 12,
+                color: theme.hintColor,
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
           _buildNutritionInput('Calories (kcal)', _caloriesController,
               Icons.local_fire_department),
@@ -103,7 +115,7 @@ class _NutritionInfoDialogState extends State<NutritionInfoDialog> {
       String label, TextEditingController controller, IconData icon) {
     return TextField(
       controller: controller,
-      keyboardType: TextInputType.number,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, size: 20),
@@ -115,11 +127,15 @@ class _NutritionInfoDialogState extends State<NutritionInfoDialog> {
   }
 
   void _saveNutritionInfo() {
+    String c = _caloriesController.text.replaceAll(',', '.');
+    String p = _proteinController.text.replaceAll(',', '.');
+    String cb = _carbsController.text.replaceAll(',', '.');
+    String f = _fatsController.text.replaceAll(',', '.');
     final macros = {
-      'calories': double.tryParse(_caloriesController.text) ?? 0.0,
-      'protein': double.tryParse(_proteinController.text) ?? 0.0,
-      'carbs': double.tryParse(_carbsController.text) ?? 0.0,
-      'fats': double.tryParse(_fatsController.text) ?? 0.0,
+      'calories': double.tryParse(c) ?? 0.0,
+      'protein': double.tryParse(p) ?? 0.0,
+      'carbs': double.tryParse(cb) ?? 0.0,
+      'fats': double.tryParse(f) ?? 0.0,
     };
     widget.onSave(macros);
     Navigator.pop(context);

@@ -10,6 +10,7 @@ import 'package:uuid/uuid.dart';
 
 import '../models/hike_plan_model.dart';
 import '../widgets/nutrition_info_dialog.dart';
+import '../widgets/portion_picker_dialog.dart';
 import '../services/hike_plan_service.dart';
 
 // --- DATA MODELS ---
@@ -17,10 +18,20 @@ import '../services/hike_plan_service.dart';
 class FoodItem {
   final String id;
   String name;
+  // Current totals for the selected portion
   double calories;
   double protein;
   double carbs;
   double fats;
+  // Portion information
+  double amount; // e.g., 120
+  String unit; // e.g., 'g', 'ml', 'tsp', 'tbsp', 'dl', 'cup'
+  String baseUnit; // 'g' or 'ml' for per-100 scaling
+  // Base nutrition per 100 baseUnit (used to rescale when portion changes)
+  double baseCaloriesPer100;
+  double baseProteinPer100;
+  double baseCarbsPer100;
+  double baseFatsPer100;
   String? barcode;
 
   FoodItem({
@@ -30,6 +41,13 @@ class FoodItem {
     this.protein = 0.0,
     this.carbs = 0.0,
     this.fats = 0.0,
+    this.amount = 0.0,
+    this.unit = 'g',
+    this.baseUnit = 'g',
+    this.baseCaloriesPer100 = 0.0,
+    this.baseProteinPer100 = 0.0,
+    this.baseCarbsPer100 = 0.0,
+    this.baseFatsPer100 = 0.0,
     this.barcode,
   });
 
@@ -40,6 +58,13 @@ class FoodItem {
         'protein': protein,
         'carbs': carbs,
         'fats': fats,
+        'amount': amount,
+        'unit': unit,
+        'baseUnit': baseUnit,
+        'baseCaloriesPer100': baseCaloriesPer100,
+        'baseProteinPer100': baseProteinPer100,
+        'baseCarbsPer100': baseCarbsPer100,
+        'baseFatsPer100': baseFatsPer100,
         'barcode': barcode,
       };
 
@@ -50,6 +75,15 @@ class FoodItem {
         protein: (json['protein'] as num?)?.toDouble() ?? 0.0,
         carbs: (json['carbs'] as num?)?.toDouble() ?? 0.0,
         fats: (json['fats'] as num?)?.toDouble() ?? 0.0,
+        amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
+        unit: json['unit'] as String? ?? 'g',
+        baseUnit: json['baseUnit'] as String? ?? 'g',
+        baseCaloriesPer100:
+            (json['baseCaloriesPer100'] as num?)?.toDouble() ?? 0.0,
+        baseProteinPer100:
+            (json['baseProteinPer100'] as num?)?.toDouble() ?? 0.0,
+        baseCarbsPer100: (json['baseCarbsPer100'] as num?)?.toDouble() ?? 0.0,
+        baseFatsPer100: (json['baseFatsPer100'] as num?)?.toDouble() ?? 0.0,
         barcode: json['barcode'],
       );
 }
@@ -121,6 +155,7 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
   final Uuid _uuid = const Uuid();
+  bool _isDirty = false; // Flag to track unsaved changes
 
   @override
   void initState() {
@@ -134,6 +169,14 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
     });
 
     _initializeDays();
+  }
+
+  void _markAsDirty() {
+    if (!_isDirty) {
+      setState(() {
+        _isDirty = true;
+      });
+    }
   }
 
   void _initializeDays() {
@@ -159,11 +202,9 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
 
     // Fallback: Create default days if no plan exists or loading failed
     int numberOfDays = 1; // Default to 1 day
-    if (widget.initialPlan != null &&
-        widget.initialPlan!.startDate != null &&
-        widget.initialPlan!.endDate != null) {
+    if (widget.initialPlan != null && widget.initialPlan!.endDate != null) {
       final duration = widget.initialPlan!.endDate!
-              .difference(widget.initialPlan!.startDate!)
+              .difference(widget.initialPlan!.startDate)
               .inDays +
           1;
       numberOfDays = duration > 0 ? duration : 1;
@@ -184,6 +225,7 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
         ),
       );
     }
+    _markAsDirty(); // Mark dirty if we created a new plan
   }
 
   @override
@@ -192,37 +234,83 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
     super.dispose();
   }
 
+  Future<bool> _onWillPop() async {
+    if (!_isDirty) {
+      return true; // Allow exit if no changes
+    }
+
+    final shouldPop = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Unsaved Changes'),
+        content: const Text(
+            'You have unsaved changes. Do you want to save them before exiting?'),
+        actions: [
+          TextButton(
+            onPressed: () =>
+                Navigator.of(context).pop(true), // Discard and exit
+            child: const Text('Discard'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false), // Don't exit
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await _savePlan();
+              if (mounted) {
+                Navigator.of(context).pop(true); // Save and exit
+              }
+            },
+            child: const Text('Save & Exit'),
+          ),
+        ],
+      ),
+    );
+    return shouldPop ?? false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Food Planner',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Save and Mark as Done',
-            onPressed: _savePlan,
-            icon: const Icon(Icons.check_circle_outline_rounded),
-          )
-        ],
-      ),
-      body: Column(
-        children: [
-          _buildDaySelector(theme),
-          Expanded(
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount: _dayPlans.length,
-              itemBuilder: (context, index) {
-                return _buildDayView(_dayPlans[index]);
-              },
-            ),
+    return PopScope(
+      canPop: !_isDirty,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        final shouldPop = await _onWillPop();
+        if (shouldPop && mounted) {
+          Navigator.pop(context);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(
+            'Food Planner',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
           ),
-        ],
+          actions: [
+            IconButton(
+              tooltip: 'Save and Mark as Done',
+              onPressed: _savePlan,
+              icon: const Icon(Icons.check_circle_outline_rounded),
+            )
+          ],
+        ),
+        body: Column(
+          children: [
+            _buildDaySelector(theme),
+            Expanded(
+              child: PageView.builder(
+                controller: _pageController,
+                itemCount: _dayPlans.length,
+                itemBuilder: (context, index) {
+                  return _buildDayView(_dayPlans[index]);
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -315,6 +403,7 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
           }
           final item = dayPlan.sections.removeAt(oldIndex);
           dayPlan.sections.insert(newIndex, item);
+          _markAsDirty();
         });
       },
       children: dayPlan.sections
@@ -362,8 +451,10 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
                 ),
                 IconButton(
                   tooltip: 'Remove section',
-                  onPressed: () =>
-                      setState(() => dayPlan.sections.remove(section)),
+                  onPressed: () {
+                    setState(() => dayPlan.sections.remove(section));
+                    _markAsDirty();
+                  },
                   icon: const Icon(Icons.delete_outline_rounded, size: 20),
                 ),
               ],
@@ -453,7 +544,7 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
           style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
         ),
         subtitle: Text(
-          '${item.calories.toStringAsFixed(0)} kcal · P ${item.protein.toStringAsFixed(0)}g · C ${item.carbs.toStringAsFixed(0)}g · F ${item.fats.toStringAsFixed(0)}g',
+          '${item.amount > 0 ? '${item.amount.toStringAsFixed(item.amount == item.amount.roundToDouble() ? 0 : 1)} ${item.unit} · ' : ''}${item.calories.toStringAsFixed(0)} kcal · P ${item.protein.toStringAsFixed(0)}g · C ${item.carbs.toStringAsFixed(0)}g · F ${item.fats.toStringAsFixed(0)}g',
           style: GoogleFonts.lato(
               color: Colors.white.withOpacity(0.8), fontSize: 13),
         ),
@@ -461,14 +552,22 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              tooltip: 'Edit',
+              tooltip: 'Edit portion',
+              icon: const Icon(Icons.scale_rounded),
+              onPressed: () => _editPortion(section, item),
+            ),
+            IconButton(
+              tooltip: 'Edit macros',
               icon: const Icon(Icons.edit_note_rounded),
               onPressed: () => _editFoodItem(section, item),
             ),
             IconButton(
               tooltip: 'Delete',
               icon: const Icon(Icons.delete_outline_rounded),
-              onPressed: () => setState(() => section.items.remove(item)),
+              onPressed: () {
+                setState(() => section.items.remove(item));
+                _markAsDirty();
+              },
             ),
           ],
         ),
@@ -544,7 +643,7 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
     return {'calories': kcal, 'protein': p, 'carbs': c, 'fats': f};
   }
 
-  Future<void> _savePlan() async {
+  Future<void> _savePlan({bool popAfter = false}) async {
     if (widget.initialPlan == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -575,6 +674,9 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
           await service.updateHikePlan(planToUpdate);
 
       if (!mounted) return;
+      setState(() {
+        _isDirty = false; // Mark as saved
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Food plan saved!'),
@@ -582,7 +684,9 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
         ),
       );
       // Pop the page and return the fresh, updated plan object
-      Navigator.of(context).pop(updatedPlanFromDb);
+      if (popAfter) {
+        Navigator.of(context).pop(updatedPlanFromDb);
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -621,6 +725,7 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
     if (name != null && name.isNotEmpty) {
       setState(() {
         dayPlan.sections.add(FoodSection(id: _uuid.v4(), name: name));
+        _markAsDirty();
       });
     }
   }
@@ -647,7 +752,10 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
       ),
     );
     if (newName != null && newName.isNotEmpty) {
-      setState(() => section.name = newName);
+      setState(() {
+        section.name = newName;
+        _markAsDirty();
+      });
     }
   }
 
@@ -717,20 +825,77 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
     );
     if (name == null || name.isEmpty || !mounted) return;
 
+    // Step 1: Choose portion and unit
+    final portion = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => const PortionPickerDialog(
+        title: 'Select portion',
+        baseUnit: 'g',
+        initialAmount: 100,
+        initialUnit: 'g',
+        allowMacroBasisChoice: true,
+        initialIsPer100: true,
+        allowedUnits: ['g', 'ml', 'tsp', 'tbsp', 'dl', 'cup'],
+      ),
+    );
+    if (portion == null || !mounted) return;
+
+    final double amount = (portion['amount'] as num).toDouble();
+    final String unit = portion['unit'] as String;
+    final String baseUnit = (unit == 'g') ? 'g' : 'ml';
+    final bool isPer100 = portion['isPer100'] as bool? ?? true;
+
+    // Step 2: Enter nutrition info
     await showDialog(
       context: context,
       builder: (context) => NutritionInfoDialog(
         foodName: name,
+        subtitle: isPer100
+            ? 'Enter values per 100 $baseUnit'
+            : 'Enter values for the selected portion ($amount $unit)',
         onSave: (macros) {
+          final double kcal = macros['calories'] ?? 0.0;
+          final double p = macros['protein'] ?? 0.0;
+          final double c = macros['carbs'] ?? 0.0;
+          final double f = macros['fats'] ?? 0.0;
+
+          final baseAmount = _toBaseAmount(baseUnit, unit, amount);
+
+          // Determine base per 100
+          final double baseK = isPer100
+              ? kcal
+              : (baseAmount > 0 ? (kcal * 100 / baseAmount) : 0.0);
+          final double baseP =
+              isPer100 ? p : (baseAmount > 0 ? (p * 100 / baseAmount) : 0.0);
+          final double baseC =
+              isPer100 ? c : (baseAmount > 0 ? (c * 100 / baseAmount) : 0.0);
+          final double baseF =
+              isPer100 ? f : (baseAmount > 0 ? (f * 100 / baseAmount) : 0.0);
+
+          // Scale totals for selected portion
+          final scaledFactor = baseAmount / 100.0;
+          final tK = baseK * scaledFactor;
+          final tP = baseP * scaledFactor;
+          final tC = baseC * scaledFactor;
+          final tF = baseF * scaledFactor;
+
           setState(() {
             section.items.add(FoodItem(
               id: _uuid.v4(),
               name: name,
-              calories: macros['calories'] ?? 0,
-              protein: macros['protein'] ?? 0,
-              carbs: macros['carbs'] ?? 0,
-              fats: macros['fats'] ?? 0,
+              calories: tK,
+              protein: tP,
+              carbs: tC,
+              fats: tF,
+              amount: amount,
+              unit: unit,
+              baseUnit: baseUnit,
+              baseCaloriesPer100: baseK,
+              baseProteinPer100: baseP,
+              baseCarbsPer100: baseC,
+              baseFatsPer100: baseF,
             ));
+            _markAsDirty();
           });
         },
       ),
@@ -762,16 +927,46 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
         return;
       }
 
+      // Ask for portion (mass-based units only due to per-100g data)
+      final portion = await showDialog<Map<String, dynamic>>(
+        context: context,
+        builder: (context) => PortionPickerDialog(
+          title: product.name ?? 'Select portion',
+          baseUnit: 'g',
+          initialAmount: 100,
+          initialUnit: 'g',
+          allowMacroBasisChoice: false,
+          initialIsPer100: true,
+          allowedUnits: const ['g'],
+        ),
+      );
+      if (portion == null) return;
+
+      final double amount = (portion['amount'] as num).toDouble();
+      final String unit = portion['unit'] as String; // should be 'g'
+      const String baseUnit = 'g';
+
+      final baseAmount = _toBaseAmount(baseUnit, unit, amount);
+      final factor = baseAmount / 100.0;
+
       setState(() {
         section.items.add(FoodItem(
           id: _uuid.v4(),
           name: product.name ?? 'Scanned product',
-          calories: product.kcal,
-          protein: product.protein,
-          carbs: product.carbs,
-          fats: product.fats,
+          calories: product.kcal * factor,
+          protein: product.protein * factor,
+          carbs: product.carbs * factor,
+          fats: product.fats * factor,
+          amount: amount,
+          unit: unit,
+          baseUnit: baseUnit,
+          baseCaloriesPer100: product.kcal,
+          baseProteinPer100: product.protein,
+          baseCarbsPer100: product.carbs,
+          baseFatsPer100: product.fats,
           barcode: result.barcode,
         ));
+        _markAsDirty();
       });
     } catch (e) {
       if (!mounted) return;
@@ -795,12 +990,23 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
           'carbs': item.carbs,
           'fats': item.fats,
         },
+        subtitle:
+            'Adjust totals for current portion (${item.amount.toStringAsFixed(item.amount == item.amount.roundToDouble() ? 0 : 1)} ${item.unit}).',
         onSave: (macros) {
           setState(() {
             item.calories = macros['calories'] ?? item.calories;
             item.protein = macros['protein'] ?? item.protein;
             item.carbs = macros['carbs'] ?? item.carbs;
             item.fats = macros['fats'] ?? item.fats;
+            // Update base per 100 based on current portion to keep rescaling consistent
+            final baseAmount =
+                _toBaseAmount(item.baseUnit, item.unit, item.amount);
+            final safeBaseAmount = baseAmount > 0 ? baseAmount : 100.0;
+            item.baseCaloriesPer100 = (item.calories * 100.0) / safeBaseAmount;
+            item.baseProteinPer100 = (item.protein * 100.0) / safeBaseAmount;
+            item.baseCarbsPer100 = (item.carbs * 100.0) / safeBaseAmount;
+            item.baseFatsPer100 = (item.fats * 100.0) / safeBaseAmount;
+            _markAsDirty();
           });
         },
       ),
@@ -840,6 +1046,87 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
   }
 
   double _kcalFromKj(double? kj) => (kj ?? 0.0) / 4.184;
+
+  // --- UNIT/PORTION HELPERS ---
+  double _toBaseAmount(String baseUnit, String unit, double amount) {
+    if (amount <= 0) return 0.0;
+    if (baseUnit == 'g') {
+      // Mass: only support grams to avoid wrong density assumptions
+      return amount; // unit should be 'g'
+    } else {
+      // Volume (ml)
+      switch (unit) {
+        case 'ml':
+          return amount;
+        case 'tsp':
+          return amount * 5.0;
+        case 'tbsp':
+          return amount * 15.0;
+        case 'dl':
+          return amount * 100.0;
+        case 'cup':
+          return amount * 240.0; // approximate
+        default:
+          return amount;
+      }
+    }
+  }
+
+  void _editPortion(FoodSection section, FoodItem item) async {
+    // Backward compatibility: if base per-100 values are missing, derive them from current totals.
+    final bool missingBase = (item.baseCaloriesPer100 == 0.0 &&
+        item.baseProteinPer100 == 0.0 &&
+        item.baseCarbsPer100 == 0.0 &&
+        item.baseFatsPer100 == 0.0);
+    if (missingBase) {
+      final String baseUnit = item.baseUnit.isNotEmpty ? item.baseUnit : 'g';
+      final String unit =
+          (item.unit.isNotEmpty) ? item.unit : (baseUnit == 'g' ? 'g' : 'ml');
+      final double amount = item.amount > 0 ? item.amount : 100.0;
+      final baseAmount = _toBaseAmount(baseUnit, unit, amount);
+      final safeBaseAmount = baseAmount > 0 ? baseAmount : 100.0;
+      item.baseUnit = baseUnit;
+      item.unit = unit;
+      item.amount = amount;
+      item.baseCaloriesPer100 = (item.calories * 100.0) / safeBaseAmount;
+      item.baseProteinPer100 = (item.protein * 100.0) / safeBaseAmount;
+      item.baseCarbsPer100 = (item.carbs * 100.0) / safeBaseAmount;
+      item.baseFatsPer100 = (item.fats * 100.0) / safeBaseAmount;
+    }
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => PortionPickerDialog(
+        title: 'Edit portion',
+        baseUnit: item.baseUnit,
+        initialAmount: item.amount > 0 ? item.amount : 100,
+        initialUnit: item.unit,
+        allowMacroBasisChoice: false,
+        initialIsPer100: true,
+        allowedUnits: item.baseUnit == 'g'
+            ? const ['g']
+            : const ['ml', 'tsp', 'tbsp', 'dl', 'cup'],
+      ),
+    );
+    if (result == null) return;
+
+    final double amount = (result['amount'] as num).toDouble();
+    final String unit = result['unit'] as String;
+    final String baseUnit = item.baseUnit; // lock to item's base
+
+    final baseAmount = _toBaseAmount(baseUnit, unit, amount);
+    final factor = baseAmount / 100.0;
+
+    setState(() {
+      item.amount = amount;
+      item.unit = unit;
+      item.calories = item.baseCaloriesPer100 * factor;
+      item.protein = item.baseProteinPer100 * factor;
+      item.carbs = item.baseCarbsPer100 * factor;
+      item.fats = item.baseFatsPer100 * factor;
+      _markAsDirty();
+    });
+  }
 }
 
 // --- HELPER & SUB-WIDGETS ---

@@ -226,23 +226,20 @@ class _CreatePostPageState extends State<CreatePostPage> {
         maxWidth: 1920,
         maxHeight: 1080,
       );
-      if (images != null) {
-        final filtered = images
-            .where((img) => File(img.path).lengthSync() <= 8 * 1024 * 1024)
-            .toList();
-        if (filtered.length > 3) filtered.removeRange(3, filtered.length);
-        setState(() => _imageFiles = filtered);
-        if (images.length > 3) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Max 3 images allowed.')),
-          );
-        }
-        if (images
-            .any((img) => File(img.path).lengthSync() > 8 * 1024 * 1024)) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Images must be max 8MB each.')),
-          );
-        }
+      final filtered = images
+          .where((img) => File(img.path).lengthSync() <= 8 * 1024 * 1024)
+          .toList();
+      if (filtered.length > 3) filtered.removeRange(3, filtered.length);
+      setState(() => _imageFiles = filtered);
+      if (images.length > 3) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Max 3 images allowed.')),
+        );
+      }
+      if (images.any((img) => File(img.path).lengthSync() > 8 * 1024 * 1024)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Images must be max 8MB each.')),
+        );
       }
     } catch (e) {
       if (mounted) {

@@ -115,8 +115,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
           final bool hasImages = images.isNotEmpty;
           final bool hasRoute = post.dailyRoutes != null &&
               post.dailyRoutes!.isNotEmpty &&
-              post.dailyRoutes!.any(
-                  (r) => r.points != null && (r.points as List).isNotEmpty);
+              post.dailyRoutes!.any((r) => (r.points as List).isNotEmpty);
 
           return CustomScrollView(
             slivers: [
