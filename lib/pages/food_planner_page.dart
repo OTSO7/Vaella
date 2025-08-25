@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
@@ -69,8 +71,8 @@ class FoodItem {
       };
 
   factory FoodItem.fromJson(Map<String, dynamic> json) => FoodItem(
-        id: json['id'],
-        name: json['name'],
+        id: json['id'] as String,
+        name: json['name'] as String,
         calories: (json['calories'] as num?)?.toDouble() ?? 0.0,
         protein: (json['protein'] as num?)?.toDouble() ?? 0.0,
         carbs: (json['carbs'] as num?)?.toDouble() ?? 0.0,
@@ -84,7 +86,7 @@ class FoodItem {
             (json['baseProteinPer100'] as num?)?.toDouble() ?? 0.0,
         baseCarbsPer100: (json['baseCarbsPer100'] as num?)?.toDouble() ?? 0.0,
         baseFatsPer100: (json['baseFatsPer100'] as num?)?.toDouble() ?? 0.0,
-        barcode: json['barcode'],
+        barcode: json['barcode'] as String?,
       );
 }
 
@@ -99,17 +101,15 @@ class FoodSection {
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
-        'items': items.map((item) => item.toJson()).toList(),
+        'items': items.map((i) => i.toJson()).toList(),
       };
 
   factory FoodSection.fromJson(Map<String, dynamic> json) => FoodSection(
-        id: json['id'],
-        name: json['name'],
-        items: (json['items'] as List<dynamic>?)
-                ?.map((itemJson) =>
-                    FoodItem.fromJson(itemJson as Map<String, dynamic>))
-                .toList() ??
-            [],
+        id: json['id'] as String,
+        name: json['name'] as String,
+        items: ((json['items'] as List<dynamic>?) ?? [])
+            .map((e) => FoodItem.fromJson(e as Map<String, dynamic>))
+            .toList(),
       );
 }
 
@@ -124,17 +124,15 @@ class DayPlan {
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
-        'sections': sections.map((section) => section.toJson()).toList(),
+        'sections': sections.map((s) => s.toJson()).toList(),
       };
 
   factory DayPlan.fromJson(Map<String, dynamic> json) => DayPlan(
-        id: json['id'],
-        name: json['name'],
-        sections: (json['sections'] as List<dynamic>?)
-                ?.map((sectionJson) =>
-                    FoodSection.fromJson(sectionJson as Map<String, dynamic>))
-                .toList() ??
-            [],
+        id: json['id'] as String,
+        name: json['name'] as String,
+        sections: ((json['sections'] as List<dynamic>?) ?? [])
+            .map((e) => FoodSection.fromJson(e as Map<String, dynamic>))
+            .toList(),
       );
 }
 
@@ -155,20 +153,83 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
   final Uuid _uuid = const Uuid();
-  bool _isDirty = false; // Flag to track unsaved changes
+  bool _isDirty = false;
+
+  HikePlan? _lastSavedPlan;
+
+  DocumentReference<Map<String, dynamic>>? _planDocRef;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _planSub;
 
   @override
   void initState() {
     super.initState();
-    _pageController.addListener(() {
-      if (_pageController.page?.round() != _currentPage) {
-        setState(() {
-          _currentPage = _pageController.page!.round();
-        });
+    _lastSavedPlan = widget.initialPlan;
+    _initializeDays();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _attachPlanListener();
+    });
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    _planSub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant FoodPlannerPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldJson = oldWidget.initialPlan?.foodPlanJson;
+    final newJson = widget.initialPlan?.foodPlanJson;
+    if (newJson != null && newJson.isNotEmpty && newJson != oldJson) {
+      _applyFoodPlanJson(newJson, markClean: true);
+      _lastSavedPlan = widget.initialPlan;
+    }
+  }
+
+  void _attachPlanListener() {
+    final uid = fb_auth.FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    // FIX: kuunnellaan samaa kokoelmaa johon HikePlanService tallentaa ('plans')
+    _planDocRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('plans')
+        .doc(widget.planId);
+
+    _planSub = _planDocRef!.snapshots().listen((snap) {
+      final data = snap.data();
+      if (data == null) return;
+      final fp = data['foodPlanJson'] as String?;
+      if (fp == null || fp.isEmpty) return;
+
+      // Älä yliaja paikallisia keskeneräisiä muutoksia
+      if (_isDirty) return;
+
+      final currentJson = jsonEncode(_dayPlans.map((d) => d.toJson()).toList());
+      if (currentJson != fp) {
+        _applyFoodPlanJson(fp, markClean: true);
       }
     });
+  }
 
-    _initializeDays();
+  void _applyFoodPlanJson(String jsonString, {bool markClean = false}) {
+    try {
+      final List<dynamic> decoded = jsonDecode(jsonString);
+      final loadedPlans = decoded
+          .map((e) => DayPlan.fromJson(e as Map<String, dynamic>))
+          .toList();
+      setState(() {
+        _dayPlans
+          ..clear()
+          ..addAll(loadedPlans);
+        if (markClean) _isDirty = false;
+      });
+    } catch (_) {
+      // ignore
+    }
   }
 
   void _markAsDirty() {
@@ -180,28 +241,13 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
   }
 
   void _initializeDays() {
-    // Try to load existing food plan first
     if (widget.initialPlan?.foodPlanJson != null &&
         widget.initialPlan!.foodPlanJson!.isNotEmpty) {
-      try {
-        final List<dynamic> decodedList =
-            jsonDecode(widget.initialPlan!.foodPlanJson!);
-        final loadedPlans = decodedList
-            .map((planJson) =>
-                DayPlan.fromJson(planJson as Map<String, dynamic>))
-            .toList();
-        if (loadedPlans.isNotEmpty) {
-          _dayPlans.addAll(loadedPlans);
-          return; // Exit if loaded successfully
-        }
-      } catch (e) {
-        print("Error decoding food plan JSON: $e");
-        // Fallback to creating default days if decoding fails
-      }
+      _applyFoodPlanJson(widget.initialPlan!.foodPlanJson!, markClean: true);
+      return;
     }
 
-    // Fallback: Create default days if no plan exists or loading failed
-    int numberOfDays = 1; // Default to 1 day
+    int numberOfDays = 1;
     if (widget.initialPlan != null && widget.initialPlan!.endDate != null) {
       final duration = widget.initialPlan!.endDate!
               .difference(widget.initialPlan!.startDate)
@@ -210,6 +256,7 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
       numberOfDays = duration > 0 ? duration : 1;
     }
 
+    _dayPlans.clear();
     for (int i = 0; i < numberOfDays; i++) {
       final dayNumber = i + 1;
       _dayPlans.add(
@@ -225,21 +272,17 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
         ),
       );
     }
-    _markAsDirty(); // Mark dirty if we created a new plan
+    _isDirty = true;
   }
 
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  Future<bool> _onWillPop() async {
+  Future<bool> _handleBackPressed() async {
     if (!_isDirty) {
-      return true; // Allow exit if no changes
+      Navigator.of(context)
+          .pop<HikePlan?>(_lastSavedPlan ?? widget.initialPlan);
+      return false;
     }
 
-    final shouldPop = await showDialog<bool>(
+    final action = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Unsaved Changes'),
@@ -247,27 +290,35 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
             'You have unsaved changes. Do you want to save them before exiting?'),
         actions: [
           TextButton(
-            onPressed: () =>
-                Navigator.of(context).pop(true), // Discard and exit
+            onPressed: () => Navigator.of(context).pop('discard'),
             child: const Text('Discard'),
           ),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false), // Don't exit
+            onPressed: () => Navigator.of(context).pop('cancel'),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () async {
-              await _savePlan();
-              if (mounted) {
-                Navigator.of(context).pop(true); // Save and exit
-              }
-            },
+            onPressed: () => Navigator.of(context).pop('save'),
             child: const Text('Save & Exit'),
           ),
         ],
       ),
     );
-    return shouldPop ?? false;
+
+    if (!mounted) return false;
+
+    switch (action) {
+      case 'discard':
+        Navigator.of(context)
+            .pop<HikePlan?>(_lastSavedPlan ?? widget.initialPlan);
+        return false;
+      case 'save':
+        await _savePlan(popAfter: true);
+        return false;
+      case 'cancel':
+      default:
+        return false;
+    }
   }
 
   @override
@@ -275,13 +326,10 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
     final theme = Theme.of(context);
 
     return PopScope(
-      canPop: !_isDirty,
+      canPop: false,
       onPopInvoked: (didPop) async {
         if (didPop) return;
-        final shouldPop = await _onWillPop();
-        if (shouldPop && mounted) {
-          Navigator.pop(context);
-        }
+        await _handleBackPressed();
       },
       child: Scaffold(
         appBar: AppBar(
@@ -289,10 +337,14 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
             'Food Planner',
             style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
           ),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: _handleBackPressed,
+          ),
           actions: [
             IconButton(
-              tooltip: 'Save and Mark as Done',
-              onPressed: _savePlan,
+              tooltip: 'Save changes',
+              onPressed: () => _savePlan(),
               icon: const Icon(Icons.check_circle_outline_rounded),
             )
           ],
@@ -304,6 +356,9 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
               child: PageView.builder(
                 controller: _pageController,
                 itemCount: _dayPlans.length,
+                onPageChanged: (idx) {
+                  setState(() => _currentPage = idx);
+                },
                 itemBuilder: (context, index) {
                   return _buildDayView(_dayPlans[index]);
                 },
@@ -654,7 +709,6 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
       return;
     }
 
-    // Serialize the current food plan to a JSON string
     final foodPlanJsonString =
         jsonEncode(_dayPlans.map((d) => d.toJson()).toList());
 
@@ -664,18 +718,17 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
         ...widget.initialPlan!.preparationItems,
         PrepItemKeys.foodPlanner: true,
       },
-      // Save the serialized food plan data
       foodPlanJson: foodPlanJsonString,
     );
 
     try {
-      // The service now returns the fully updated plan from Firestore
       final HikePlan updatedPlanFromDb =
           await service.updateHikePlan(planToUpdate);
 
       if (!mounted) return;
       setState(() {
-        _isDirty = false; // Mark as saved
+        _isDirty = false;
+        _lastSavedPlan = updatedPlanFromDb;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -683,9 +736,8 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
           backgroundColor: Colors.teal.shade600,
         ),
       );
-      // Pop the page and return the fresh, updated plan object
       if (popAfter) {
-        Navigator.of(context).pop(updatedPlanFromDb);
+        Navigator.of(context).pop<HikePlan>(updatedPlanFromDb);
       }
     } catch (e) {
       if (!mounted) return;
@@ -985,6 +1037,7 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
       builder: (context) => NutritionInfoDialog(
         foodName: item.name,
         initialMacros: {
+          // Edit current portion totals, not per-100
           'calories': item.calories,
           'protein': item.protein,
           'carbs': item.carbs,
@@ -994,11 +1047,17 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
             'Adjust totals for current portion (${item.amount.toStringAsFixed(item.amount == item.amount.roundToDouble() ? 0 : 1)} ${item.unit}).',
         onSave: (macros) {
           setState(() {
-            item.calories = macros['calories'] ?? item.calories;
-            item.protein = macros['protein'] ?? item.protein;
-            item.carbs = macros['carbs'] ?? item.carbs;
-            item.fats = macros['fats'] ?? item.fats;
-            // Update base per 100 based on current portion to keep rescaling consistent
+            // Update current totals from dialog
+            item.calories = (macros['calories'] ?? item.calories)
+                .clamp(0.0, double.infinity);
+            item.protein =
+                (macros['protein'] ?? item.protein).clamp(0.0, double.infinity);
+            item.carbs =
+                (macros['carbs'] ?? item.carbs).clamp(0.0, double.infinity);
+            item.fats =
+                (macros['fats'] ?? item.fats).clamp(0.0, double.infinity);
+
+            // Recompute base-per-100 from current portion to keep scaling consistent
             final baseAmount =
                 _toBaseAmount(item.baseUnit, item.unit, item.amount);
             final safeBaseAmount = baseAmount > 0 ? baseAmount : 100.0;
@@ -1006,6 +1065,7 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
             item.baseProteinPer100 = (item.protein * 100.0) / safeBaseAmount;
             item.baseCarbsPer100 = (item.carbs * 100.0) / safeBaseAmount;
             item.baseFatsPer100 = (item.fats * 100.0) / safeBaseAmount;
+
             _markAsDirty();
           });
         },
@@ -1051,7 +1111,7 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
   double _toBaseAmount(String baseUnit, String unit, double amount) {
     if (amount <= 0) return 0.0;
     if (baseUnit == 'g') {
-      // Mass: only support grams to avoid wrong density assumptions
+      // Mass: keep grams only (avoid density assumptions)
       return amount; // unit should be 'g'
     } else {
       // Volume (ml)
@@ -1065,7 +1125,7 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
         case 'dl':
           return amount * 100.0;
         case 'cup':
-          return amount * 240.0; // approximate
+          return amount * 240.0;
         default:
           return amount;
       }
@@ -1073,7 +1133,6 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
   }
 
   void _editPortion(FoodSection section, FoodItem item) async {
-    // Backward compatibility: if base per-100 values are missing, derive them from current totals.
     final bool missingBase = (item.baseCaloriesPer100 == 0.0 &&
         item.baseProteinPer100 == 0.0 &&
         item.baseCarbsPer100 == 0.0 &&
@@ -1112,7 +1171,7 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
 
     final double amount = (result['amount'] as num).toDouble();
     final String unit = result['unit'] as String;
-    final String baseUnit = item.baseUnit; // lock to item's base
+    final String baseUnit = item.baseUnit;
 
     final baseAmount = _toBaseAmount(baseUnit, unit, amount);
     final factor = baseAmount / 100.0;
@@ -1189,7 +1248,9 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
             controller: _controller,
             onDetect: (capture) async {
               if (_locked) return;
-              final raw = capture.barcodes.firstOrNull?.rawValue;
+              final barcodes = capture.barcodes;
+              if (barcodes.isEmpty) return;
+              final raw = barcodes.first.rawValue;
               if (raw == null || raw.isEmpty) return;
               setState(() => _locked = true);
               Navigator.of(context).pop<_ScanResult?>(_ScanResult(raw));
@@ -1206,14 +1267,14 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
               ),
             ),
           ),
-          Positioned(
+          const Positioned(
             bottom: 32,
             left: 16,
             right: 16,
             child: Text(
               'Align barcode within the frame',
               textAlign: TextAlign.center,
-              style: GoogleFonts.lato(color: Colors.white, fontSize: 16),
+              style: TextStyle(color: Colors.white, fontSize: 16),
             ),
           ),
         ],

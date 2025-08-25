@@ -30,8 +30,6 @@ class _PortionPickerDialogState extends State<PortionPickerDialog> {
   late String _selectedUnit;
   late bool _isPer100;
 
-  static const List<String> _units = ['g', 'ml', 'tsp', 'tbsp', 'dl', 'cup'];
-
   @override
   void initState() {
     super.initState();
@@ -54,6 +52,7 @@ class _PortionPickerDialogState extends State<PortionPickerDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final allowedUnits = _allowedUnitList();
 
     return AlertDialog(
       backgroundColor: theme.colorScheme.surface,
@@ -64,86 +63,68 @@ class _PortionPickerDialogState extends State<PortionPickerDialog> {
           color: theme.colorScheme.onSurface,
         ),
       ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _amountController,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(
-                    labelText: 'Amount',
-                    prefixIcon: const Icon(Icons.scale_rounded, size: 20),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 120,
-                child: DropdownButtonFormField<String>(
-                  value: _selectedUnit,
-                  decoration: InputDecoration(
-                    labelText: 'Unit',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  items: _allowedUnitList()
-                      .map((u) => DropdownMenuItem(value: u, child: Text(u)))
-                      .toList(),
-                  onChanged: (v) =>
-                      setState(() => _selectedUnit = v ?? _selectedUnit),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          if (widget.allowMacroBasisChoice) ...[
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Portion',
+                style: GoogleFonts.lato(
+                    fontSize: 13, color: theme.colorScheme.onSurface)),
+            const SizedBox(height: 8),
             Row(
               children: [
-                Switch(
-                  value: _isPer100,
-                  onChanged: (v) => setState(() => _isPer100 = v),
-                ),
                 Expanded(
-                  child: Text(
-                    'Nutrition values are per 100 ${_selectedUnit == 'g' ? 'g' : 'ml'}',
-                    style: GoogleFonts.lato(
-                      color: theme.colorScheme.onSurface.withOpacity(0.85),
+                  child: TextField(
+                    controller: _amountController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Amount',
+                      border: OutlineInputBorder(),
                     ),
                   ),
+                ),
+                const SizedBox(width: 8),
+                DropdownButton<String>(
+                  value: _selectedUnit,
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() => _selectedUnit = v);
+                  },
+                  items: allowedUnits
+                      .map((u) => DropdownMenuItem(
+                            value: u,
+                            child: Text(u),
+                          ))
+                      .toList(),
                 ),
               ],
             ),
-            const Padding(
-              padding: EdgeInsets.only(top: 4.0),
-            ),
-          ] else ...[
-            Text(
-              'Scaling against 100 ${widget.baseUnit}',
-              style: GoogleFonts.lato(
-                fontSize: 12,
-                color: theme.hintColor,
-              ),
-            ),
+            const SizedBox(height: 16),
+            if (widget.allowMacroBasisChoice)
+              SwitchListTile.adaptive(
+                title: const Text('Values are per 100 base units'),
+                subtitle: Text('Base: ${widget.baseUnit}'),
+                value: _isPer100,
+                onChanged: (v) => setState(() => _isPer100 = v),
+                contentPadding: EdgeInsets.zero,
+              )
+            else
+              Text('Base: ${widget.baseUnit}',
+                  style: GoogleFonts.lato(
+                      fontSize: 13, color: theme.colorScheme.onSurface)),
           ],
-        ],
+        ),
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
+          onPressed: () => Navigator.pop(context),
         ),
         ElevatedButton(
-          onPressed: _save,
           child: const Text('Apply'),
+          onPressed: _save,
         ),
       ],
     );
