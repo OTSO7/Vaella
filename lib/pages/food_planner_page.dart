@@ -15,6 +15,15 @@ import '../widgets/nutrition_info_dialog.dart';
 import '../widgets/portion_picker_dialog.dart';
 import '../services/hike_plan_service.dart';
 
+// --- FIXED SECTION NAMES ---
+const List<String> kFixedSectionNames = <String>[
+  'Breakfast',
+  'Lunch',
+  'Dinner',
+  'Evening Meal',
+  'Snacks',
+];
+
 // --- DATA MODELS ---
 
 class FoodItem {
@@ -192,7 +201,6 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
     final uid = fb_auth.FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
-    // FIX: kuunnellaan samaa kokoelmaa johon HikePlanService tallentaa ('plans')
     _planDocRef = FirebaseFirestore.instance
         .collection('users')
         .doc(uid)
@@ -205,7 +213,6 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
       final fp = data['foodPlanJson'] as String?;
       if (fp == null || fp.isEmpty) return;
 
-      // Älä yliaja paikallisia keskeneräisiä muutoksia
       if (_isDirty) return;
 
       final currentJson = jsonEncode(_dayPlans.map((d) => d.toJson()).toList());
@@ -221,6 +228,12 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
       final loadedPlans = decoded
           .map((e) => DayPlan.fromJson(e as Map<String, dynamic>))
           .toList();
+
+      // Normalize to fixed section set for each day
+      for (final d in loadedPlans) {
+        _ensureFixedSections(d);
+      }
+
       setState(() {
         _dayPlans
           ..clear()
@@ -259,20 +272,33 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
     _dayPlans.clear();
     for (int i = 0; i < numberOfDays; i++) {
       final dayNumber = i + 1;
-      _dayPlans.add(
-        DayPlan(
-          id: _uuid.v4(),
-          name: 'Day $dayNumber',
-          sections: [
-            FoodSection(id: _uuid.v4(), name: 'Breakfast'),
-            FoodSection(id: _uuid.v4(), name: 'Lunch'),
-            FoodSection(id: _uuid.v4(), name: 'Dinner'),
-            FoodSection(id: _uuid.v4(), name: 'Snacks'),
-          ],
-        ),
+      final day = DayPlan(
+        id: _uuid.v4(),
+        name: 'Day $dayNumber',
+        sections: [],
       );
+      _ensureFixedSections(day);
+      _dayPlans.add(day);
     }
     _isDirty = true;
+  }
+
+  void _ensureFixedSections(DayPlan day) {
+    // Keep only fixed sections in fixed order, preserve items where names match.
+    final Map<String, FoodSection> byName = {
+      for (final s in day.sections) s.name.toLowerCase(): s
+    };
+    day.sections
+      ..clear()
+      ..addAll(kFixedSectionNames.map((name) {
+        final existing = byName[name.toLowerCase()];
+        return existing ??
+            FoodSection(
+              id: _uuid.v4(),
+              name: name,
+              items: [],
+            );
+      }));
   }
 
   Future<bool> _handleBackPressed() async {
@@ -433,37 +459,13 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
   }
 
   Widget _buildDayView(DayPlan dayPlan) {
-    return ReorderableListView(
+    return ListView(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-      header: Column(
-        children: [
-          _buildDailyTotalsCard(dayPlan),
-          const SizedBox(height: 8),
-        ],
-      ),
-      footer: Padding(
-        padding: const EdgeInsets.only(top: 12.0),
-        child: Center(
-          child: TextButton.icon(
-            onPressed: () => _addSectionDialog(dayPlan),
-            icon: const Icon(Icons.add_circle_outline_rounded),
-            label: const Text('Add Meal Section'),
-          ),
-        ),
-      ),
-      onReorder: (oldIndex, newIndex) {
-        setState(() {
-          if (newIndex > oldIndex) {
-            newIndex -= 1;
-          }
-          final item = dayPlan.sections.removeAt(oldIndex);
-          dayPlan.sections.insert(newIndex, item);
-          _markAsDirty();
-        });
-      },
-      children: dayPlan.sections
-          .map((section) => _buildSectionCard(dayPlan, section))
-          .toList(),
+      children: [
+        _buildDailyTotalsCard(dayPlan),
+        const SizedBox(height: 8),
+        ...dayPlan.sections.map((s) => _buildSectionCard(dayPlan, s)),
+      ],
     );
   }
 
@@ -474,22 +476,21 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
     return Card(
       key: ValueKey(section.id),
       color: theme.colorScheme.surface,
-      elevation: 2,
+      elevation: 0,
       margin: const EdgeInsets.symmetric(vertical: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: theme.dividerColor.withOpacity(0.5)),
+      ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 10, 16, 16),
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
         child: Column(
           children: [
             Row(
               children: [
-                ReorderableDragStartListener(
-                  index: dayPlan.sections.indexOf(section),
-                  child: const Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: Icon(Icons.drag_handle_rounded),
-                  ),
-                ),
+                Icon(Icons.restaurant_menu_rounded,
+                    color: theme.colorScheme.primary),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     section.name,
@@ -499,22 +500,10 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
                     ),
                   ),
                 ),
-                IconButton(
-                  tooltip: 'Rename',
-                  onPressed: () => _renameSection(section),
-                  icon: const Icon(Icons.edit_rounded, size: 20),
-                ),
-                IconButton(
-                  tooltip: 'Remove section',
-                  onPressed: () {
-                    setState(() => dayPlan.sections.remove(section));
-                    _markAsDirty();
-                  },
-                  icon: const Icon(Icons.delete_outline_rounded, size: 20),
-                ),
+                // No rename or delete for sections (fixed structure)
               ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
             if (section.items.isEmpty)
               InkWell(
                 onTap: () => _showAddFoodAction(section),
@@ -545,22 +534,27 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
             else
               Column(
                 children: section.items
-                    .map((item) => _buildFoodItemTile(section, item))
+                    .map((item) => _FoodItemExpansionTile(
+                          key: ValueKey(item.id),
+                          item: item,
+                          onEditPortion: () => _editPortion(section, item),
+                          onEditMacros: () => _editFoodItem(section, item),
+                          onDelete: () {
+                            setState(() => section.items.remove(item));
+                            _markAsDirty();
+                          },
+                        ))
                     .toList(),
               ),
             const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
-                  child: Padding(
-                    padding:
-                        const EdgeInsets.only(left: 44.0), // Align with title
-                    child: Text(
-                      'Total: ${totals['calories']!.toStringAsFixed(0)} kcal',
-                      style: GoogleFonts.lato(
-                        fontWeight: FontWeight.w600,
-                        color: theme.colorScheme.onSurface.withOpacity(0.9),
-                      ),
+                  child: Text(
+                    'Total: ${totals['calories']!.toStringAsFixed(0)} kcal',
+                    style: GoogleFonts.lato(
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurface.withOpacity(0.9),
                     ),
                   ),
                 ),
@@ -583,63 +577,16 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
     );
   }
 
-  Widget _buildFoodItemTile(FoodSection section, FoodItem item) {
-    final theme = Theme.of(context);
-
-    return Container(
-      margin: const EdgeInsets.only(left: 36, right: 0, top: 4, bottom: 4),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.only(left: 16, right: 4),
-        title: Text(
-          item.name,
-          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-        ),
-        subtitle: Text(
-          '${item.amount > 0 ? '${item.amount.toStringAsFixed(item.amount == item.amount.roundToDouble() ? 0 : 1)} ${item.unit} · ' : ''}${item.calories.toStringAsFixed(0)} kcal · P ${item.protein.toStringAsFixed(0)}g · C ${item.carbs.toStringAsFixed(0)}g · F ${item.fats.toStringAsFixed(0)}g',
-          style: GoogleFonts.lato(
-              color: Colors.white.withOpacity(0.8), fontSize: 13),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              tooltip: 'Edit portion',
-              icon: const Icon(Icons.scale_rounded),
-              onPressed: () => _editPortion(section, item),
-            ),
-            IconButton(
-              tooltip: 'Edit macros',
-              icon: const Icon(Icons.edit_note_rounded),
-              onPressed: () => _editFoodItem(section, item),
-            ),
-            IconButton(
-              tooltip: 'Delete',
-              icon: const Icon(Icons.delete_outline_rounded),
-              onPressed: () {
-                setState(() => section.items.remove(item));
-                _markAsDirty();
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildDailyTotalsCard(DayPlan dayPlan) {
     final theme = Theme.of(context);
     final totals = _calculateDayTotals(dayPlan);
 
     return Card(
-      color: theme.colorScheme.primary.withOpacity(0.1),
+      color: theme.colorScheme.primary.withOpacity(0.08),
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: theme.colorScheme.primary.withOpacity(0.3)),
+        side: BorderSide(color: theme.colorScheme.primary.withOpacity(0.25)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -747,67 +694,6 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
           backgroundColor: Colors.red.shade700,
         ),
       );
-    }
-  }
-
-  Future<void> _addSectionDialog(DayPlan dayPlan) async {
-    final controller = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('New Meal Section'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'Section name',
-            hintText: 'e.g. Evening snacks',
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
-          ElevatedButton(
-              onPressed: () => Navigator.pop(context, controller.text.trim()),
-              child: const Text('Add'))
-        ],
-      ),
-    );
-    if (name != null && name.isNotEmpty) {
-      setState(() {
-        dayPlan.sections.add(FoodSection(id: _uuid.v4(), name: name));
-        _markAsDirty();
-      });
-    }
-  }
-
-  Future<void> _renameSection(FoodSection section) async {
-    final controller = TextEditingController(text: section.name);
-    final newName = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Rename section'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'Section name'),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
-          ElevatedButton(
-              onPressed: () => Navigator.pop(context, controller.text.trim()),
-              child: const Text('Save'))
-        ],
-      ),
-    );
-    if (newName != null && newName.isNotEmpty) {
-      setState(() {
-        section.name = newName;
-        _markAsDirty();
-      });
     }
   }
 
@@ -1185,6 +1071,175 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
       item.fats = item.baseFatsPer100 * factor;
       _markAsDirty();
     });
+  }
+}
+
+// --- FOOD ITEM EXPANSION TILE (collapsed shows only name) ---
+
+class _FoodItemExpansionTile extends StatefulWidget {
+  final FoodItem item;
+  final VoidCallback onEditPortion;
+  final VoidCallback onEditMacros;
+  final VoidCallback onDelete;
+
+  const _FoodItemExpansionTile({
+    super.key,
+    required this.item,
+    required this.onEditPortion,
+    required this.onEditMacros,
+    required this.onDelete,
+  });
+
+  @override
+  State<_FoodItemExpansionTile> createState() => _FoodItemExpansionTileState();
+}
+
+class _FoodItemExpansionTileState extends State<_FoodItemExpansionTile>
+    with TickerProviderStateMixin {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final i = widget.item;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
+      margin: const EdgeInsets.only(top: 6, bottom: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _expanded
+              ? theme.colorScheme.primary.withOpacity(0.35)
+              : theme.dividerColor.withOpacity(0.08),
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Column(
+          children: [
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+              title: Text(
+                i.name,
+                style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+              ),
+              trailing: Icon(
+                _expanded
+                    ? Icons.expand_less_rounded
+                    : Icons.expand_more_rounded,
+              ),
+              onTap: () => setState(() => _expanded = !_expanded),
+            ),
+            // Smooth open & close animations (size + fade)
+            AnimatedSize(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeInOutCubic,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                child: _expanded
+                    ? _buildDetails(context, i)
+                    : const SizedBox.shrink(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetails(BuildContext context, FoodItem i) {
+    final theme = Theme.of(context);
+    final textColor = theme.colorScheme.onSurface.withOpacity(0.9);
+
+    Widget chip(IconData icon, String label, Color color) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withOpacity(0.28)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18, color: color),
+            const SizedBox(width: 6),
+            Text(label, style: GoogleFonts.lato(color: textColor)),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      key: const ValueKey('details'),
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Divider(height: 1),
+          const SizedBox(height: 10),
+          Text('Nutrition',
+              style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w700, fontSize: 14)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              chip(Icons.local_fire_department_rounded,
+                  '${i.calories.toStringAsFixed(0)} kcal', Colors.redAccent),
+              chip(Icons.fitness_center_rounded,
+                  'Protein ${i.protein.toStringAsFixed(1)} g', Colors.teal),
+              chip(Icons.grain_rounded, 'Carbs ${i.carbs.toStringAsFixed(1)} g',
+                  Colors.orange),
+              chip(Icons.circle_rounded, 'Fats ${i.fats.toStringAsFixed(1)} g',
+                  Colors.purple),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text('Portion',
+              style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w700, fontSize: 14)),
+          const SizedBox(height: 6),
+          Text(
+            '${i.amount.toStringAsFixed(i.amount == i.amount.roundToDouble() ? 0 : 1)} ${i.unit}'
+            '  (base: per 100 ${i.baseUnit})',
+            style: GoogleFonts.lato(
+                color: theme.colorScheme.onSurface.withOpacity(0.8)),
+          ),
+          const SizedBox(height: 12),
+          // Use Wrap to avoid overflow on narrow screens
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              OutlinedButton.icon(
+                onPressed: widget.onEditPortion,
+                icon: const Icon(Icons.scale_rounded),
+                label: const Text('Edit portion'),
+              ),
+              OutlinedButton.icon(
+                onPressed: widget.onEditMacros,
+                icon: const Icon(Icons.edit_note_rounded),
+                label: const Text('Edit macros'),
+              ),
+              IconButton(
+                tooltip: 'Delete',
+                onPressed: widget.onDelete,
+                icon: const Icon(Icons.delete_outline_rounded),
+              ),
+            ],
+          )
+        ],
+      ),
+    );
   }
 }
 

@@ -68,9 +68,6 @@ class _PortionPickerDialogState extends State<PortionPickerDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Portion',
-                style: GoogleFonts.lato(
-                    fontSize: 13, color: theme.colorScheme.onSurface)),
             const SizedBox(height: 8),
             Row(
               children: [
