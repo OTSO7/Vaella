@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
 import '../providers/auth_provider.dart';
 import '../providers/follow_provider.dart';
@@ -196,6 +197,7 @@ class _ProfileBanner extends StatelessWidget {
         ),
       ),
       actions: [
+        _NotificationsBellQuickMenu(userId: user.uid),
         isOwnProfile ? _SettingsButton() : _ProfilePopupMenu(),
         const SizedBox(width: 8),
       ],
@@ -773,4 +775,255 @@ class _ModernTabBarDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   bool shouldRebuild(_ModernTabBarDelegate oldDelegate) => false;
+}
+
+class _NotificationsBellQuickMenu extends StatefulWidget {
+  final String userId;
+  const _NotificationsBellQuickMenu({required this.userId});
+
+  @override
+  State<_NotificationsBellQuickMenu> createState() => _NotificationsBellQuickMenuState();
+}
+
+class _NotificationsBellQuickMenuState extends State<_NotificationsBellQuickMenu> {
+  final GlobalKey _iconKey = GlobalKey();
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> _stream() {
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(widget.userId)
+        .collection('notifications')
+        .orderBy('createdAt', descending: true)
+        .limit(3)
+        .snapshots();
+  }
+
+  String _formatTime(Timestamp? ts) {
+    final dt = ts?.toDate();
+    if (dt == null) return '';
+    final now = DateTime.now();
+    final diff = now.difference(dt);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inHours < 1) return '${diff.inMinutes}m';
+    if (diff.inDays < 1) return '${diff.inHours}h';
+    return DateFormat('dd.MM HH:mm').format(dt);
+  }
+
+  void _showMenu() async {
+    final RenderBox? renderBox = _iconKey.currentContext?.findRenderObject() as RenderBox?;
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+
+    final offset = renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
+    final size = renderBox?.size ?? const Size(40, 40);
+
+    await showMenu(
+      context: context,
+      color: Theme.of(context).colorScheme.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(offset.dx, offset.dy + size.height, size.width, size.height),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        PopupMenuItem(
+          enabled: false,
+          padding: EdgeInsets.zero,
+          child: Container(
+            width: 320,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: _stream(),
+              builder: (context, snapshot) {
+                final cs = Theme.of(context).colorScheme;
+                final docs = snapshot.data?.docs ?? [];
+                if (docs.isEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.notifications_none_rounded, size: 36, color: cs.onSurfaceVariant),
+                        const SizedBox(height: 8),
+                        Text('No recent notifications', style: GoogleFonts.lato(color: cs.onSurfaceVariant)),
+                        const SizedBox(height: 8),
+                        _SeeAllButton(),
+                      ],
+                    ),
+                  );
+                }
+
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final d in docs) _QuickNotifItem(doc: d, timeStr: _formatTime(d.data()['createdAt'] as Timestamp?)),
+                    const Divider(height: 1),
+                    const _SeeAllButton(),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.userId)
+          .collection('notifications')
+          .where('read', isEqualTo: false)
+          .limit(1)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final hasUnread = (snapshot.data?.docs ?? []).isNotEmpty;
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            key: _iconKey,
+            customBorder: const CircleBorder(),
+            onTap: _showMenu,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(10.0),
+                  child: Icon(Icons.notifications_none_rounded, color: Colors.white),
+                ),
+                if (hasUnread)
+                  Positioned(
+                    right: 8,
+                    top: 8,
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: const BoxDecoration(
+                        color: Colors.orangeAccent,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _QuickNotifItem extends StatelessWidget {
+  final QueryDocumentSnapshot<Map<String, dynamic>> doc;
+  final String timeStr;
+  const _QuickNotifItem({required this.doc, required this.timeStr});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final data = doc.data();
+    final type = data['type'] as String? ?? 'unknown';
+
+    IconData icon;
+    String title;
+    String? subtitle;
+
+    switch (type) {
+      case 'hike_invite':
+        icon = Icons.landscape_rounded;
+        title = '${data['fromDisplayName'] ?? 'Someone'} invited you';
+        subtitle = data['planName'];
+        break;
+      case 'invite_accepted':
+        icon = Icons.task_alt_rounded;
+        title = '${data['fromDisplayName'] ?? 'Someone'} accepted your invite';
+        subtitle = data['planName'];
+        break;
+      case 'invite_declined':
+        icon = Icons.highlight_off_rounded;
+        title = '${data['fromDisplayName'] ?? 'Someone'} declined your invite';
+        subtitle = data['planName'];
+        break;
+      case 'new_follower':
+        icon = Icons.person_add_alt_1_rounded;
+        title = '${data['fromDisplayName'] ?? 'Someone'} started following you';
+        subtitle = data['fromUsername'] != null ? '@${data['fromUsername']}' : null;
+        break;
+      default:
+        icon = Icons.notifications_rounded;
+        title = 'Notification';
+        subtitle = null;
+    }
+
+    return ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      leading: CircleAvatar(
+        backgroundColor: cs.surfaceContainerHighest,
+        child: Icon(icon, color: cs.primary),
+      ),
+      title: Text(
+        title,
+        style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 14),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: RichText(
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        text: TextSpan(
+          style: GoogleFonts.lato(fontSize: 12, color: cs.onSurfaceVariant),
+          children: [
+            if (subtitle?.isNotEmpty == true) TextSpan(text: subtitle!),
+            if (subtitle?.isNotEmpty == true && timeStr.isNotEmpty)
+              const TextSpan(text: ' • '),
+            TextSpan(
+              text: timeStr,
+              style: GoogleFonts.lato(
+                fontSize: 12,
+                color: cs.onSurfaceVariant.withOpacity(0.6),
+              ),
+            ),
+          ],
+        ),
+      ),
+      onTap: () {
+        Navigator.of(context).pop();
+        context.push('/notifications');
+      },
+    );
+  }
+}
+
+class _SeeAllButton extends StatelessWidget {
+  const _SeeAllButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 6.0),
+      child: SizedBox(
+        width: double.infinity,
+        child: TextButton(
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+          ),
+          onPressed: () {
+            Navigator.of(context).pop();
+            context.push('/notifications');
+          },
+          child: Text(
+            'See all',
+            style: GoogleFonts.poppins(
+              color: cs.primary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

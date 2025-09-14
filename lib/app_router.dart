@@ -27,6 +27,7 @@ import 'pages/find_users_page.dart';
 import 'pages/followers_following_list_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/food_planner_page.dart';
+import 'pages/notifications_page.dart';
 
 import 'widgets/main_scaffold.dart';
 import 'widgets/user_hikes_map_section.dart';
@@ -230,6 +231,11 @@ class AppRouter extends StatelessWidget {
           path: '/settings',
           parentNavigatorKey: _rootNavigatorKey,
           builder: (context, state) => const SettingsPage(),
+        ),
+        GoRoute(
+          path: '/notifications',
+          parentNavigatorKey: _rootNavigatorKey,
+          builder: (context, state) => const NotificationsPage(),
         ),
 
         // Reittisuunnitteluun liittyvät sivut

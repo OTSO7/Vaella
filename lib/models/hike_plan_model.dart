@@ -83,6 +83,9 @@ class HikePlan {
   final List<DailyRoute> dailyRoutes;
   final int? overallRating;
   final String? foodPlanJson; // LISÄTTY
+  final bool isCollaborative;
+  final String? collabOwnerId;
+  final List<String> collaboratorIds;
 
   HikePlan({
     String? id,
@@ -102,6 +105,9 @@ class HikePlan {
     List<DailyRoute>? dailyRoutes,
     this.overallRating,
     this.foodPlanJson, // LISÄTTY
+    this.isCollaborative = false,
+    this.collabOwnerId,
+    List<String>? collaboratorIds,
   })  : id = id ?? const Uuid().v4(),
         status = status ?? _calculateStatus(startDate, endDate, null),
         preparationItems = preparationItems ??
@@ -112,7 +118,8 @@ class HikePlan {
               PrepItemKeys.packingList: false,
             },
         packingList = packingList ?? [],
-        dailyRoutes = dailyRoutes ?? [];
+        dailyRoutes = dailyRoutes ?? [],
+        collaboratorIds = collaboratorIds ?? [];
 
   static HikeStatus _calculateStatus(
       DateTime startDate, DateTime? endDate, HikeStatus? currentStatusIfAny) {
@@ -182,6 +189,10 @@ class HikePlan {
           .toList(),
       overallRating: data['overallRating'],
       foodPlanJson: data['foodPlanJson'], // LISÄTTY
+      isCollaborative: data['isCollaborative'] ?? false,
+      collabOwnerId: data['collabOwnerId'],
+      collaboratorIds:
+          List<String>.from((data['collaboratorIds'] as List<dynamic>? ?? [])),
     );
   }
 
@@ -203,6 +214,9 @@ class HikePlan {
       'dailyRoutes': dailyRoutes.map((route) => route.toFirestore()).toList(),
       'overallRating': overallRating,
       'foodPlanJson': foodPlanJson, // LISÄTTY
+      'isCollaborative': isCollaborative,
+      'collabOwnerId': collabOwnerId,
+      'collaboratorIds': collaboratorIds,
     };
   }
 
@@ -225,6 +239,9 @@ class HikePlan {
     int? overallRating,
     bool setOverallRatingToNull = false,
     String? foodPlanJson, // LISÄTTY
+    bool? isCollaborative,
+    String? collabOwnerId,
+    List<String>? collaboratorIds,
   }) {
     return HikePlan(
       id: id ?? this.id,
@@ -245,6 +262,9 @@ class HikePlan {
       overallRating:
           setOverallRatingToNull ? null : (overallRating ?? this.overallRating),
       foodPlanJson: foodPlanJson ?? this.foodPlanJson, // LISÄTTY
+      isCollaborative: isCollaborative ?? this.isCollaborative,
+      collabOwnerId: collabOwnerId ?? this.collabOwnerId,
+      collaboratorIds: collaboratorIds ?? this.collaboratorIds,
     );
   }
 }
