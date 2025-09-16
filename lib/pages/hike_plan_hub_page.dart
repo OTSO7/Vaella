@@ -20,6 +20,7 @@ import '../services/hike_plan_service.dart';
 import '../utils/app_colors.dart';
 import '../utils/map_helpers.dart';
 import '../widgets/add_hike_plan_form.dart';
+import 'group_hike_hub_page.dart';
 
 class HikePlanHubPage extends StatefulWidget {
   final HikePlan initialPlan;
@@ -460,6 +461,38 @@ class _HikePlanHubPageState extends State<HikePlanHubPage> {
       ..._plan.collaboratorIds,
       if (me != null && me.uid.isNotEmpty) me.uid,
     }.toList();
+
+    // If this is a group plan with multiple participants, use the new group interface
+    final isGroupPlan = ids.length > 1;
+    if (isGroupPlan) {
+      // Navigate to the new group planning interface
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) =>
+                  GroupHikeHubPage(initialPlan: _plan),
+              transitionsBuilder:
+                  (context, animation, secondaryAnimation, child) {
+                const begin = Offset(1.0, 0.0);
+                const end = Offset.zero;
+                const curve = Curves.easeOut;
+
+                var tween = Tween(begin: begin, end: end).chain(
+                  CurveTween(curve: curve),
+                );
+
+                return SlideTransition(
+                  position: animation.drive(tween),
+                  child: child,
+                );
+              },
+              transitionDuration: const Duration(milliseconds: 300),
+            ),
+          );
+        }
+      });
+    }
 
     final dateRange = _dateRangeString(_plan.startDate, _plan.endDate);
     final distanceText = _plan.lengthKm != null && _plan.lengthKm! > 0

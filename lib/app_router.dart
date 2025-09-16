@@ -19,6 +19,7 @@ import 'pages/create_post_page.dart';
 import 'pages/user_posts_list_page.dart';
 import 'pages/weather_page.dart';
 import 'pages/hike_plan_hub_page.dart';
+import 'pages/group_hike_hub_page.dart';
 import 'pages/packing_list_page.dart';
 import 'pages/route_planner_page.dart';
 import 'pages/post_detail_page.dart';
@@ -254,6 +255,18 @@ class AppRouter extends StatelessWidget {
                   body: Center(child: Text('Hike plan not found!')));
             }
             return HikePlanHubPage(initialPlan: plan);
+          },
+        ),
+        GoRoute(
+          path: '/group-hike-hub',
+          parentNavigatorKey: _rootNavigatorKey,
+          builder: (context, state) {
+            final plan = state.extra as HikePlan?;
+            if (plan == null) {
+              return const Scaffold(
+                  body: Center(child: Text('Group hike plan not found!')));
+            }
+            return GroupHikeHubPage(initialPlan: plan);
           },
         ),
         GoRoute(
