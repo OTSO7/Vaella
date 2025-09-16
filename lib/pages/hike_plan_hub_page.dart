@@ -3,7 +3,6 @@ import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:go_router/go_router.dart';
@@ -326,6 +325,129 @@ class _HikePlanHubPageState extends State<HikePlanHubPage> {
     }
   }
 
+  Future<void> _openGroupProgress() async {
+    // Show functional group progress tracking interface
+    final cs = Theme.of(context).colorScheme;
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 500, maxHeight: 700),
+          decoration: BoxDecoration(
+            color: cs.surface,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      cs.primaryContainer.withOpacity(0.8),
+                      cs.primaryContainer.withOpacity(0.4),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(20),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: cs.primary,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: cs.primary.withOpacity(0.3),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        Icons.analytics_outlined,
+                        size: 36,
+                        color: cs.onPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Group Progress',
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 18,
+                        color: cs.onPrimaryContainer,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'See how everyone is preparing',
+                      style: GoogleFonts.lato(
+                        fontSize: 13,
+                        color: cs.onPrimaryContainer.withOpacity(0.8),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Content
+              Expanded(
+                child: _GroupProgressContent(
+                  plan: _plan,
+                  participantIds: <String>{
+                    if (_plan.collabOwnerId != null &&
+                        _plan.collabOwnerId!.isNotEmpty)
+                      _plan.collabOwnerId!,
+                    ..._plan.collaboratorIds,
+                    if (context.read<AuthProvider>().userProfile != null)
+                      context.read<AuthProvider>().userProfile!.uid,
+                  }.toList(),
+                ),
+              ),
+
+              // Footer
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
+                      ),
+                      child: Text(
+                        'Close',
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w600,
+                          color: cs.primary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -353,7 +475,7 @@ class _HikePlanHubPageState extends State<HikePlanHubPage> {
             pinned: true,
             stretch: true,
             elevation: 0,
-            expandedHeight: 300,
+            expandedHeight: 460,
             backgroundColor: cs.surface,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded),
@@ -376,12 +498,6 @@ class _HikePlanHubPageState extends State<HikePlanHubPage> {
                 StretchMode.zoomBackground,
                 StretchMode.blurBackground
               ],
-              titlePadding: const EdgeInsetsDirectional.only(
-                  start: 56, bottom: 14, end: 56),
-              title: Text(_plan.hikeName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
               background: _HeaderBackground(
                 hasRoute: _hasRoute,
                 hasLocation: _hasLocation,
@@ -395,7 +511,7 @@ class _HikePlanHubPageState extends State<HikePlanHubPage> {
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(120),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                 child: _GlassHeaderInfo(
                   title: _plan.hikeName,
                   location: _plan.location,
@@ -407,102 +523,25 @@ class _HikePlanHubPageState extends State<HikePlanHubPage> {
             ),
           ),
 
-          // Subtle collaborators indicator
-          if (ids.isNotEmpty && ids.length > 1)
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
-              sliver: SliverToBoxAdapter(
-                child: _SubtleCollaboratorsIndicator(
-                  participantIds: ids.take(5).toList(),
-                  totalCount: ids.length,
-                ),
-              ),
-            ),
-
-          // Weather Forecast - First
+          // Modern grid-based layout
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 24, 16, 20),
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
             sliver: SliverToBoxAdapter(
-              child: _EnhancedWeatherCard(
+              child: _ModernGridLayout(
                 plan: _plan,
-                onOpen: _openWeather,
+                hasRoute: _hasRoute,
+                hasLocation: _hasLocation,
+                planCenter: _hasLocation
+                    ? LatLng(_plan.latitude!, _plan.longitude!)
+                    : null,
+                participantIds: ids,
+                onOpenWeather: _openWeather,
+                onOpenPacking: _openPacking,
+                onOpenFood: _openFood,
+                onOpenPlanner: _openPlanner,
+                onInvite: _openInviteSheet,
+                onOpenGroupProgress: _openGroupProgress,
               ),
-            ),
-          ),
-
-          // Packing List - Second
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-            sliver: SliverToBoxAdapter(
-                child: _GearSummaryCard(plan: _plan, onOpen: _openPacking)),
-          ),
-
-          // Food Planner - Third
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-            sliver: SliverToBoxAdapter(
-                child: _FoodSummaryCard(plan: _plan, onOpen: _openFood)),
-          ),
-
-          // Route Planner - Fourth
-          if (_hasRoute || _hasLocation)
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-              sliver: SliverToBoxAdapter(
-                child: _RoutePreviewCard(
-                  plan: _plan,
-                  hasRoute: _hasRoute,
-                  hasLocation: _hasLocation,
-                  planCenter: _hasLocation
-                      ? LatLng(_plan.latitude!, _plan.longitude!)
-                      : null,
-                  onOpenPlanner: _openPlanner,
-                ),
-              ),
-            ),
-
-          // Collaborators
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-            sliver: SliverToBoxAdapter(
-              child: ids.isEmpty
-                  ? _EmptyCollabState(onInvite: _openInviteSheet)
-                  : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      stream: FirebaseFirestore.instance
-                          .collection('users')
-                          .where(FieldPath.documentId,
-                              whereIn: ids.take(10).toList())
-                          .snapshots(),
-                      builder: (context, snapshot) {
-                        final docs = snapshot.data?.docs ?? [];
-                        final participants = <_Participant>[];
-                        for (final d in docs) {
-                          final data = d.data();
-                          participants.add(
-                            _Participant(
-                              uid: d.id,
-                              name: (data['displayName'] as String?) ?? 'Hiker',
-                              avatarUrl: data['photoURL'] as String?,
-                            ),
-                          );
-                        }
-                        if (participants.every((p) => p.uid != me?.uid) &&
-                            me != null) {
-                          participants.insert(
-                              0,
-                              _Participant(
-                                  uid: me.uid,
-                                  name: me.displayName,
-                                  avatarUrl: me.photoURL));
-                        }
-                        if (participants.isEmpty)
-                          return _EmptyCollabState(onInvite: _openInviteSheet);
-
-                        return _CollaboratorsSection(
-                            participants: participants,
-                            onInvite: _openInviteSheet);
-                      },
-                    ),
             ),
           ),
         ],
@@ -653,467 +692,109 @@ class _GlassHeaderInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.14),
-            borderRadius: BorderRadius.circular(20),
+            color: Colors.black.withOpacity(0.3),
+            borderRadius: BorderRadius.circular(24),
             border: Border.all(color: Colors.white.withOpacity(0.2)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.poppins(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800)),
-                        const SizedBox(height: 4),
-                        if (location.isNotEmpty)
-                          Row(
-                            children: [
-                              const Icon(Icons.place_outlined,
-                                  size: 14, color: Colors.white70),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  location,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.lato(
-                                      color: Colors.white.withOpacity(0.9),
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.w700),
-                                ),
-                              ),
-                            ],
-                          ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            const Icon(Icons.calendar_month_outlined,
-                                size: 14, color: Colors.white70),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                dateRange,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.lato(
-                                    color: Colors.white.withOpacity(0.9),
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w700),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Icon(Icons.route_outlined, size: 16, color: Colors.white),
-                  const SizedBox(width: 6),
-                  Text(distanceText,
-                      style: GoogleFonts.lato(
-                          color: Colors.white, fontWeight: FontWeight.w700)),
-                  const Spacer(),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: Colors.white.withOpacity(0.25)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.calendar_month_outlined,
-                            size: 14, color: Colors.white),
-                        const SizedBox(width: 6),
-                        Text('${days} days',
-                            style: GoogleFonts.lato(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 12.5)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ================= ROUTE PREVIEW =================
-class _RoutePreviewCard extends StatelessWidget {
-  final HikePlan plan;
-  final bool hasRoute;
-  final bool hasLocation;
-  final LatLng? planCenter;
-  final VoidCallback onOpenPlanner;
-  const _RoutePreviewCard(
-      {required this.plan,
-      required this.hasRoute,
-      required this.hasLocation,
-      required this.planCenter,
-      required this.onOpenPlanner});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    // Calculate route statistics including both ascent and descent
-    final totalDistance = plan.dailyRoutes.fold<double>(
-        0.0, (sum, route) => sum + (route.summary.distance / 1000));
-    final totalDuration = plan.dailyRoutes
-        .fold<double>(0.0, (sum, route) => sum + route.summary.duration);
-    final totalAscent = plan.dailyRoutes
-        .fold<double>(0.0, (sum, route) => sum + route.summary.ascent);
-    final totalDescent = plan.dailyRoutes
-        .fold<double>(0.0, (sum, route) => sum + route.summary.descent);
-
-    return Material(
-      elevation: 8,
-      borderRadius: BorderRadius.circular(16),
-      shadowColor: Colors.black.withOpacity(0.16),
-      child: Container(
-        decoration: BoxDecoration(
-          color: cs.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: cs.outlineVariant.withOpacity(0.25)),
-        ),
-        child: InkWell(
-          onTap: onOpenPlanner,
-          borderRadius: BorderRadius.circular(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Enhanced map preview with gradient overlay
-              Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius:
-                        const BorderRadius.vertical(top: Radius.circular(16)),
-                    child: AspectRatio(
-                      aspectRatio: 16 / 9,
-                      child: _HeaderBackground(
-                        hasRoute: hasRoute,
-                        hasLocation: hasLocation,
-                        planCenter: planCenter,
-                        imageUrl: plan.imageUrl,
-                        dailyRoutes: plan.dailyRoutes,
-                      ),
-                    ),
-                  ),
-                  // Gradient overlay for better text readability
-                  Positioned.fill(
-                    child: ClipRRect(
-                      borderRadius:
-                          const BorderRadius.vertical(top: Radius.circular(16)),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.transparent,
-                              Colors.black.withOpacity(0.3),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Enhanced floating open indicator
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.7),
-                        borderRadius: BorderRadius.circular(20),
-                        border:
-                            Border.all(color: Colors.white.withOpacity(0.2)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.launch_rounded,
-                            color: Colors.white,
-                            size: 14,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Open Planner',
-                            style: GoogleFonts.poppins(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
-              // Content section with enhanced layout
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header with icon and title
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: cs.primary.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(
-                            Icons.route_outlined,
-                            color: cs.primary,
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Route Overview',
-                                style: GoogleFonts.poppins(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              Text(
-                                hasRoute
-                                    ? 'Tap anywhere to explore in detail'
-                                    : 'Start planning your route',
-                                style: GoogleFonts.lato(
-                                  color: cs.onSurfaceVariant,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    if (hasRoute && totalDistance > 0) ...[
-                      const SizedBox(height: 16),
-                      // Enhanced route statistics with grid layout
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: cs.surfaceContainerHighest.withOpacity(0.5),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: cs.outlineVariant.withOpacity(0.3)),
-                        ),
-                        child: Column(
-                          children: [
-                            // Primary stats row
-                            Row(
-                              children: [
-                                _EnhancedStatItem(
-                                  icon: Icons.straighten,
-                                  label: 'Distance',
-                                  value:
-                                      '${totalDistance.toStringAsFixed(1)} km',
-                                  color: cs.primary,
-                                ),
-                                const SizedBox(width: 16),
-                                if (totalDuration > 0)
-                                  _EnhancedStatItem(
-                                    icon: Icons.access_time,
-                                    label: 'Duration',
-                                    value: _formatDuration(totalDuration),
-                                    color: Colors.orange.shade600,
-                                  ),
-                              ],
-                            ),
-
-                            // Elevation stats row (if available)
-                            if (totalAscent > 0 || totalDescent > 0) ...[
-                              const SizedBox(height: 12),
-                              const Divider(height: 1),
-                              const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  if (totalAscent > 0)
-                                    _EnhancedStatItem(
-                                      icon: Icons.trending_up,
-                                      label: 'Gain',
-                                      value: '${totalAscent.toInt()}m',
-                                      color: Colors.green.shade600,
-                                    ),
-                                  if (totalAscent > 0 && totalDescent > 0)
-                                    const SizedBox(width: 16),
-                                  if (totalDescent > 0)
-                                    _EnhancedStatItem(
-                                      icon: Icons.trending_down,
-                                      label: 'Descent',
-                                      value: '${totalDescent.toInt()}m',
-                                      color: Colors.red.shade600,
-                                    ),
-                                ],
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
-
-                    if (!hasRoute && !hasLocation) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: cs.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: cs.outlineVariant.withOpacity(0.3)),
-                        ),
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.add_location_alt_outlined,
-                              size: 32,
-                              color: cs.onSurfaceVariant,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Start planning your route',
-                              style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.w600,
-                                color: cs.onSurface,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Add waypoints and create your perfect hiking route',
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.lato(
-                                color: cs.onSurfaceVariant,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _formatDuration(double seconds) {
-    final d = Duration(seconds: seconds.round());
-    if (d.inHours > 0) {
-      return '${d.inHours}h ${d.inMinutes.remainder(60)}m';
-    }
-    return '${d.inMinutes}m';
-  }
-}
-
-// Enhanced statistics item widget for better visual hierarchy
-class _EnhancedStatItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-
-  const _EnhancedStatItem({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 16, color: color),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: GoogleFonts.lato(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: color.withOpacity(0.8),
-                ),
+              Text(title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  if (location.isNotEmpty) ...[
+                    Icon(Icons.place_outlined, size: 12, color: Colors.white70),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        location,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.lato(
+                            color: Colors.white.withOpacity(0.9),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                  Icon(Icons.calendar_month_outlined,
+                      size: 12, color: Colors.white70),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      dateRange,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.lato(
+                          color: Colors.white.withOpacity(0.9),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text('$days days',
+                        style: GoogleFonts.lato(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 11)),
+                  ),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: color,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-// ================= SUBTLE COLLABORATORS INDICATOR =================
-class _SubtleCollaboratorsIndicator extends StatelessWidget {
-  final List<String> participantIds;
-  final int totalCount;
+// ================= MODERN CARD COMPONENTS =================
 
-  const _SubtleCollaboratorsIndicator({
+// Enhanced Group Hub Card - Apple-inspired group collaboration
+class _ModernGroupHubCard extends StatelessWidget {
+  final HikePlan plan;
+  final List<String> participantIds;
+  final VoidCallback onInvite;
+  final VoidCallback onOpenGroupProgress;
+
+  const _ModernGroupHubCard({
+    required this.plan,
     required this.participantIds,
-    required this.totalCount,
+    required this.onInvite,
+    required this.onOpenGroupProgress,
   });
 
   @override
@@ -1121,204 +802,82 @@ class _SubtleCollaboratorsIndicator extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: cs.primaryContainer.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cs.primary.withOpacity(0.2)),
-      ),
-      child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .where(FieldPath.documentId, whereIn: participantIds)
-            .snapshots(),
-        builder: (context, snapshot) {
-          final docs = snapshot.data?.docs ?? [];
-
-          return Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.group_outlined,
-                size: 16,
-                color: cs.primary,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'Planning with ${totalCount > 1 ? '${totalCount - 1}' : ''} ${totalCount > 2 ? 'friends' : 'friend'}',
-                style: GoogleFonts.lato(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: cs.primary,
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Avatar stack
-              SizedBox(
-                height: 20,
-                width: docs.length > 3 ? 60 : docs.length * 18.0,
-                child: Stack(
-                  children: List.generate(
-                    docs.length > 3 ? 3 : docs.length,
-                    (index) {
-                      final doc = docs[index];
-                      final data = doc.data();
-                      final avatarUrl = data['photoURL'] as String?;
-
-                      return Positioned(
-                        left: index * 12.0,
-                        child: Container(
-                          width: 20,
-                          height: 20,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 1.5),
-                          ),
-                          child: CircleAvatar(
-                            radius: 8,
-                            backgroundImage:
-                                (avatarUrl != null && avatarUrl.isNotEmpty)
-                                    ? NetworkImage(avatarUrl)
-                                    : null,
-                            backgroundColor: cs.surfaceContainerHighest,
-                            child: (avatarUrl == null || avatarUrl.isEmpty)
-                                ? Icon(Icons.person,
-                                    size: 10, color: cs.onSurfaceVariant)
-                                : null,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-              if (totalCount > 3) ...[
-                const SizedBox(width: 4),
-                Text(
-                  '+${totalCount - 3}',
-                  style: GoogleFonts.lato(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: cs.primary,
-                  ),
-                ),
-              ],
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-// ================= SECTION CARD =================
-class _SectionCard extends StatelessWidget {
-  final Widget child;
-  final EdgeInsetsGeometry? padding;
-  const _SectionCard({required this.child, this.padding});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Material(
-      elevation: 8,
-      borderRadius: BorderRadius.circular(16),
-      shadowColor: Colors.black.withOpacity(0.16),
-      child: Container(
-        decoration: BoxDecoration(
-          color: cs.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: cs.outlineVariant.withOpacity(0.25)),
+        gradient: LinearGradient(
+          colors: [
+            cs.primaryContainer.withOpacity(0.8),
+            cs.primaryContainer.withOpacity(0.4),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        padding: padding ?? const EdgeInsets.fromLTRB(14, 12, 14, 12),
-        child: child,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: cs.primary.withOpacity(0.2),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: cs.primary.withOpacity(0.15),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+            spreadRadius: -2,
+          ),
+          BoxShadow(
+            color: cs.primary.withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+            spreadRadius: 0,
+          ),
+        ],
       ),
-    );
-  }
-}
-
-// ================= GEAR & FOOD =================
-class _GearSummaryCard extends StatelessWidget {
-  final HikePlan plan;
-  final VoidCallback onOpen;
-  const _GearSummaryCard({required this.plan, required this.onOpen});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final packedCount = plan.packingList.where((i) => i.isPacked).length;
-    final totalCount = plan.packingList.length;
-    final progress = totalCount == 0 ? 0.0 : packedCount / totalCount;
-
-    if (totalCount == 0) {
-      return _SectionCard(
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: onOpen,
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  cs.primaryContainer.withOpacity(0.3),
-                  cs.primaryContainer.withOpacity(0.1),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            padding: const EdgeInsets.all(20),
-            child: Column(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header with group info and actions
+            Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: cs.primary.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.backpack_outlined,
-                    size: 32,
-                    color: cs.primary,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Gear List',
-                  style: GoogleFonts.poppins(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 18,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Start building your packing list!\nAdd essential hiking gear and track your progress.',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.lato(
-                    color: cs.onSurfaceVariant,
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
                     color: cs.primary,
                     borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: cs.primary.withOpacity(0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                  child: Icon(
+                    Icons.groups_2_rounded,
+                    color: cs.onPrimary,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.add_rounded,
-                          color: Colors.white, size: 18),
-                      const SizedBox(width: 6),
                       Text(
-                        'Add First Item',
+                        'Group Adventure',
                         style: GoogleFonts.poppins(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 20,
+                          color: cs.onPrimaryContainer,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${participantIds.length} adventurers planning together',
+                        style: GoogleFonts.lato(
+                          fontSize: 15,
+                          color: cs.onPrimaryContainer.withOpacity(0.8),
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
@@ -1326,235 +885,578 @@ class _GearSummaryCard extends StatelessWidget {
                 ),
               ],
             ),
-          ),
-        ),
-      );
-    }
 
-    return _SectionCard(
-      padding: EdgeInsets.zero,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onOpen,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Header with gradient background
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    cs.primary.withOpacity(0.15),
-                    cs.primaryContainer.withOpacity(0.1),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+            const SizedBox(height: 24),
+
+            // Participant avatars with Apple-style design
+            _buildParticipantRow(context, cs),
+
+            const SizedBox(height: 24),
+
+            // Action buttons with Apple-style design
+            Row(
+              children: [
+                Expanded(
+                  child: _buildActionButton(
+                    context: context,
+                    cs: cs,
+                    icon: Icons.analytics_outlined,
+                    label: 'Group Progress',
+                    onTap: onOpenGroupProgress,
+                    isPrimary: true,
+                  ),
                 ),
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(16)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: cs.primary.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      Icons.backpack_outlined,
-                      color: cs.primary,
-                      size: 22,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Gear List',
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
-                          ),
-                        ),
-                        Text(
-                          '$totalCount items • ${(progress * 100).round()}% ready',
-                          style: GoogleFonts.lato(
-                            color: cs.onSurfaceVariant,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: progress == 1.0
-                          ? Colors.green.withOpacity(0.2)
-                          : cs.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          progress == 1.0
-                              ? Icons.check_circle
-                              : Icons.open_in_new,
-                          size: 16,
-                          color: progress == 1.0 ? Colors.green : cs.primary,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          progress == 1.0 ? 'Complete' : 'Open',
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                            color: progress == 1.0 ? Colors.green : cs.primary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Content
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Progress visualization
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Container(
-                          height: 12,
-                          decoration: BoxDecoration(
-                            color: cs.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
-                            child: LinearProgressIndicator(
-                              value: progress,
-                              backgroundColor: Colors.transparent,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                progress == 1.0 ? Colors.green : cs.primary,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: progress == 1.0
-                              ? Colors.green.withOpacity(0.1)
-                              : cs.primaryContainer.withOpacity(0.5),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          '$packedCount/$totalCount',
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                            color: progress == 1.0 ? Colors.green : cs.primary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  // Item preview
-                  SizedBox(
-                    height: 32,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: plan.packingList.length.clamp(0, 8),
-                      separatorBuilder: (_, __) => const SizedBox(width: 8),
-                      itemBuilder: (context, i) {
-                        final item = plan.packingList[i];
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: item.isPacked
-                                ? Colors.green.withOpacity(0.1)
-                                : cs.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: item.isPacked
-                                  ? Colors.green.withOpacity(0.3)
-                                  : cs.outlineVariant.withOpacity(0.3),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                item.isPacked
-                                    ? Icons.check_circle
-                                    : Icons.circle_outlined,
-                                size: 14,
-                                color: item.isPacked
-                                    ? Colors.green
-                                    : cs.onSurfaceVariant,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                item.name,
-                                style: GoogleFonts.lato(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: item.isPacked
-                                      ? Colors.green
-                                      : cs.onSurface,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-
-                  if (plan.packingList.length > 8) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      '+${plan.packingList.length - 8} more items',
-                      style: GoogleFonts.lato(
-                        fontSize: 12,
-                        color: cs.onSurfaceVariant,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+                const SizedBox(width: 12),
+                _buildInviteButton(context, cs),
+              ],
             ),
           ],
         ),
       ),
     );
   }
+
+  Widget _buildParticipantRow(BuildContext context, ColorScheme cs) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .where(FieldPath.documentId,
+              whereIn: participantIds.take(10).toList())
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return _buildLoadingAvatars(cs);
+        }
+
+        final users = snapshot.data!.docs.map((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          return {
+            'uid': doc.id,
+            'name': data['displayName'] ?? 'Hiker',
+            'photo': data['photoURL'],
+          };
+        }).toList();
+
+        return Row(
+          children: [
+            // Avatar stack with Apple-style overlapping
+            SizedBox(
+              height: 44,
+              width: (users.length * 32.0) + 12,
+              child: Stack(
+                children: users.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final user = entry.value;
+                  return Positioned(
+                    left: index * 32.0,
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: cs.surface,
+                          width: 3,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.15),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: CircleAvatar(
+                        radius: 20,
+                        backgroundImage: user['photo'] != null
+                            ? NetworkImage(user['photo'])
+                            : null,
+                        backgroundColor: cs.primaryContainer,
+                        child: user['photo'] == null
+                            ? Icon(
+                                Icons.person_rounded,
+                                color: cs.onPrimaryContainer,
+                                size: 24,
+                              )
+                            : null,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+
+            if (users.length < participantIds.length) ...[
+              const SizedBox(width: 8),
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: cs.surfaceContainerHighest,
+                  border: Border.all(
+                    color: cs.outline.withOpacity(0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Center(
+                  child: Text(
+                    '+${participantIds.length - users.length}',
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+
+            const Spacer(),
+
+            // Group status indicator
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: cs.surface.withOpacity(0.8),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: cs.outline.withOpacity(0.2),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.circle,
+                    color: Colors.green.shade400,
+                    size: 8,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Active',
+                    style: GoogleFonts.lato(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildLoadingAvatars(ColorScheme cs) {
+    return Row(
+      children: List.generate(3, (index) {
+        return Container(
+          margin: EdgeInsets.only(left: index > 0 ? -8 : 0),
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: cs.surfaceContainerHighest,
+            border: Border.all(color: cs.surface, width: 3),
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _buildActionButton({
+    required BuildContext context,
+    required ColorScheme cs,
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    required bool isPrimary,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+          decoration: BoxDecoration(
+            color: isPrimary
+                ? cs.surface.withOpacity(0.9)
+                : cs.surface.withOpacity(0.6),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: cs.outline.withOpacity(0.2),
+            ),
+            boxShadow: [
+              if (isPrimary) ...[
+                BoxShadow(
+                  color: cs.primary.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                color: isPrimary ? cs.primary : cs.onSurfaceVariant,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  color: isPrimary ? cs.primary : cs.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInviteButton(BuildContext context, ColorScheme cs) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onInvite,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: cs.primary,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: cs.primary.withOpacity(0.3),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Icon(
+            Icons.person_add_alt_1_rounded,
+            color: cs.onPrimary,
+            size: 20,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _FoodSummaryCard extends StatelessWidget {
+class _ModernWeatherCard extends StatelessWidget {
   final HikePlan plan;
   final VoidCallback onOpen;
-  const _FoodSummaryCard({required this.plan, required this.onOpen});
+
+  const _ModernWeatherCard({
+    required this.plan,
+    required this.onOpen,
+  });
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Container(
+      height: 140,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            cs.surfaceContainer,
+            cs.surface,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: cs.outlineVariant.withOpacity(0.2),
+          width: 0.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.12),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
+            spreadRadius: -2,
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onOpen,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: cs.primaryContainer,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: cs.primary.withOpacity(0.15),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    Icons.cloud_outlined,
+                    color: cs.onPrimaryContainer,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Weather Forecast',
+                        style: GoogleFonts.poppins(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        plan.latitude != null
+                            ? 'Check conditions for your hike'
+                            : 'Add location for weather info',
+                        style: GoogleFonts.lato(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  color: cs.onSurfaceVariant,
+                  size: 16,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ModernPackingCard extends StatelessWidget {
+  final HikePlan plan;
+  final VoidCallback onOpen;
+
+  const _ModernPackingCard({
+    required this.plan,
+    required this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final packedCount = plan.packingList.where((i) => i.isPacked).length;
+    final totalCount = plan.packingList.length;
+    final progress = totalCount > 0 ? packedCount / totalCount : 0.0;
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 160),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              cs.surfaceContainer,
+              cs.surface,
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: cs.outlineVariant.withOpacity(0.2),
+            width: 0.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.12),
+              blurRadius: 20,
+              offset: const Offset(0, 6),
+              spreadRadius: -2,
+            ),
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 2),
+              spreadRadius: 0,
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: onOpen,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: cs.primaryContainer,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: cs.primary.withOpacity(0.15),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.backpack_outlined,
+                          color: cs.onPrimaryContainer,
+                          size: 22,
+                        ),
+                      ),
+                      const Expanded(child: SizedBox.shrink()),
+                      Flexible(
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          alignment: WrapAlignment.end,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color:
+                                    cs.surfaceContainerHighest.withOpacity(0.6),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                'Personal',
+                                style: GoogleFonts.lato(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: cs.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                            if (totalCount > 0)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: progress > 0.8
+                                      ? cs.primary.withOpacity(0.1)
+                                      : cs.surfaceContainerHighest
+                                          .withOpacity(0.8),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  '${(progress * 100).round()}%',
+                                  style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                    color: progress > 0.8
+                                        ? cs.primary
+                                        : cs.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'My Packing List',
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  if (totalCount > 0) ...[
+                    Text(
+                      '$packedCount of $totalCount items packed',
+                      style: GoogleFonts.lato(
+                        color: cs.onSurfaceVariant,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        backgroundColor:
+                            cs.surfaceContainerHighest.withOpacity(0.3),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          progress > 0.8
+                              ? cs.primary
+                              : cs.primary.withOpacity(0.6),
+                        ),
+                        minHeight: 8,
+                      ),
+                    ),
+                  ] else
+                    Text(
+                      'Start building your personal packing list',
+                      style: GoogleFonts.lato(
+                        color: cs.onSurfaceVariant,
+                        fontSize: 13,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ModernFoodCard extends StatelessWidget {
+  final HikePlan plan;
+  final VoidCallback onOpen;
+
+  const _ModernFoodCard({
+    required this.plan,
+    required this.onOpen,
+  });
 
   Map<String, double> _calculateFoodTotals() {
     if (plan.foodPlanJson == null || plan.foodPlanJson!.isEmpty) {
@@ -1576,7 +1478,6 @@ class _FoodSummaryCard extends StatelessWidget {
           if (items.isNotEmpty) {
             dayHasItems = true;
             totalItems += items.length;
-
             for (final item in items) {
               totalCalories += (item['calories'] as num?)?.toDouble() ?? 0.0;
             }
@@ -1602,951 +1503,962 @@ class _FoodSummaryCard extends StatelessWidget {
     final days = plan.endDate != null
         ? plan.endDate!.difference(plan.startDate).inDays + 1
         : 1;
-
     final foodData = _calculateFoodTotals();
-    final hasFood = foodData['items']! > 0;
+    final plannedDays = foodData['days']!.toInt();
+    final progress = days > 0 ? (plannedDays / days) : 0.0;
 
-    return _SectionCard(
-      padding: EdgeInsets.zero,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onOpen,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Header with gradient background
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.orangeAccent.withOpacity(0.2),
-                    Colors.deepOrangeAccent.withOpacity(0.1),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(16)),
-              ),
-              child: Row(
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 160),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              cs.surfaceContainer,
+              cs.surface,
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: cs.outlineVariant.withOpacity(0.2),
+            width: 0.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.12),
+              blurRadius: 20,
+              offset: const Offset(0, 6),
+              spreadRadius: -2,
+            ),
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 2),
+              spreadRadius: 0,
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: onOpen,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.orangeAccent.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      hasFood
-                          ? Icons.restaurant_menu
-                          : Icons.restaurant_outlined,
-                      color: Colors.deepOrange.shade600,
-                      size: 22,
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: cs.secondaryContainer,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: cs.secondary.withOpacity(0.15),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.restaurant_menu,
+                          color: cs.onSecondaryContainer,
+                          size: 22,
+                        ),
+                      ),
+                      const Expanded(child: SizedBox.shrink()),
+                      Flexible(
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          alignment: WrapAlignment.end,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color:
+                                    cs.surfaceContainerHighest.withOpacity(0.6),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                'Personal',
+                                style: GoogleFonts.lato(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: cs.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                            if (plannedDays > 0)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: progress > 0.8
+                                      ? cs.primary.withOpacity(0.1)
+                                      : cs.surfaceContainerHighest
+                                          .withOpacity(0.8),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  '${(progress * 100).round()}%',
+                                  style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                    color: progress > 0.8
+                                        ? cs.primary
+                                        : cs.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'My Food Plan',
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Food Planner',
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
-                          ),
-                        ),
-                        Text(
-                          hasFood
-                              ? '${foodData['days']!.toInt()}/$days days planned'
-                              : '$days ${days == 1 ? 'day' : 'days'} of meals to plan',
-                          style: GoogleFonts.lato(
-                            color: cs.onSurfaceVariant,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
+                  const SizedBox(height: 4),
+                  if (plannedDays > 0) ...[
+                    Text(
+                      '$plannedDays of $days days planned',
+                      style: GoogleFonts.lato(
+                        color: cs.onSurfaceVariant,
+                        fontSize: 13,
+                      ),
                     ),
-                  ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.orangeAccent.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.open_in_new,
-                          size: 16,
-                          color: Colors.deepOrange.shade600,
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        backgroundColor:
+                            cs.surfaceContainerHighest.withOpacity(0.3),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          progress > 0.8
+                              ? cs.primary
+                              : cs.primary.withOpacity(0.6),
                         ),
-                        const SizedBox(width: 4),
-                        Text(
-                          hasFood ? 'Edit' : 'Plan',
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                            color: Colors.deepOrange.shade600,
-                          ),
-                        ),
-                      ],
+                        minHeight: 8,
+                      ),
                     ),
-                  ),
+                  ] else
+                    Text(
+                      'Plan your personal meals and snacks',
+                      style: GoogleFonts.lato(
+                        color: cs.onSurfaceVariant,
+                        fontSize: 13,
+                      ),
+                    ),
                 ],
               ),
             ),
-
-            // Content
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: hasFood
-                  ? _buildMealSummary(foodData, cs)
-                  : _buildEmptyState(cs),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildMealSummary(Map<String, double> foodData, ColorScheme cs) {
-    final days = plan.endDate != null
-        ? plan.endDate!.difference(plan.startDate).inDays + 1
-        : 1;
-    final plannedDays = foodData['days']!.toInt();
-    final progressPercent = days > 0 ? (plannedDays / days) : 0.0;
+class _ModernRouteCard extends StatelessWidget {
+  final HikePlan plan;
+  final bool hasRoute;
+  final bool hasLocation;
+  final LatLng? planCenter;
+  final VoidCallback onOpen;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Progress visualization (clean and simple)
-        Row(
-          children: [
-            Expanded(
-              child: Container(
-                height: 12,
-                decoration: BoxDecoration(
-                  color: cs.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: LinearProgressIndicator(
-                    value: progressPercent,
-                    backgroundColor: Colors.transparent,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      progressPercent >= 1.0
-                          ? Colors.green
-                          : Colors.orange.shade600,
+  const _ModernRouteCard({
+    required this.plan,
+    required this.hasRoute,
+    required this.hasLocation,
+    required this.planCenter,
+    required this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final totalDistance = plan.dailyRoutes.fold<double>(
+        0.0, (sum, route) => sum + (route.summary.distance / 1000));
+
+    return Container(
+      height: hasRoute ? 180 : 120,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            cs.surfaceContainer,
+            cs.surface,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: cs.outlineVariant.withOpacity(0.2),
+          width: 0.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.12),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
+            spreadRadius: -2,
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onOpen,
+          child: Stack(
+            children: [
+              // Subtle map preview if has route
+              if (hasRoute || hasLocation)
+                Positioned.fill(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: Opacity(
+                      opacity: 0.15,
+                      child: _HeaderBackground(
+                        hasRoute: hasRoute,
+                        hasLocation: hasLocation,
+                        planCenter: planCenter,
+                        imageUrl: plan.imageUrl,
+                        dailyRoutes: plan.dailyRoutes,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: progressPercent >= 1.0
-                    ? Colors.green.withOpacity(0.1)
-                    : Colors.orange.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '$plannedDays/$days days',
-                style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                  color: progressPercent >= 1.0
-                      ? Colors.green
-                      : Colors.orange.shade600,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
 
-  Widget _buildEmptyState(ColorScheme cs) {
-    return Column(
-      children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Colors.orange.shade50.withOpacity(0.8),
-                Colors.orange.shade100.withOpacity(0.4),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.orange.shade200.withOpacity(0.6)),
-          ),
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade100,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.orange.shade200),
-                ),
-                child: Icon(
-                  Icons.restaurant_menu_rounded,
-                  size: 32,
-                  color: Colors.orange.shade700,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Plan Your Trail Meals',
-                style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
-                  color: Colors.orange.shade800,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Create nutritious meal plans for each day of your hike.\nTrack calories, ingredients, and portions.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.lato(
-                  fontSize: 13,
-                  height: 1.4,
-                  color: Colors.orange.shade700,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade600,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.orange.shade200,
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.add_rounded,
-                        color: Colors.white, size: 18),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Start Planning',
-                      style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                        color: Colors.white,
+              // Content
+              Positioned.fill(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: hasRoute
+                                  ? cs.primaryContainer
+                                  : cs.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: hasRoute
+                                      ? cs.primary.withOpacity(0.15)
+                                      : cs.onSurfaceVariant.withOpacity(0.1),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              hasRoute ? Icons.route : Icons.add_road_rounded,
+                              color: hasRoute
+                                  ? cs.onPrimaryContainer
+                                  : cs.onSurfaceVariant,
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Text(
+                              hasRoute ? 'Route Planned' : 'Plan Route',
+                              style: GoogleFonts.poppins(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            color: cs.onSurfaceVariant,
+                            size: 16,
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
+                      if (hasRoute) ...[
+                        const Spacer(),
+                        Text(
+                          '${totalDistance.toStringAsFixed(1)} km total distance',
+                          style: GoogleFonts.lato(
+                            color: cs.onSurfaceVariant,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${plan.dailyRoutes.length} day segments',
+                          style: GoogleFonts.lato(
+                            color: cs.onSurfaceVariant,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ] else ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Create your hiking route',
+                          style: GoogleFonts.lato(
+                            color: cs.onSurfaceVariant,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const Spacer(),
+                      ],
+                    ],
+                  ),
                 ),
               ),
             ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
 
-// ================= ENHANCED WEATHER CARD =================
-class _EnhancedWeatherCard extends StatefulWidget {
+// ================= MODERN GRID LAYOUT =================
+class _ModernGridLayout extends StatelessWidget {
   final HikePlan plan;
-  final VoidCallback onOpen;
+  final bool hasRoute;
+  final bool hasLocation;
+  final LatLng? planCenter;
+  final List<String> participantIds;
+  final VoidCallback onOpenWeather;
+  final VoidCallback onOpenPacking;
+  final VoidCallback onOpenFood;
+  final VoidCallback onOpenPlanner;
+  final VoidCallback onInvite;
+  final VoidCallback onOpenGroupProgress;
 
-  const _EnhancedWeatherCard({required this.plan, required this.onOpen});
+  const _ModernGridLayout({
+    required this.plan,
+    required this.hasRoute,
+    required this.hasLocation,
+    required this.planCenter,
+    required this.participantIds,
+    required this.onOpenWeather,
+    required this.onOpenPacking,
+    required this.onOpenFood,
+    required this.onOpenPlanner,
+    required this.onInvite,
+    required this.onOpenGroupProgress,
+  });
 
   @override
-  State<_EnhancedWeatherCard> createState() => _EnhancedWeatherCardState();
+  Widget build(BuildContext context) {
+    final isGroupPlan = participantIds.length > 1;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Group collaboration hub - prominent position for group plans
+        if (isGroupPlan) ...[
+          _ModernGroupHubCard(
+            plan: plan,
+            participantIds: participantIds,
+            onInvite: onInvite,
+            onOpenGroupProgress: onOpenGroupProgress,
+          ),
+          const SizedBox(height: 20),
+        ],
+
+        // Primary featured card - Weather (full width)
+        _ModernWeatherCard(
+          plan: plan,
+          onOpen: onOpenWeather,
+        ),
+
+        const SizedBox(height: 20),
+
+        // Two-column grid for main actions with group features
+        IntrinsicHeight(
+          child: Row(
+            children: [
+              Expanded(
+                child: _ModernPackingCard(
+                  plan: plan,
+                  onOpen: onOpenPacking,
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: _ModernFoodCard(
+                  plan: plan,
+                  onOpen: onOpenFood,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 20),
+
+        // Route planning card - enhanced for group collaboration
+        _ModernRouteCard(
+          plan: plan,
+          hasRoute: hasRoute,
+          hasLocation: hasLocation,
+          planCenter: planCenter,
+          onOpen: onOpenPlanner,
+        ),
+
+        // Invite section for single-person plans
+        if (!isGroupPlan) ...[
+          const SizedBox(height: 20),
+          _buildInvitePrompt(context),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildInvitePrompt(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            cs.primaryContainer.withOpacity(0.3),
+            cs.primaryContainer.withOpacity(0.1),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: cs.primary.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: cs.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              Icons.group_add_rounded,
+              color: cs.primary,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Make it a Group Adventure',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                    color: cs.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Invite friends to plan together',
+                  style: GoogleFonts.lato(
+                    color: cs.onSurfaceVariant,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Material(
+            color: cs.primary,
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: onInvite,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Text(
+                  'Invite',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color: cs.onPrimary,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _EnhancedWeatherCardState extends State<_EnhancedWeatherCard> {
-  final Dio _dio = Dio();
-  Future<Map<String, dynamic>?>? _weatherFuture;
+// ================= GROUP PROGRESS CONTENT =================
+class _GroupProgressContent extends StatelessWidget {
+  final HikePlan plan;
+  final List<String> participantIds;
+
+  const _GroupProgressContent({
+    required this.plan,
+    required this.participantIds,
+  });
 
   @override
-  void initState() {
-    super.initState();
-    if (widget.plan.latitude != null && widget.plan.longitude != null) {
-      _weatherFuture = _fetchWeatherPreview();
-    }
-  }
-
-  Future<Map<String, dynamic>?> _fetchWeatherPreview() async {
-    try {
-      final lat = widget.plan.latitude!;
-      final lon = widget.plan.longitude!;
-      final now = DateTime.now();
-      final start = widget.plan.startDate;
-      final diffDays = start.difference(now).inDays;
-
-      if (diffDays > 9) {
-        // Return estimate data for far future hikes
-        return await _fetchEstimateData(lat, lon, start, widget.plan.endDate);
-      } else {
-        // Return actual forecast data
-        return await _fetchForecastData(lat, lon);
-      }
-    } catch (e) {
-      return null;
-    }
-  }
-
-  Future<Map<String, dynamic>> _fetchEstimateData(
-      double lat, double lon, DateTime start, DateTime? end) async {
-    try {
-      double avgTemp = 0, dayTemp = 0, nightTemp = 0;
-      int count = 0, dayCount = 0, nightCount = 0;
-      final years = [start.year - 1, start.year - 2, start.year - 3];
-
-      for (final year in years) {
-        final startStr = DateFormat('yyyy-MM-dd')
-            .format(DateTime(year, start.month, start.day));
-        final endStr = DateFormat('yyyy-MM-dd').format(
-            DateTime(year, end?.month ?? start.month, end?.day ?? start.day));
-        final url =
-            'https://archive-api.open-meteo.com/v1/archive?latitude=$lat&longitude=$lon&start_date=$startStr&end_date=$endStr&daily=temperature_2m_mean,temperature_2m_max,temperature_2m_min&timezone=Europe/Helsinki';
-
-        final response = await _dio.get(url);
-        final data = response.data;
-        if (data?['daily']?['temperature_2m_mean'] != null) {
-          final means = List<double>.from(data['daily']['temperature_2m_mean']
-              .map((v) => v?.toDouble() ?? 0.0));
-          final maxs = List<double>.from(data['daily']['temperature_2m_max']
-              .map((v) => v?.toDouble() ?? 0.0));
-          final mins = List<double>.from(data['daily']['temperature_2m_min']
-              .map((v) => v?.toDouble() ?? 0.0));
-          if (means.isNotEmpty) {
-            avgTemp += means.reduce((a, b) => a + b);
-            count += means.length;
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('users')
+            .where(FieldPath.documentId,
+                whereIn: participantIds.take(10).toList())
+            .snapshots(),
+        builder: (context, usersSnapshot) {
+          if (!usersSnapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
           }
-          if (maxs.isNotEmpty) {
-            dayTemp += maxs.reduce((a, b) => a + b);
-            dayCount += maxs.length;
-          }
-          if (mins.isNotEmpty) {
-            nightTemp += mins.reduce((a, b) => a + b);
-            nightCount += mins.length;
-          }
-        }
-      }
 
-      if (count > 0) {
-        return {
-          'isEstimate': true,
-          'avgTemp': avgTemp / count,
-          'dayTemp': dayCount > 0 ? dayTemp / dayCount : null,
-          'nightTemp': nightCount > 0 ? nightTemp / nightCount : null,
-        };
-      }
-    } catch (e) {
-      // Fallback estimate based on location and month
-      return _getSeasonalEstimate(start);
-    }
-    return _getSeasonalEstimate(start);
+          final users = usersSnapshot.data!.docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return {
+              'uid': doc.id,
+              'name': data['displayName'] ?? 'Hiker',
+              'photo': data['photoURL'],
+            };
+          }).toList();
+
+          return Column(
+            children: users
+                .map((user) => Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: _UserProgressCard(
+                        user: user,
+                        planId: plan.id,
+                      ),
+                    ))
+                .toList(),
+          );
+        },
+      ),
+    );
   }
+}
 
-  Map<String, dynamic> _getSeasonalEstimate(DateTime date) {
-    final month = date.month;
-    double avgTemp, dayTemp, nightTemp;
+class _UserProgressCard extends StatelessWidget {
+  final Map<String, dynamic> user;
+  final String planId;
 
-    // Finnish seasonal estimates
-    switch (month) {
-      case 12:
-      case 1:
-      case 2: // Winter
-        avgTemp = -8;
-        dayTemp = -3;
-        nightTemp = -15;
-        break;
-      case 3:
-      case 4:
-      case 5: // Spring
-        avgTemp = month == 3 ? -2 : (month == 4 ? 5 : 12);
-        dayTemp = avgTemp + 5;
-        nightTemp = avgTemp - 8;
-        break;
-      case 6:
-      case 7:
-      case 8: // Summer
-        avgTemp = month == 6 ? 16 : (month == 7 ? 19 : 17);
-        dayTemp = avgTemp + 6;
-        nightTemp = avgTemp - 6;
-        break;
-      case 9:
-      case 10:
-      case 11: // Autumn
-        avgTemp = month == 9 ? 12 : (month == 10 ? 6 : 0);
-        dayTemp = avgTemp + 4;
-        nightTemp = avgTemp - 6;
-        break;
-      default:
-        avgTemp = 8;
-        dayTemp = 15;
-        nightTemp = 2;
-    }
-
-    return {
-      'isEstimate': true,
-      'avgTemp': avgTemp,
-      'dayTemp': dayTemp,
-      'nightTemp': nightTemp,
-    };
-  }
-
-  Future<Map<String, dynamic>> _fetchForecastData(
-      double lat, double lon) async {
-    final url =
-        'https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=$lat&lon=$lon';
-    final response = await _dio.get(url,
-        options:
-            Options(headers: {'User-Agent': 'TrekNote/1.0 (your@email.com)'}));
-
-    final timeseries = response.data['properties']?['timeseries'] as List?;
-    if (timeseries == null || timeseries.isEmpty) {
-      throw Exception('No forecast data available');
-    }
-
-    final now = DateTime.now();
-    final currentTemp = timeseries.first['data']['instant']['details']
-            ['air_temperature']
-        .toDouble();
-    final currentSymbol = _getSymbolCode(timeseries.first);
-
-    final List<Map<String, dynamic>> dailyForecast = [];
-    final Map<String, List<double>> dailyTemps = {};
-
-    for (var item in timeseries.take(72)) {
-      // Next 3 days
-      final dt = DateTime.parse(item['time']);
-      if (dt.isBefore(now)) continue;
-
-      final dayKey = DateFormat('yyyy-MM-dd').format(dt);
-      final temp =
-          item['data']['instant']['details']['air_temperature']?.toDouble();
-
-      if (temp != null) {
-        dailyTemps.putIfAbsent(dayKey, () => []).add(temp);
-      }
-    }
-
-    dailyTemps.forEach((dayKey, temps) {
-      final day = DateTime.parse(dayKey);
-      final high = temps.reduce((a, b) => a > b ? a : b);
-      final low = temps.reduce((a, b) => a < b ? a : b);
-      dailyForecast.add({
-        'date': day,
-        'high': high,
-        'low': low,
-        'dayName': DateFormat('EEEE').format(day),
-      });
-    });
-
-    dailyForecast.sort((a, b) => a['date'].compareTo(b['date']));
-
-    return {
-      'isEstimate': false,
-      'currentTemp': currentTemp,
-      'currentSymbol': currentSymbol,
-      'dailyForecast': dailyForecast.take(5).toList(),
-    };
-  }
-
-  String _getSymbolCode(Map<String, dynamic> item) {
-    return item['data']?['next_1_hours']?['summary']?['symbol_code'] ??
-        item['data']?['next_6_hours']?['summary']?['symbol_code'] ??
-        item['data']?['next_12_hours']?['summary']?['symbol_code'] ??
-        'clearsky_day';
-  }
-
-  IconData _getWeatherIcon(String symbolCode) {
-    final code = symbolCode.toLowerCase();
-    if (code.contains('sun') || code.contains('clearsky_day'))
-      return Icons.wb_sunny;
-    if (code.contains('clearsky_night')) return Icons.nights_stay;
-    if (code.contains('partlycloudy')) return Icons.wb_cloudy;
-    if (code.contains('cloudy')) return Icons.cloud;
-    if (code.contains('rain')) return Icons.water_drop;
-    if (code.contains('snow')) return Icons.ac_unit;
-    if (code.contains('thunder')) return Icons.flash_on;
-    if (code.contains('fog')) return Icons.foggy;
-    return Icons.wb_cloudy;
-  }
-
-  Color _getTempColor(double temp) {
-    if (temp >= 20) return Colors.orange.shade600;
-    if (temp >= 10) return Colors.green.shade600;
-    if (temp >= 0) return Colors.blue.shade600;
-    return Colors.indigo.shade600;
-  }
-
-  String _getEstimateDescription(
-      double avgTemp, double? dayTemp, double? nightTemp) {
-    final tempDesc = avgTemp >= 15
-        ? "pleasant"
-        : avgTemp >= 5
-            ? "cool"
-            : avgTemp >= -5
-                ? "cold"
-                : "very cold";
-
-    final dayNightDesc = dayTemp != null && nightTemp != null
-        ? " Expect around ${dayTemp.round()}°C during the day and ${nightTemp.round()}°C at night."
-        : "";
-
-    final advice = avgTemp < 0
-        ? " Pack warm layers and winter gear."
-        : avgTemp < 10
-            ? " Bring warm clothing for chilly conditions."
-            : " Comfortable hiking weather expected.";
-
-    return "Typically $tempDesc weather for this time of year.$dayNightDesc$advice";
-  }
+  const _UserProgressCard({
+    required this.user,
+    required this.planId,
+  });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    if (widget.plan.latitude == null || widget.plan.longitude == null) {
-      return _SectionCard(
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                  content: const Text(
-                      'Weather forecast requires location coordinates.'),
-                  backgroundColor: AppColors.errorColor(context)),
-            );
-          },
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                Icon(Icons.location_off, color: cs.onSurfaceVariant),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Weather Forecast',
-                          style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.w700, fontSize: 16)),
-                      Text('Location needed for weather data',
-                          style: GoogleFonts.lato(color: cs.onSurfaceVariant)),
-                    ],
-                  ),
-                ),
-                Icon(Icons.arrow_forward_ios,
-                    size: 16, color: cs.onSurfaceVariant),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(user['uid'])
+          .collection('plans')
+          .doc(planId)
+          .snapshots(),
+      builder: (context, planSnapshot) {
+        if (!planSnapshot.hasData) {
+          return _buildLoadingCard(context, cs);
+        }
 
-    return _SectionCard(
-      padding: EdgeInsets.zero,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: widget.onOpen,
-        child: FutureBuilder<Map<String, dynamic>?>(
-          future: _weatherFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
+        final planData = planSnapshot.data?.data() as Map<String, dynamic>?;
+        if (planData == null) {
+          return _buildNoDataCard(context, cs);
+        }
+
+        // Calculate packing progress
+        final packingList = (planData['packingList'] as List<dynamic>? ?? []);
+        final packedItems =
+            packingList.where((item) => item['isPacked'] == true).length;
+        final totalItems = packingList.length;
+        final packingProgress = totalItems > 0 ? packedItems / totalItems : 0.0;
+
+        // Calculate food planning progress
+        final foodPlanJson = planData['foodPlanJson'] as String?;
+        final foodProgress = _calculateFoodProgress(foodPlanJson, planData);
+
+        return Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                cs.surfaceContainer,
+                cs.surface,
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: cs.outlineVariant.withOpacity(0.3),
+              width: 0.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 12,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                // User header
+                Row(
                   children: [
-                    SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: cs.primary),
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: cs.outline.withOpacity(0.2),
+                          width: 2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: CircleAvatar(
+                        radius: 22,
+                        backgroundImage: user['photo'] != null
+                            ? NetworkImage(user['photo'])
+                            : null,
+                        backgroundColor: cs.primaryContainer,
+                        child: user['photo'] == null
+                            ? Icon(
+                                Icons.person_rounded,
+                                color: cs.onPrimaryContainer,
+                                size: 28,
+                              )
+                            : null,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text('Loading weather forecast...',
-                          style:
-                              GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            user['name'],
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Personal progress',
+                            style: GoogleFonts.lato(
+                              color: cs.onSurfaceVariant,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
-              );
-            }
 
-            final data = snapshot.data;
-            if (data == null) {
-              return _buildErrorCard(cs);
-            }
+                const SizedBox(height: 16),
 
-            if (data['isEstimate'] == true) {
-              return _buildEstimateCard(data, cs);
-            } else {
-              return _buildForecastCard(data, cs);
-            }
-          },
+                // Progress sections
+                Row(
+                  children: [
+                    Expanded(
+                      child: _ProgressSection(
+                        icon: Icons.backpack_outlined,
+                        title: 'Packing',
+                        progress: packingProgress,
+                        subtitle: totalItems > 0
+                            ? '$packedItems of $totalItems packed'
+                            : 'No items yet',
+                        color: cs.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _ProgressSection(
+                        icon: Icons.restaurant_menu,
+                        title: 'Food Plan',
+                        progress: foodProgress,
+                        subtitle: _getFoodProgressText(foodPlanJson, planData),
+                        color: cs.secondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  double _calculateFoodProgress(
+      String? foodPlanJson, Map<String, dynamic> planData) {
+    if (foodPlanJson == null || foodPlanJson.isEmpty) return 0.0;
+
+    try {
+      final startDate = (planData['startDate'] as Timestamp).toDate();
+      final endDate = (planData['endDate'] as Timestamp?)?.toDate();
+      final totalDays =
+          endDate != null ? endDate.difference(startDate).inDays + 1 : 1;
+
+      final List<dynamic> decoded = json.decode(foodPlanJson);
+      int daysWithFood = 0;
+
+      for (final dayData in decoded) {
+        final sections = dayData['sections'] as List<dynamic>? ?? [];
+        bool dayHasItems = false;
+
+        for (final sectionData in sections) {
+          final items = sectionData['items'] as List<dynamic>? ?? [];
+          if (items.isNotEmpty) {
+            dayHasItems = true;
+            break;
+          }
+        }
+
+        if (dayHasItems) daysWithFood++;
+      }
+
+      return totalDays > 0 ? (daysWithFood / totalDays) : 0.0;
+    } catch (e) {
+      return 0.0;
+    }
+  }
+
+  String _getFoodProgressText(
+      String? foodPlanJson, Map<String, dynamic> planData) {
+    if (foodPlanJson == null || foodPlanJson.isEmpty) return 'No plan yet';
+
+    try {
+      final startDate = (planData['startDate'] as Timestamp).toDate();
+      final endDate = (planData['endDate'] as Timestamp?)?.toDate();
+      final totalDays =
+          endDate != null ? endDate.difference(startDate).inDays + 1 : 1;
+
+      final List<dynamic> decoded = json.decode(foodPlanJson);
+      int daysWithFood = 0;
+
+      for (final dayData in decoded) {
+        final sections = dayData['sections'] as List<dynamic>? ?? [];
+        bool dayHasItems = false;
+
+        for (final sectionData in sections) {
+          final items = sectionData['items'] as List<dynamic>? ?? [];
+          if (items.isNotEmpty) {
+            dayHasItems = true;
+            break;
+          }
+        }
+
+        if (dayHasItems) daysWithFood++;
+      }
+
+      return '$daysWithFood of $totalDays days';
+    } catch (e) {
+      return 'No plan yet';
+    }
+  }
+
+  Widget _buildLoadingCard(BuildContext context, ColorScheme cs) {
+    return Container(
+      height: 140,
+      decoration: BoxDecoration(
+        color: cs.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: cs.outlineVariant.withOpacity(0.3),
+          width: 0.5,
         ),
+      ),
+      child: const Center(
+        child: CircularProgressIndicator(),
       ),
     );
   }
 
-  Widget _buildErrorCard(ColorScheme cs) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
+  Widget _buildNoDataCard(BuildContext context, ColorScheme cs) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: cs.outlineVariant.withOpacity(0.3),
+          width: 0.5,
+        ),
+      ),
       child: Row(
         children: [
-          Icon(Icons.error_outline, color: cs.error),
+          CircleAvatar(
+            backgroundImage:
+                user['photo'] != null ? NetworkImage(user['photo']) : null,
+            backgroundColor: cs.primaryContainer,
+            child: user['photo'] == null
+                ? Icon(
+                    Icons.person_rounded,
+                    color: cs.onPrimaryContainer,
+                  )
+                : null,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Weather Forecast',
-                    style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.w700, fontSize: 16)),
-                Text('Unable to load weather data',
-                    style: GoogleFonts.lato(color: cs.onSurfaceVariant)),
+                Text(
+                  user['name'],
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  'No data available',
+                  style: GoogleFonts.lato(
+                    color: cs.onSurfaceVariant,
+                    fontSize: 13,
+                  ),
+                ),
               ],
             ),
           ),
-          Icon(Icons.arrow_forward_ios, size: 16, color: cs.onSurfaceVariant),
         ],
       ),
     );
   }
-
-  Widget _buildEstimateCard(Map<String, dynamic> data, ColorScheme cs) {
-    final avgTemp = data['avgTemp'] as double;
-    final dayTemp = data['dayTemp'] as double?;
-    final nightTemp = data['nightTemp'] as double?;
-    final tempColor = _getTempColor(avgTemp);
-    final description = _getEstimateDescription(avgTemp, dayTemp, nightTemp);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: tempColor.withOpacity(0.1),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-          ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: tempColor.withOpacity(0.2),
-                child: Icon(Icons.history_toggle_off, color: tempColor),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Weather Estimate',
-                        style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w700, fontSize: 16)),
-                    Text('${avgTemp.round()}°C average',
-                        style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 24,
-                            color: tempColor)),
-                  ],
-                ),
-              ),
-              if (dayTemp != null && nightTemp != null) ...[
-                Column(
-                  children: [
-                    Text('${dayTemp.round()}°',
-                        style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w600, color: tempColor)),
-                    Text('Day',
-                        style: GoogleFonts.lato(
-                            fontSize: 12, color: cs.onSurfaceVariant)),
-                  ],
-                ),
-                const SizedBox(width: 16),
-                Column(
-                  children: [
-                    Text('${nightTemp.round()}°',
-                        style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w600, color: tempColor)),
-                    Text('Night',
-                        style: GoogleFonts.lato(
-                            fontSize: 12, color: cs.onSurfaceVariant)),
-                  ],
-                ),
-              ],
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(description,
-                  style: GoogleFonts.lato(height: 1.4, color: cs.onSurface)),
-              const SizedBox(height: 8),
-              Text('Exact forecast available 10 days before hike',
-                  style: GoogleFonts.lato(
-                      fontSize: 12,
-                      color: cs.onSurfaceVariant,
-                      fontStyle: FontStyle.italic)),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildForecastCard(Map<String, dynamic> data, ColorScheme cs) {
-    final currentTemp = data['currentTemp'] as double;
-    final currentSymbol = data['currentSymbol'] as String;
-    final dailyForecast = data['dailyForecast'] as List<Map<String, dynamic>>;
-    final tempColor = _getTempColor(currentTemp);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: tempColor.withOpacity(0.1),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-          ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: tempColor.withOpacity(0.2),
-                child: Icon(_getWeatherIcon(currentSymbol), color: tempColor),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Current Weather',
-                        style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w700, fontSize: 16)),
-                    Text('${currentTemp.round()}°C',
-                        style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 24,
-                            color: tempColor)),
-                  ],
-                ),
-              ),
-              Icon(Icons.arrow_forward_ios,
-                  size: 16, color: cs.onSurfaceVariant),
-            ],
-          ),
-        ),
-        if (dailyForecast.isNotEmpty)
-          Container(
-            height: 72,
-            margin: const EdgeInsets.symmetric(vertical: 4),
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              itemCount: dailyForecast.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemBuilder: (context, i) {
-                final day = dailyForecast[i];
-                final isToday = i == 0;
-                final dayName = isToday
-                    ? 'Today'
-                    : day['dayName'].toString().substring(0, 3);
-                final high = (day['high'] as double).round();
-                final low = (day['low'] as double).round();
-
-                return Container(
-                  width: 64,
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
-                  decoration: BoxDecoration(
-                    color: isToday
-                        ? cs.primaryContainer
-                        : cs.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(dayName,
-                          style: GoogleFonts.lato(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: isToday
-                                  ? cs.onPrimaryContainer
-                                  : cs.onSurface)),
-                      const SizedBox(height: 3),
-                      Text('$high°',
-                          style: GoogleFonts.poppins(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: isToday
-                                  ? cs.onPrimaryContainer
-                                  : cs.onSurface)),
-                      Text('$low°',
-                          style: GoogleFonts.lato(
-                              fontSize: 11,
-                              color: isToday
-                                  ? cs.onPrimaryContainer.withOpacity(0.7)
-                                  : cs.onSurfaceVariant)),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          child: Text('Tap for detailed forecast',
-              style: GoogleFonts.lato(
-                  fontSize: 12,
-                  color: cs.onSurfaceVariant,
-                  fontStyle: FontStyle.italic)),
-        ),
-      ],
-    );
-  }
 }
 
-// ================= COLLABORATORS =================
-class _CollaboratorsSection extends StatelessWidget {
-  final List<_Participant> participants;
-  final VoidCallback onInvite;
-  const _CollaboratorsSection(
-      {required this.participants, required this.onInvite});
+class _ProgressSection extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final double progress;
+  final String subtitle;
+  final Color color;
+
+  const _ProgressSection({
+    required this.icon,
+    required this.title,
+    required this.progress,
+    required this.subtitle,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Icon(Icons.group_outlined, color: cs.primary),
-            const SizedBox(width: 8),
-            Expanded(
-                child: Text('Group & collaborators',
-                    style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.w700, fontSize: 16))),
-            TextButton.icon(
-                onPressed: onInvite,
-                icon: const Icon(Icons.person_add_alt_1_rounded),
-                label: const Text('Invite')),
-          ],
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: color.withOpacity(0.2),
+          width: 0.5,
         ),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 100, // Increased height to prevent overflow
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(vertical: 8), // Better padding
-            itemCount: participants.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
-            itemBuilder: (context, i) {
-              final p = participants[i];
-              return SizedBox(
-                width: 72,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircleAvatar(
-                      radius: 24,
-                      backgroundColor: cs.surfaceContainerHighest,
-                      backgroundImage:
-                          (p.avatarUrl != null && p.avatarUrl!.isNotEmpty)
-                              ? NetworkImage(p.avatarUrl!)
-                              : null,
-                      child: (p.avatarUrl == null || p.avatarUrl!.isEmpty)
-                          ? const Icon(Icons.person, size: 20)
-                          : null,
-                    ),
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: Text(
-                        p.name.split(' ').first,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.lato(fontSize: 12, height: 1.2),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        )
-      ],
-    );
-  }
-}
-
-class _Participant {
-  final String uid;
-  final String name;
-  final String? avatarUrl;
-  _Participant({required this.uid, required this.name, this.avatarUrl});
-}
-
-class _EmptyCollabState extends StatelessWidget {
-  final VoidCallback onInvite;
-  const _EmptyCollabState({required this.onInvite});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                  color: cs.surfaceContainerHighest, shape: BoxShape.circle),
-              child: Icon(Icons.group_add_rounded,
-                  size: 48, color: cs.onSurfaceVariant),
-            ),
-            const SizedBox(height: 12),
-            Text('No collaborators yet',
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: color,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                title,
                 style: GoogleFonts.poppins(
-                    fontWeight: FontWeight.w700, fontSize: 18)),
-            const SizedBox(height: 6),
-            Text('Invite friends and start planning together.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.lato(color: cs.onSurfaceVariant)),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-                onPressed: onInvite,
-                icon: const Icon(Icons.person_add_alt_1_rounded),
-                label: const Text('Invite friends')),
-          ],
-        ),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: progress,
+              backgroundColor: cs.surfaceContainerHighest.withOpacity(0.3),
+              valueColor: AlwaysStoppedAnimation<Color>(color),
+              minHeight: 6,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Flexible(
+                child: Text(
+                  subtitle,
+                  style: GoogleFonts.lato(
+                    fontSize: 11,
+                    color: cs.onSurfaceVariant,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Text(
+                '${(progress * 100).round()}%',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 11,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
