@@ -25,10 +25,12 @@ class _PostDetailPageState extends State<PostDetailPage> {
   bool _isLiked = false;
   int _likeCount = 0;
   int _currentImage = 0;
+  late final PageController _pageController;
 
   @override
   void initState() {
     super.initState();
+    _pageController = PageController(initialPage: 0);
     _postFuture = _fetchAndIncrementViews();
   }
 
@@ -94,10 +96,16 @@ class _PostDetailPageState extends State<PostDetailPage> {
   }
 
   @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: theme.colorScheme.surface,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: FutureBuilder<Post>(
         future: _postFuture,
         builder: (context, snapshot) {
@@ -121,7 +129,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
             slivers: [
               SliverAppBar(
                 automaticallyImplyLeading: false,
-                backgroundColor: theme.colorScheme.surface,
+                backgroundColor: Colors.transparent,
                 expandedHeight: MediaQuery.of(context).size.height * 0.42,
                 pinned: false,
                 flexibleSpace: FlexibleSpaceBar(
@@ -132,7 +140,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                           ? PageView.builder(
                               itemCount: images.length,
                               controller:
-                                  PageController(initialPage: _currentImage),
+                                  _pageController,
                               onPageChanged: (i) =>
                                   setState(() => _currentImage = i),
                               itemBuilder: (context, i) => ClipRRect(
@@ -204,10 +212,10 @@ class _PostDetailPageState extends State<PostDetailPage> {
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
                                 colors: [
-                                  Colors.black54,
-                                  Colors.transparent,
-                                  Colors.transparent,
                                   Colors.black38,
+                                  Colors.transparent,
+                                  Colors.transparent,
+                                  Colors.black26,
                                 ],
                                 stops: [0, 0.25, 0.7, 1],
                               ),
@@ -220,7 +228,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                         top: 36,
                         left: 16,
                         child: CircleAvatar(
-                          backgroundColor: Colors.black.withOpacity(0.45),
+                          backgroundColor: Colors.black.withOpacity(0.35),
                           child: IconButton(
                             icon: const Icon(Icons.arrow_back,
                                 color: Colors.white),
@@ -232,7 +240,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                         top: 36,
                         right: 16,
                         child: CircleAvatar(
-                          backgroundColor: Colors.black.withOpacity(0.45),
+                          backgroundColor: Colors.black.withOpacity(0.35),
                           child: IconButton(
                             icon: const Icon(Icons.ios_share,
                                 color: Colors.white),
@@ -255,15 +263,15 @@ class _PostDetailPageState extends State<PostDetailPage> {
                     children: [
                       // Käyttäjäkortti
                       Material(
-                        elevation: 4,
+                        elevation: 0,
                         borderRadius: BorderRadius.circular(22),
-                        color: theme.colorScheme.surface,
+                        color: theme.colorScheme.surfaceContainer,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 18, vertical: 12),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(22),
-                            color: theme.colorScheme.surface,
+                            color: theme.colorScheme.surfaceContainer,
                           ),
                           child: Row(
                             children: [
@@ -289,16 +297,14 @@ class _PostDetailPageState extends State<PostDetailPage> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text("@${post.username}",
-                                          style: GoogleFonts.poppins(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 17,
-                                              color:
-                                                  theme.colorScheme.onSurface)),
+                                          style: theme.textTheme.titleLarge?.copyWith(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 16,
+                                              color: theme.colorScheme.onSurface)),
                                       Text(_getTimeAgo(post.timestamp),
-                                          style: GoogleFonts.lato(
-                                              fontSize: 12.5,
-                                              color: theme.colorScheme
-                                                  .onSurfaceVariant)),
+                                          style: theme.textTheme.bodyLarge?.copyWith(
+                                              fontSize: 12,
+                                              color: theme.colorScheme.onSurfaceVariant)),
                                     ],
                                   ),
                                 ),
@@ -361,9 +367,9 @@ class _PostDetailPageState extends State<PostDetailPage> {
                       // Otsikko
                       Text(
                         post.title,
-                        style: GoogleFonts.poppins(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 24,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 22,
                           color: theme.colorScheme.onSurface,
                         ),
                       ),
@@ -377,17 +383,17 @@ class _PostDetailPageState extends State<PostDetailPage> {
                           Expanded(
                             child: Text(
                               post.location,
-                              style: GoogleFonts.lato(
+                              style: TextStyle(
                                   fontWeight: FontWeight.w600,
-                                  color: theme.colorScheme.primary,
-                                  fontSize: 15.5),
+                                  color: theme.colorScheme.primary.withOpacity(0.9),
+                                  fontSize: 15),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           Text(
                             DateFormat('d MMM y').format(post.timestamp),
-                            style: GoogleFonts.lato(
+                            style: theme.textTheme.bodyLarge?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                               fontSize: 13,
                             ),
@@ -402,10 +408,10 @@ class _PostDetailPageState extends State<PostDetailPage> {
                       if (post.caption.isNotEmpty)
                         Text(
                           post.caption,
-                          style: GoogleFonts.lato(
-                            fontSize: 16.5,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            fontSize: 16,
                             color: theme.colorScheme.onSurface,
-                            height: 1.7,
+                            height: 1.6,
                           ),
                         ),
                       const SizedBox(height: 24),
@@ -427,7 +433,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                           ),
                           icon: const Icon(Icons.mode_comment_outlined),
                           label: Text("View Comments (${post.commentCount})",
-                              style: GoogleFonts.poppins(
+                              style: theme.textTheme.titleLarge?.copyWith(
                                   fontWeight: FontWeight.w600)),
                           onPressed: () {
                             showModalBottomSheet(
@@ -524,7 +530,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
         const SizedBox(width: 4),
         Text(
           '$count',
-          style: GoogleFonts.poppins(
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
             fontWeight: FontWeight.w600,
             color: color.withOpacity(0.85),
             fontSize: 14,
@@ -567,7 +573,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
         Icon(icon, size: 19, color: color),
         const SizedBox(width: 5),
         Text(text,
-            style: GoogleFonts.poppins(
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                 fontWeight: FontWeight.w600, color: color, fontSize: 14)),
       ],
     );
@@ -635,14 +641,14 @@ class _PostDetailPageState extends State<PostDetailPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(label,
-                      style: GoogleFonts.poppins(
+                      style: theme.textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w600,
                         fontSize: 15.5,
                         color: theme.colorScheme.onSurface,
                       )),
                   Text(
                     hint,
-                    style: GoogleFonts.lato(
+                    style: theme.textTheme.bodyLarge?.copyWith(
                       fontSize: 13,
                       color: color.withOpacity(0.8),
                       fontWeight: FontWeight.w500,
@@ -661,7 +667,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
             const SizedBox(width: 8),
             Text(
               rating.toStringAsFixed(1),
-              style: GoogleFonts.poppins(
+              style: theme.textTheme.bodyLarge?.copyWith(
                 fontWeight: FontWeight.w600,
                 color: color,
                 fontSize: 15,
@@ -727,6 +733,7 @@ class _RouteMapBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final allPoints = _collectAllPoints();
     if (allPoints.isEmpty) {
       return Container(
@@ -762,7 +769,7 @@ class _RouteMapBackground extends StatelessWidget {
                   (route.points as List).isNotEmpty)
               .map((route) => Polyline<Object>(
                     points: List<LatLng>.from(route.points ?? []),
-                    color: Colors.deepOrange.withOpacity(0.85),
+                    color: theme.colorScheme.primary.withOpacity(0.85),
                     strokeWidth: 5.0,
                     borderColor: Colors.black.withOpacity(0.18),
                     borderStrokeWidth: 1.3,
