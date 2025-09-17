@@ -32,18 +32,69 @@ class HikePlanHubPage extends StatefulWidget {
 
 class _HikePlanHubPageState extends State<HikePlanHubPage> {
   late HikePlan _plan;
-
+  bool _hasNavigated = false;
+  bool _isInitialized = false;
   @override
   void initState() {
     super.initState();
     _plan = widget.initialPlan;
+
+    // Check for group plan navigation immediately and defer UI initialization
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkForGroupNavigation();
+      if (mounted && !_hasNavigated) {
+        setState(() {
+          _isInitialized = true;
+        });
+      }
+    });
+  }
+
+  void _checkForGroupNavigation() {
+    if (_hasNavigated) return;
+
+    final me = context.read<AuthProvider>().userProfile;
+    final ids = <String>{
+      if (_plan.collabOwnerId != null && _plan.collabOwnerId!.isNotEmpty)
+        _plan.collabOwnerId!,
+      ..._plan.collaboratorIds,
+      if (me != null && me.uid.isNotEmpty) me.uid,
+    }.toList();
+
+    final isGroupPlan = ids.length > 1;
+    if (isGroupPlan && mounted && !_hasNavigated) {
+      _hasNavigated = true;
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              GroupHikeHubPage(initialPlan: _plan),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            const begin = Offset(1.0, 0.0);
+            const end = Offset.zero;
+            const curve = Curves.easeOut;
+
+            var tween = Tween(begin: begin, end: end).chain(
+              CurveTween(curve: curve),
+            );
+
+            return SlideTransition(
+              position: animation.drive(tween),
+              child: child,
+            );
+          },
+          transitionDuration: const Duration(milliseconds: 300),
+        ),
+      );
+    }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Refresh plan data when returning from other pages
-    _refreshPlanData();
+    // Only refresh if we haven't navigated away
+    if (!_hasNavigated) {
+      _refreshPlanData();
+    }
   }
 
   Future<void> _refreshPlanData() async {
@@ -452,6 +503,17 @@ class _HikePlanHubPageState extends State<HikePlanHubPage> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+
+    // Show loading screen until initialization is complete or navigation has occurred
+    if (!_isInitialized || _hasNavigated) {
+      return Scaffold(
+        backgroundColor: cs.surface,
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     final me = context.watch<AuthProvider>().userProfile;
 
     // Participant IDs: owner + collaborators + me
@@ -461,38 +523,6 @@ class _HikePlanHubPageState extends State<HikePlanHubPage> {
       ..._plan.collaboratorIds,
       if (me != null && me.uid.isNotEmpty) me.uid,
     }.toList();
-
-    // If this is a group plan with multiple participants, use the new group interface
-    final isGroupPlan = ids.length > 1;
-    if (isGroupPlan) {
-      // Navigate to the new group planning interface
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          Navigator.of(context).pushReplacement(
-            PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) =>
-                  GroupHikeHubPage(initialPlan: _plan),
-              transitionsBuilder:
-                  (context, animation, secondaryAnimation, child) {
-                const begin = Offset(1.0, 0.0);
-                const end = Offset.zero;
-                const curve = Curves.easeOut;
-
-                var tween = Tween(begin: begin, end: end).chain(
-                  CurveTween(curve: curve),
-                );
-
-                return SlideTransition(
-                  position: animation.drive(tween),
-                  child: child,
-                );
-              },
-              transitionDuration: const Duration(milliseconds: 300),
-            ),
-          );
-        }
-      });
-    }
 
     final dateRange = _dateRangeString(_plan.startDate, _plan.endDate);
     final distanceText = _plan.lengthKm != null && _plan.lengthKm! > 0
