@@ -724,15 +724,6 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                     urlTemplate:
                         'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     userAgentPackageName: 'com.example.treknoteflutter',
-                    tileBuilder: (context, tileWidget, tile) {
-                      return ColorFiltered(
-                        colorFilter: ColorFilter.mode(
-                          Colors.black.withOpacity(0.3),
-                          BlendMode.darken,
-                        ),
-                        child: tileWidget,
-                      );
-                    },
                   ),
                   MarkerLayer(
                     markers: [
@@ -1271,7 +1262,6 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
   }
 
   Widget _buildParticipantPage(BuildContext context, String participantId) {
-    final cs = Theme.of(context).colorScheme;
     final currentUserId = context.read<AuthProvider>().userProfile?.uid;
     final isCurrentUser = participantId == currentUserId;
 
@@ -1282,9 +1272,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
           .snapshots(),
       builder: (context, userSnapshot) {
         if (!userSnapshot.hasData) {
-          return const Center(
-            child: CircularProgressIndicator(strokeWidth: 2),
-          );
+          return _buildLoadingParticipantPage();
         }
 
         final userData = userSnapshot.data?.data() as Map<String, dynamic>?;
@@ -1302,46 +1290,68 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
           builder: (context, planSnapshot) {
             final planData = planSnapshot.data?.data() as Map<String, dynamic>?;
 
-            return Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    const Color(0xFF1A1A1A),
-                    const Color(0xFF0A0A0A),
-                  ],
-                ),
-              ),
-              child: SafeArea(
-                child: CustomScrollView(
-                  physics: const ClampingScrollPhysics(),
-                  slivers: [
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          children: [
-                            const SizedBox(height: 40),
+            return StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(participantId)
+                  .collection('plans')
+                  .doc(_plan.id)
+                  .collection('foodPlans')
+                  .snapshots(),
+              builder: (context, foodSnapshot) {
+                final foodPlans = foodSnapshot.hasData 
+                    ? foodSnapshot.data!.docs.map((doc) => doc.data() as Map<String, dynamic>).toList()
+                    : <Map<String, dynamic>>[];
 
-                            // Profile header
-                            _buildProfileHeader(userProfile, isCurrentUser),
-                            const SizedBox(height: 32),
-
-                            // Progress card
-                            _buildProgressCard(planData),
-                            const SizedBox(height: 20),
-
-                            // Action buttons
-                            _buildUserActions(
-                                participantId, isCurrentUser, planData),
-                          ],
-                        ),
-                      ),
+                return Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        const Color(0xFF1A1A1A),
+                        const Color(0xFF0A0A0A),
+                      ],
                     ),
-                  ],
-                ),
-              ),
+                  ),
+                  child: SafeArea(
+                    child: CustomScrollView(
+                      physics: const ClampingScrollPhysics(),
+                      slivers: [
+                        // Floating header with glassmorphism
+                        SliverToBoxAdapter(
+                          child: _buildFloatingHeader(userProfile, isCurrentUser),
+                        ),
+
+                        // Main content with cards
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                          sliver: SliverList(
+                            delegate: SliverChildListDelegate([
+                              const SizedBox(height: 20),
+                              
+                              // Overview stats card
+                              _buildOverviewStatsCard(planData, foodPlans),
+                              const SizedBox(height: 16),
+
+                              // Packing progress card
+                              _buildPackingProgressCard(planData, participantId, isCurrentUser),
+                              const SizedBox(height: 16),
+
+                              // Food planning card
+                              _buildFoodPlanningCard(foodPlans, participantId, isCurrentUser),
+                              const SizedBox(height: 16),
+
+                              // Quick actions
+                              _buildQuickActionsCard(participantId, isCurrentUser, planData),
+                            ]),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             );
           },
         );
@@ -1349,172 +1359,241 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
     );
   }
 
-  Widget _buildProfileHeader(
-      user_model.UserProfile? userProfile, bool isCurrentUser) {
-    return Column(
-      children: [
-        AnimatedBuilder(
-          animation: _pulseAnimation,
-          builder: (context, child) {
-            return Transform.scale(
-              scale: isCurrentUser ? _pulseAnimation.value : 1.0,
-              child: Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: isCurrentUser
-                        ? [
-                            AppColors.primaryColor(context),
-                            AppColors.primaryColor(context).withOpacity(0.6),
-                          ]
-                        : [
-                            Colors.white.withOpacity(0.2),
-                            Colors.white.withOpacity(0.1),
-                          ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: isCurrentUser
-                          ? AppColors.primaryColor(context).withOpacity(0.3)
-                          : Colors.black.withOpacity(0.2),
-                      blurRadius: 20,
-                      spreadRadius: 5,
-                    ),
-                  ],
-                ),
-                padding: const EdgeInsets.all(3),
-                child: CircleAvatar(
-                  radius: 47,
-                  backgroundImage: userProfile?.photoURL != null
-                      ? NetworkImage(userProfile!.photoURL!)
-                      : null,
-                  backgroundColor: const Color(0xFF2C2C2C),
-                  child: userProfile?.photoURL == null
-                      ? Icon(
-                          Icons.person_rounded,
-                          size: 40,
-                          color: Colors.white.withOpacity(0.5),
-                        )
-                      : null,
-                ),
-              ),
-            );
-          },
+  Widget _buildLoadingParticipantPage() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            const Color(0xFF1A1A1A),
+            const Color(0xFF0A0A0A),
+          ],
         ),
-        const SizedBox(height: 20),
-        Text(
-          userProfile?.displayName ?? 'Adventurer',
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w600,
-            fontSize: 24,
-            color: Colors.white,
-          ),
-        ),
-        if (userProfile?.username != null) ...[
-          const SizedBox(height: 4),
-          Text(
-            '@${userProfile!.username}',
-            style: GoogleFonts.lato(
-              fontSize: 14,
-              color: Colors.white.withOpacity(0.5),
-            ),
-          ),
-        ],
-        const SizedBox(height: 12),
-        if (isCurrentUser)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.primaryColor(context).withOpacity(0.2),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: AppColors.primaryColor(context).withOpacity(0.3),
-                width: 0.5,
-              ),
-            ),
-            child: Text(
-              'You',
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppColors.primaryColor(context),
-              ),
-            ),
-          ),
-      ],
+      ),
+      child: const Center(
+        child: CircularProgressIndicator(strokeWidth: 2),
+      ),
     );
   }
 
-  Widget _buildProgressCard(Map<String, dynamic>? planData) {
-    final preparationItems =
-        planData?['preparationItems'] as Map<String, dynamic>? ?? {};
-    final completedItems =
-        preparationItems.values.where((v) => v == true).length;
-    final prepProgress = completedItems / 4;
-
-    final packingList = (planData?['packingList'] as List<dynamic>? ?? []);
-    final packedItems =
-        packingList.where((item) => item['isPacked'] == true).length;
-    final packingProgress =
-        packingList.isNotEmpty ? packedItems / packingList.length : 0.0;
-
-    final overallProgress = (prepProgress + packingProgress) / 2;
-
+  Widget _buildFloatingHeader(user_model.UserProfile? userProfile, bool isCurrentUser) {
     return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.1),
-          width: 0.5,
+      margin: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.12),
+                width: 0.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                // Profile avatar with status ring
+                Stack(
+                  children: [
+                    AnimatedBuilder(
+                      animation: _pulseAnimation,
+                      builder: (context, child) {
+                        return Transform.scale(
+                          scale: isCurrentUser ? _pulseAnimation.value : 1.0,
+                          child: Container(
+                            width: 80,
+                            height: 80,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                colors: isCurrentUser
+                                    ? [
+                                        AppColors.primaryColor(context),
+                                        AppColors.primaryColor(context).withOpacity(0.6),
+                                      ]
+                                    : [
+                                        Colors.white.withOpacity(0.2),
+                                        Colors.white.withOpacity(0.1),
+                                      ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: isCurrentUser
+                                      ? AppColors.primaryColor(context).withOpacity(0.4)
+                                      : Colors.black.withOpacity(0.2),
+                                  blurRadius: 16,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                            padding: const EdgeInsets.all(3),
+                            child: CircleAvatar(
+                              radius: 37,
+                              backgroundImage: userProfile?.photoURL != null
+                                  ? NetworkImage(userProfile!.photoURL!)
+                                  : null,
+                              backgroundColor: const Color(0xFF2C2C2C),
+                              child: userProfile?.photoURL == null
+                                  ? Icon(
+                                      Icons.person_rounded,
+                                      size: 32,
+                                      color: Colors.white.withOpacity(0.6),
+                                    )
+                                  : null,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    if (isCurrentUser)
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryColor(context),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: const Color(0xFF1A1A1A), width: 2),
+                          ),
+                          child: const Icon(
+                            Icons.star_rounded,
+                            color: Colors.white,
+                            size: 12,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                
+                // Name and username
+                Text(
+                  userProfile?.displayName ?? 'Adventurer',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 20,
+                    color: Colors.white,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                if (userProfile?.username != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '@${userProfile!.username}',
+                    style: GoogleFonts.lato(
+                      fontSize: 14,
+                      color: Colors.white.withOpacity(0.6),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+                
+                if (isCurrentUser) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryColor(context).withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: AppColors.primaryColor(context).withOpacity(0.3),
+                        width: 0.5,
+                      ),
+                    ),
+                    child: Text(
+                      'You',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primaryColor(context),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildOverviewStatsCard(Map<String, dynamic>? planData, List<Map<String, dynamic>> foodPlans) {
+    final packingList = (planData?['packingList'] as List<dynamic>? ?? []);
+    final packedItems = packingList.where((item) => item['isPacked'] == true).length;
+    final totalItems = packingList.length;
+    
+    final totalMeals = foodPlans.length;
+    final plannedMeals = foodPlans.where((plan) => 
+        (plan['items'] as List<dynamic>? ?? []).isNotEmpty).length;
+
+    return _buildGlassCard(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryColor(context).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.analytics_outlined,
+                  color: AppColors.primaryColor(context),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
               Text(
-                'Progress',
+                'Overview',
                 style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w700,
                   fontSize: 18,
                   color: Colors.white,
                 ),
               ),
-              Text(
-                '${(overallProgress * 100).round()}%',
-                style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 20,
-                  color: _getProgressColor(overallProgress),
-                ),
-              ),
             ],
           ),
-          const SizedBox(height: 16),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: overallProgress,
-              minHeight: 8,
-              backgroundColor: Colors.white.withOpacity(0.1),
-              valueColor: AlwaysStoppedAnimation<Color>(
-                _getProgressColor(overallProgress),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
+          
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildProgressItem('Preparation', prepProgress),
-              _buildProgressItem('Packing', packingProgress),
+              Expanded(
+                child: _buildStatItem(
+                  icon: Icons.backpack_outlined,
+                  label: 'Packed',
+                  value: '$packedItems/$totalItems',
+                  progress: totalItems > 0 ? packedItems / totalItems : 0.0,
+                  color: Colors.blue,
+                ),
+              ),
+              const SizedBox(width: 24),
+              Expanded(
+                child: _buildStatItem(
+                  icon: Icons.restaurant_outlined,
+                  label: 'Meals',
+                  value: '$plannedMeals/$totalMeals',
+                  progress: totalMeals > 0 ? plannedMeals / totalMeals : 0.0,
+                  color: Colors.orange,
+                ),
+              ),
             ],
           ),
         ],
@@ -1522,13 +1601,29 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
     );
   }
 
-  Widget _buildProgressItem(String label, double progress) {
+  Widget _buildStatItem({
+    required IconData icon,
+    required String label,
+    required String value,
+    required double progress,
+    required Color color,
+  }) {
     return Column(
       children: [
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(icon, color: color, size: 24),
+        ),
+        const SizedBox(height: 8),
         Text(
-          '${(progress * 100).round()}%',
+          value,
           style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
             fontSize: 16,
             color: Colors.white,
           ),
@@ -1537,39 +1632,736 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
           label,
           style: GoogleFonts.lato(
             fontSize: 12,
-            color: Colors.white.withOpacity(0.5),
+            color: Colors.white.withOpacity(0.6),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          height: 4,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(2),
+          ),
+          child: FractionallySizedBox(
+            alignment: Alignment.centerLeft,
+            widthFactor: progress.clamp(0.0, 1.0),
+            child: Container(
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
           ),
         ),
       ],
     );
   }
 
-  Color _getProgressColor(double progress) {
-    if (progress >= 0.8) return AppColors.primaryColor(context);
-    if (progress >= 0.5) return AppColors.accentColor(context);
-    return Colors.red.shade400;
+  Widget _buildPackingProgressCard(Map<String, dynamic>? planData, String participantId, bool isCurrentUser) {
+    final packingList = (planData?['packingList'] as List<dynamic>? ?? []);
+    final packedItems = packingList.where((item) => item['isPacked'] == true).toList();
+    final unpackedItems = packingList.where((item) => item['isPacked'] != true).toList();
+
+    return _buildGlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.backpack_outlined,
+                  color: Colors.blue,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isCurrentUser ? 'My Gear' : 'Gear Status',
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 18,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      '${packedItems.length} of ${packingList.length} items packed',
+                      style: GoogleFonts.lato(
+                        fontSize: 13,
+                        color: Colors.white.withOpacity(0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => _openUserPackingList(participantId),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    child: Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      color: Colors.white.withOpacity(0.6),
+                      size: 16,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          
+          if (packingList.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            
+            // Progress bar
+            Container(
+              height: 8,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: FractionallySizedBox(
+                alignment: Alignment.centerLeft,
+                widthFactor: (packedItems.length / packingList.length).clamp(0.0, 1.0),
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.blue, Colors.blue.shade300],
+                    ),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            
+            // Recent packed items
+            if (packedItems.isNotEmpty) ...[
+              Text(
+                'Recently Packed',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  color: Colors.white.withOpacity(0.8),
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...packedItems.take(3).map((item) => _buildPackingItem(item, true)),
+            ],
+            
+            // Pending items
+            if (unpackedItems.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Still Needed',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  color: Colors.white.withOpacity(0.8),
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...unpackedItems.take(3).map((item) => _buildPackingItem(item, false)),
+            ],
+            
+            if (packingList.length > 6) ...[
+              const SizedBox(height: 12),
+              Text(
+                '+${packingList.length - 6} more items',
+                style: GoogleFonts.lato(
+                  fontSize: 12,
+                  color: Colors.white.withOpacity(0.5),
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ] else ...[
+            const SizedBox(height: 20),
+            Center(
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.backpack_outlined,
+                    size: 48,
+                    color: Colors.white.withOpacity(0.3),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No packing list yet',
+                    style: GoogleFonts.lato(
+                      fontSize: 14,
+                      color: Colors.white.withOpacity(0.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
-  Widget _buildUserActions(String participantId, bool isCurrentUser,
-      Map<String, dynamic>? planData) {
-    final packingList = (planData?['packingList'] as List<dynamic>? ?? []);
-    final packedItems =
-        packingList.where((item) => item['isPacked'] == true).length;
-    final totalItems = packingList.length;
-
-    return Column(
-      children: [
-        _buildModernActionCard(
-          context,
-          icon: Icons.backpack_outlined,
-          title: isCurrentUser ? 'My Packing List' : 'Packing List',
-          subtitle: totalItems > 0
-              ? '$packedItems of $totalItems items'
-              : 'No items yet',
-          color: AppColors.accentColor(context),
-          onTap: () => _openUserPackingList(participantId),
+  Widget _buildPackingItem(Map<String, dynamic> item, bool isPacked) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: isPacked 
+            ? Colors.green.withOpacity(0.1)
+            : Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isPacked 
+              ? Colors.green.withOpacity(0.3)
+              : Colors.white.withOpacity(0.1),
+          width: 0.5,
         ),
-      ],
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isPacked ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+            size: 16,
+            color: isPacked ? Colors.green : Colors.white.withOpacity(0.4),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              item['name'] ?? 'Item',
+              style: GoogleFonts.lato(
+                fontSize: 13,
+                color: Colors.white.withOpacity(isPacked ? 0.9 : 0.7),
+                decoration: isPacked ? TextDecoration.lineThrough : null,
+              ),
+            ),
+          ),
+          if (item['category'] != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                item['category'],
+                style: GoogleFonts.lato(
+                  fontSize: 10,
+                  color: Colors.white.withOpacity(0.6),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFoodPlanningCard(List<Map<String, dynamic>> foodPlans, String participantId, bool isCurrentUser) {
+    final plannedMeals = foodPlans.where((plan) => 
+        (plan['items'] as List<dynamic>? ?? []).isNotEmpty).length;
+
+    return _buildGlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.restaurant_outlined,
+                  color: Colors.orange,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isCurrentUser ? 'My Food Plan' : 'Food Planning',
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 18,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      '$plannedMeals of ${foodPlans.length} meals planned',
+                      style: GoogleFonts.lato(
+                        fontSize: 13,
+                        color: Colors.white.withOpacity(0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () {
+                    // Navigate to food planner
+                    GoRouter.of(context).pushNamed('foodPlannerPage',
+                        pathParameters: {'planId': _plan.id}, extra: _plan);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    child: Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      color: Colors.white.withOpacity(0.6),
+                      size: 16,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          
+          if (foodPlans.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            
+            // Progress bar
+            Container(
+              height: 8,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: FractionallySizedBox(
+                alignment: Alignment.centerLeft,
+                widthFactor: (plannedMeals / foodPlans.length).clamp(0.0, 1.0),
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.orange, Colors.orange.shade300],
+                    ),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            
+            // Meal breakdown
+            ...foodPlans.take(4).map((plan) => _buildMealItem(plan)),
+            
+            if (foodPlans.length > 4) ...[
+              const SizedBox(height: 8),
+              Text(
+                '+${foodPlans.length - 4} more meals',
+                style: GoogleFonts.lato(
+                  fontSize: 12,
+                  color: Colors.white.withOpacity(0.5),
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ] else ...[
+            const SizedBox(height: 20),
+            Center(
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.restaurant_outlined,
+                    size: 48,
+                    color: Colors.white.withOpacity(0.3),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No meals planned yet',
+                    style: GoogleFonts.lato(
+                      fontSize: 14,
+                      color: Colors.white.withOpacity(0.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMealItem(Map<String, dynamic> plan) {
+    final items = plan['items'] as List<dynamic>? ?? [];
+    final mealType = plan['mealType'] ?? 'Meal';
+    final dayIndex = plan['dayIndex'] ?? 0;
+    final isPlanned = items.isNotEmpty;
+
+    IconData mealIcon;
+    Color mealColor;
+    
+    switch (mealType.toLowerCase()) {
+      case 'breakfast':
+        mealIcon = Icons.free_breakfast_outlined;
+        mealColor = Colors.amber;
+        break;
+      case 'lunch':
+        mealIcon = Icons.lunch_dining_outlined;
+        mealColor = Colors.green;
+        break;
+      case 'dinner':
+        mealIcon = Icons.dinner_dining_outlined;
+        mealColor = Colors.deepOrange;
+        break;
+      case 'snack':
+        mealIcon = Icons.cookie_outlined;
+        mealColor = Colors.purple;
+        break;
+      default:
+        mealIcon = Icons.restaurant_outlined;
+        mealColor = Colors.orange;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isPlanned 
+            ? mealColor.withOpacity(0.1)
+            : Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isPlanned 
+              ? mealColor.withOpacity(0.3)
+              : Colors.white.withOpacity(0.1),
+          width: 0.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: mealColor.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              mealIcon,
+              size: 16,
+              color: mealColor,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Day ${dayIndex + 1} - $mealType',
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white.withOpacity(0.9),
+                  ),
+                ),
+                if (isPlanned) ...[
+                  Text(
+                    '${items.length} items planned',
+                    style: GoogleFonts.lato(
+                      fontSize: 11,
+                      color: Colors.white.withOpacity(0.6),
+                    ),
+                  ),
+                ] else ...[
+                  Text(
+                    'Not planned yet',
+                    style: GoogleFonts.lato(
+                      fontSize: 11,
+                      color: Colors.white.withOpacity(0.4),
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Icon(
+            isPlanned ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+            size: 16,
+            color: isPlanned ? mealColor : Colors.white.withOpacity(0.3),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreparationCard(Map<String, dynamic>? planData, String participantId, bool isCurrentUser) {
+    final preparationItems = planData?['preparationItems'] as Map<String, dynamic>? ?? {};
+    final completedItems = preparationItems.entries.where((e) => e.value == true).toList();
+    final pendingItems = preparationItems.entries.where((e) => e.value != true).toList();
+
+    final prepTasks = [
+      {'key': 'weatherChecked', 'title': 'Weather Forecast', 'icon': Icons.cloud_outlined},
+      {'key': 'routePlanned', 'title': 'Route Planning', 'icon': Icons.map_outlined},
+      {'key': 'gearChecked', 'title': 'Gear Check', 'icon': Icons.backpack_outlined},
+      {'key': 'emergencyPlan', 'title': 'Emergency Plan', 'icon': Icons.emergency_outlined},
+    ];
+
+    return _buildGlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.checklist_outlined,
+                  color: Colors.green,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Preparation',
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 18,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      '${completedItems.length} of ${prepTasks.length} tasks completed',
+                      style: GoogleFonts.lato(
+                        fontSize: 13,
+                        color: Colors.white.withOpacity(0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          
+          // Progress bar
+          Container(
+            height: 8,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: (completedItems.length / prepTasks.length).clamp(0.0, 1.0),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.green, Colors.green.shade300],
+                  ),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          
+          // Preparation tasks
+          ...prepTasks.map((task) {
+            final isCompleted = preparationItems[task['key']] == true;
+            return _buildPreparationItem(
+              task['title'] as String,
+              task['icon'] as IconData,
+              isCompleted,
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreparationItem(String title, IconData icon, bool isCompleted) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isCompleted 
+            ? Colors.green.withOpacity(0.1)
+            : Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isCompleted 
+              ? Colors.green.withOpacity(0.3)
+              : Colors.white.withOpacity(0.1),
+          width: 0.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isCompleted ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+            size: 20,
+            color: isCompleted ? Colors.green : Colors.white.withOpacity(0.4),
+          ),
+          const SizedBox(width: 12),
+          Icon(
+            icon,
+            size: 16,
+            color: Colors.white.withOpacity(isCompleted ? 0.8 : 0.5),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              title,
+              style: GoogleFonts.lato(
+                fontSize: 14,
+                color: Colors.white.withOpacity(isCompleted ? 0.9 : 0.7),
+                decoration: isCompleted ? TextDecoration.lineThrough : null,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActionsCard(String participantId, bool isCurrentUser, Map<String, dynamic>? planData) {
+    return _buildGlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Quick Actions',
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.w700,
+              fontSize: 18,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 16),
+          
+          Row(
+            children: [
+              Expanded(
+                child: _buildActionButton(
+                  icon: Icons.backpack_outlined,
+                  label: 'Packing List',
+                  color: Colors.blue,
+                  onTap: () => _openUserPackingList(participantId),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildActionButton(
+                  icon: Icons.restaurant_outlined,
+                  label: 'Food Plan',
+                  color: Colors.orange,
+                  onTap: () {
+                    GoRouter.of(context).pushNamed('foodPlannerPage',
+                        pathParameters: {'planId': _plan.id}, extra: _plan);
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          HapticFeedback.lightImpact();
+          onTap();
+        },
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: color.withOpacity(0.2),
+              width: 0.5,
+            ),
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: color, size: 24),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                style: GoogleFonts.lato(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white.withOpacity(0.9),
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGlassCard({required Widget child}) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.1),
+              width: 0.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: child,
+        ),
+      ),
     );
   }
 }
