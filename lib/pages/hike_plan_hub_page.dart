@@ -21,6 +21,7 @@ import '../utils/app_colors.dart';
 import '../utils/map_helpers.dart';
 import '../widgets/add_hike_plan_form.dart';
 import 'group_hike_hub_page.dart';
+import 'modern_individual_hike_hub_page.dart';
 
 class HikePlanHubPage extends StatefulWidget {
   final HikePlan initialPlan;
@@ -62,12 +63,18 @@ class _HikePlanHubPageState extends State<HikePlanHubPage> {
     }.toList();
 
     final isGroupPlan = ids.length > 1;
-    if (isGroupPlan && mounted && !_hasNavigated) {
+    
+    if (mounted && !_hasNavigated) {
       _hasNavigated = true;
+      
+      // Navigate to appropriate page based on plan type
+      final targetPage = isGroupPlan 
+          ? GroupHikeHubPage(initialPlan: _plan)
+          : ModernIndividualHikeHubPage(initialPlan: _plan);
+      
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              GroupHikeHubPage(initialPlan: _plan),
+          pageBuilder: (context, animation, secondaryAnimation) => targetPage,
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             const begin = Offset(1.0, 0.0);
             const end = Offset.zero;

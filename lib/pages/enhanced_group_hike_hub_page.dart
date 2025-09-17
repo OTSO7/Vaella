@@ -152,6 +152,214 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
     }
   }
 
+  Future<void> _openInviteSheet() async {
+    // Check if already at max capacity (4 members)
+    if (_participantIds.length >= 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Maximum 4 members allowed in a group hike'),
+          backgroundColor: Colors.orange.shade700,
+        ),
+      );
+      return;
+    }
+
+    final auth = context.read<AuthProvider>();
+    final me = auth.userProfile;
+    if (me == null) return;
+
+    final cs = Theme.of(context).colorScheme;
+    List<user_model.UserProfile> results = [];
+    final controller = TextEditingController();
+    bool isLoading = false;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(builder: (ctx, setModalState) {
+          Future<void> _search(String q) async {
+            setModalState(() => isLoading = true);
+            results = await auth.searchUsersByUsername(q.trim());
+            setModalState(() => isLoading = false);
+          }
+
+          Future<void> _sendInvite(user_model.UserProfile target) async {
+            // Double check capacity
+            if (_participantIds.length >= 4) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Group is full (4 members max)'),
+                  backgroundColor: Colors.orange.shade700,
+                ),
+              );
+              Navigator.of(ctx).pop();
+              return;
+            }
+
+            try {
+              await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(target.uid)
+                  .collection('notifications')
+                  .add({
+                'type': 'hike_invite',
+                'planId': _plan.id,
+                'planName': _plan.hikeName,
+                'fromUserId': me.uid,
+                'fromDisplayName': me.displayName,
+                'createdAt': FieldValue.serverTimestamp(),
+                'status': 'pending',
+              });
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                    content: Text('Invite sent to ${target.displayName}'),
+                    backgroundColor: Colors.green.shade700),
+              );
+              Navigator.of(ctx).pop();
+              _refreshPlanData();
+            } catch (e) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Failed to send invite: $e')));
+            }
+          }
+
+          final remainingSlots = 4 - _participantIds.length;
+
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
+              left: 12,
+              right: 12,
+              top: 12,
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: Container(
+                color: Theme.of(ctx).scaffoldBackgroundColor,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 5,
+                      margin: const EdgeInsets.only(top: 10, bottom: 12),
+                      decoration: BoxDecoration(
+                          color: cs.outlineVariant,
+                          borderRadius: BorderRadius.circular(999)),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 8),
+                      child: Row(
+                        children: [
+                          Icon(Icons.person_add_alt_1_rounded,
+                              color: cs.primary),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Invite friends to this hike',
+                                    style: GoogleFonts.poppins(
+                                        fontWeight: FontWeight.w700, fontSize: 16)),
+                                Text(
+                                  '$remainingSlots ${remainingSlots == 1 ? 'slot' : 'slots'} remaining',
+                                  style: GoogleFonts.lato(
+                                    fontSize: 12,
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                              icon: const Icon(Icons.close_rounded),
+                              onPressed: () => Navigator.of(ctx).pop()),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 8),
+                      child: TextField(
+                        controller: controller,
+                        decoration: const InputDecoration(
+                            prefixIcon: Icon(Icons.search),
+                            hintText: 'Search friends by username'),
+                        onSubmitted: _search,
+                      ),
+                    ),
+                    if (isLoading)
+                      const Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: CircularProgressIndicator())
+                    else
+                      Flexible(
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: results.length,
+                          separatorBuilder: (_, __) => Divider(
+                              color: cs.outlineVariant.withOpacity(0.3)),
+                          itemBuilder: (ctx, i) {
+                            final u = results[i];
+                            // Check if user is already in the group
+                            final isAlreadyMember = _participantIds.contains(u.uid);
+                            
+                            return ListTile(
+                              leading: CircleAvatar(
+                                backgroundImage: (u.photoURL != null &&
+                                        u.photoURL!.isNotEmpty)
+                                    ? NetworkImage(u.photoURL!)
+                                    : null,
+                                child:
+                                    (u.photoURL == null || u.photoURL!.isEmpty)
+                                        ? const Icon(Icons.person)
+                                        : null,
+                              ),
+                              title: Text(u.displayName,
+                                  style: GoogleFonts.poppins(
+                                      fontWeight: FontWeight.w600)),
+                              subtitle: Text('@${u.username}',
+                                  style: GoogleFonts.lato(
+                                      color: cs.onSurfaceVariant)),
+                              trailing: isAlreadyMember
+                                  ? Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: cs.primaryContainer,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        'Member',
+                                        style: GoogleFonts.lato(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: cs.onPrimaryContainer,
+                                        ),
+                                      ),
+                                    )
+                                  : TextButton(
+                                      onPressed: () => _sendInvite(u),
+                                      child: const Text('Invite')),
+                            );
+                          },
+                        ),
+                      ),
+                    const SizedBox(height: 14),
+                  ],
+                ),
+              ),
+            ),
+          );
+        });
+      },
+    );
+  }
+
   void _onPageChanged(int index) {
     HapticFeedback.selectionClick();
     setState(() => _currentPageIndex = index);
@@ -198,7 +406,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
             child: PageView.builder(
               controller: _pageController,
               onPageChanged: _onPageChanged,
-              physics: const BouncingScrollPhysics(),
+              physics: const ClampingScrollPhysics(),
               itemCount: 1 + _participantIds.length,
               itemBuilder: (context, index) {
                 if (index == 0) {
@@ -230,7 +438,8 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                       }
                       return Opacity(
                         opacity: opacity,
-                        child: _buildParticipantPage(context, _participantIds[index - 1]),
+                        child: _buildParticipantPage(
+                            context, _participantIds[index - 1]),
                       );
                     },
                   );
@@ -348,7 +557,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
         : DateFormat('MMMM d, yyyy').format(_plan.startDate);
 
     return CustomScrollView(
-      physics: const BouncingScrollPhysics(),
+      physics: const ClampingScrollPhysics(),
       slivers: [
         // Beautiful header with map
         SliverToBoxAdapter(
@@ -611,8 +820,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
               ),
             ),
           ),
-
-                  ],
+        ],
       ),
     );
   }
@@ -711,6 +919,8 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
   }
 
   Widget _buildTeamSection(BuildContext context) {
+    final canInviteMore = _participantIds.length < 4;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -731,18 +941,66 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
               ),
             ),
             const Spacer(),
+            if (canInviteMore) ...[
+              Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    _openInviteSheet();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryColor(context).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppColors.primaryColor(context).withOpacity(0.3),
+                        width: 0.5,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.person_add_alt_1_rounded,
+                          size: 14,
+                          color: AppColors.primaryColor(context),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Add',
+                          style: GoogleFonts.lato(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primaryColor(context),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: AppColors.primaryColor(context).withOpacity(0.2),
+                color: _participantIds.length >= 4 
+                    ? Colors.orange.withOpacity(0.2)
+                    : AppColors.primaryColor(context).withOpacity(0.2),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
-                '${_participantIds.length} members',
+                '${_participantIds.length}/4 members',
                 style: GoogleFonts.lato(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.primaryColor(context),
+                  color: _participantIds.length >= 4 
+                      ? Colors.orange
+                      : AppColors.primaryColor(context),
                 ),
               ),
             ),
@@ -1057,7 +1315,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
               ),
               child: SafeArea(
                 child: CustomScrollView(
-                  physics: const BouncingScrollPhysics(),
+                  physics: const ClampingScrollPhysics(),
                   slivers: [
                     SliverToBoxAdapter(
                       child: Padding(
@@ -1222,7 +1480,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Readiness',
+                'Progress',
                 style: GoogleFonts.poppins(
                   fontWeight: FontWeight.w600,
                   fontSize: 18,
