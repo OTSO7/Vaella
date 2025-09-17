@@ -299,11 +299,16 @@ class AppRouter extends StatelessWidget {
           builder: (context, state) {
             final planId = state.pathParameters['planId']!;
             final hikePlan = state.extra as HikePlan?;
+            final userId = state.uri.queryParameters['userId'];
             if (hikePlan == null) {
               return const Scaffold(
                   body: Center(child: Text('Hike Plan data missing.')));
             }
-            return PackingListPage(planId: planId, initialPlan: hikePlan);
+            return PackingListPage(
+              planId: planId, 
+              initialPlan: hikePlan,
+              userId: userId,
+            );
           },
         ),
         // POISTETTU VÄLIAIKAISESTI: Uusi reitti ateriasuunnitelmalle

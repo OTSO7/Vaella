@@ -7,11 +7,15 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:uuid/uuid.dart';
 import 'package:percent_indicator/percent_indicator.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 
 import '../models/hike_plan_model.dart';
 import '../models/packing_list_item.dart';
 import '../services/hike_plan_service.dart';
 import '../utils/app_colors.dart';
+import '../providers/auth_provider.dart';
 
 class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   _SliverAppBarDelegate(this._tabBar);
@@ -41,11 +45,13 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
 class PackingListPage extends StatefulWidget {
   final String planId;
   final HikePlan initialPlan;
+  final String? userId; // Optional userId for viewing other users' lists
 
   const PackingListPage({
     super.key,
     required this.planId,
     required this.initialPlan,
+    this.userId,
   });
 
   @override
@@ -73,22 +79,48 @@ class _PackingListPageState extends State<PackingListPage>
     'Bonus',
   ];
 
-  // POISTETTU: _secondaryCategories ja _allCategories poistettu tarpeettomina.
-
   Timer? _debounceTimer;
   final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
       GlobalKey<ScaffoldMessengerState>();
 
   late final ScrollController _scrollController;
   TabController? _tabController;
+  
+  // User-specific packing list
+  List<PackingListItem> _userPackingList = [];
+  late String _currentUserId;
+  late bool _isOwnList;
+  late bool _isGroupHike;
+  String? _viewingUserName;
 
   @override
   void initState() {
     super.initState();
     _scrollController = ScrollController();
-    // MUUTETTU: TabControllerin pituus on nyt suoraan _packingCategories-listan pituus.
     _tabController =
         TabController(length: _packingCategories.length, vsync: this);
+    
+    // Determine if this is a group hike
+    _isGroupHike = widget.initialPlan.collabOwnerId != null || 
+                   widget.initialPlan.collaboratorIds.isNotEmpty;
+    
+    // Get current user ID
+    final currentUser = FirebaseAuth.instance.currentUser;
+    _currentUserId = widget.userId ?? currentUser?.uid ?? '';
+    
+    // Check if viewing own list
+    _isOwnList = widget.userId == null || widget.userId == currentUser?.uid;
+    
+    // Load user-specific packing list if group hike
+    if (_isGroupHike) {
+      _loadUserPackingList();
+      if (!_isOwnList && widget.userId != null) {
+        _loadUserName(widget.userId!);
+      }
+    } else {
+      // For individual hikes, use the plan's packing list
+      _userPackingList = List.from(widget.initialPlan.packingList);
+    }
   }
 
   @override
@@ -183,17 +215,75 @@ class _PackingListPageState extends State<PackingListPage>
     );
   }
 
-  Future<void> _updateHikePlan(HikePlan updatedPlan,
-      {bool showSuccess = false}) async {
-    print('PackingListPage: Queuing update for plan ${updatedPlan.id}');
+  Future<void> _loadUserPackingList() async {
+    if (!_isGroupHike || _currentUserId.isEmpty) return;
+    
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_currentUserId)
+          .collection('plans')
+          .doc(widget.planId)
+          .get();
+      
+      if (doc.exists) {
+        final data = doc.data();
+        if (data != null && data['packingList'] != null) {
+          setState(() {
+            _userPackingList = (data['packingList'] as List<dynamic>)
+                .map((item) => PackingListItem.fromMap(item as Map<String, dynamic>))
+                .toList();
+          });
+        }
+      }
+    } catch (e) {
+      print('Error loading user packing list: $e');
+    }
+  }
+
+  Future<void> _loadUserName(String userId) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+      
+      if (doc.exists && mounted) {
+        final data = doc.data();
+        setState(() {
+          _viewingUserName = data?['displayName'] ?? data?['username'] ?? 'User';
+        });
+      }
+    } catch (e) {
+      print('Error loading user name: $e');
+    }
+  }
+
+  Future<void> _updatePackingList({bool showSuccess = false}) async {
+    print('PackingListPage: Updating packing list');
     _debounceTimer?.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 300), () async {
       if (!mounted) return;
 
       try {
-        await _hikePlanService.updateHikePlan(updatedPlan);
-        print(
-            'PackingListPage: Firestore update successful for plan ${updatedPlan.id}.');
+        if (_isGroupHike && _currentUserId.isNotEmpty) {
+          // For group hikes, save to user's personal document
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(_currentUserId)
+              .collection('plans')
+              .doc(widget.planId)
+              .set({
+            'packingList': _userPackingList.map((item) => item.toMap()).toList(),
+            'lastUpdated': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        } else {
+          // For individual hikes, update the main plan
+          final updatedPlan = widget.initialPlan.copyWith(packingList: _userPackingList);
+          await _hikePlanService.updateHikePlan(updatedPlan);
+        }
+
+        print('PackingListPage: Update successful');
 
         if (mounted && showSuccess) {
           _scaffoldMessengerKey.currentState?.hideCurrentSnackBar();
@@ -210,7 +300,7 @@ class _PackingListPageState extends State<PackingListPage>
           );
         }
       } catch (e) {
-        print('PackingListPage: Error during Firestore update: $e');
+        print('PackingListPage: Error during update: $e');
         if (mounted) {
           _scaffoldMessengerKey.currentState?.hideCurrentSnackBar();
           _scaffoldMessengerKey.currentState?.showSnackBar(
@@ -230,16 +320,17 @@ class _PackingListPageState extends State<PackingListPage>
   }
 
   void _onItemStatusChanged(
-      PackingListItem item, bool newPackedStatus, HikePlan currentHikePlan) {
+      PackingListItem item, bool newPackedStatus) {
     print(
         'PackingListPage: Status changed for item: ${item.name} to $newPackedStatus');
 
-    final List<PackingListItem> updatedList =
-        currentHikePlan.packingList.map((i) {
-      return i.id == item.id ? i.copyWith(isPacked: newPackedStatus) : i;
-    }).toList();
+    setState(() {
+      _userPackingList = _userPackingList.map((i) {
+        return i.id == item.id ? i.copyWith(isPacked: newPackedStatus) : i;
+      }).toList();
+    });
 
-    _updateHikePlan(currentHikePlan.copyWith(packingList: updatedList));
+    _updatePackingList();
   }
 
   Future<void> _selectCategory(BuildContext context, TextTheme appTextTheme,
@@ -376,8 +467,19 @@ class _PackingListPageState extends State<PackingListPage>
 
   void _addOrUpdateItem(
       {PackingListItem? itemToEdit,
-      String? defaultCategory,
-      required HikePlan currentHikePlan}) {
+      String? defaultCategory}) {
+    
+    // Don't allow editing if viewing someone else's list
+    if (!_isOwnList) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('You can only edit your own packing list', 
+              style: GoogleFonts.lato()),
+          backgroundColor: AppColors.errorColor(context),
+        ),
+      );
+      return;
+    }
     _newItemNameController.text = itemToEdit?.name ?? '';
     _newItemQuantityController.text = (itemToEdit?.quantity ?? 1).toString();
     _selectedCategory = itemToEdit?.category ?? defaultCategory ?? 'Bonus';
@@ -462,32 +564,29 @@ class _PackingListPageState extends State<PackingListPage>
 
                         String newItemId = itemToEdit?.id ?? const Uuid().v4();
 
-                        final List<PackingListItem> updatedList =
-                            List<PackingListItem>.from(
-                                currentHikePlan.packingList);
-
-                        if (itemToEdit == null) {
-                          updatedList.add(PackingListItem(
-                            id: newItemId,
-                            name: _newItemNameController.text.trim(),
-                            quantity: quantity,
-                            category: _selectedCategory,
-                            isPacked: false,
-                          ));
-                        } else {
-                          final int index = updatedList
-                              .indexWhere((i) => i.id == itemToEdit.id);
-                          if (index != -1) {
-                            updatedList[index] = itemToEdit.copyWith(
+                        setState(() {
+                          if (itemToEdit == null) {
+                            _userPackingList.add(PackingListItem(
+                              id: newItemId,
                               name: _newItemNameController.text.trim(),
                               quantity: quantity,
                               category: _selectedCategory,
-                            );
+                              isPacked: false,
+                            ));
+                          } else {
+                            final int index = _userPackingList
+                                .indexWhere((i) => i.id == itemToEdit.id);
+                            if (index != -1) {
+                              _userPackingList[index] = itemToEdit.copyWith(
+                                name: _newItemNameController.text.trim(),
+                                quantity: quantity,
+                                category: _selectedCategory,
+                              );
+                            }
                           }
-                        }
-                        _updateHikePlan(
-                            currentHikePlan.copyWith(packingList: updatedList),
-                            showSuccess: true);
+                        });
+                        
+                        _updatePackingList(showSuccess: true);
                         _newItemNameController.clear();
                         _newItemQuantityController.clear();
                         Navigator.pop(context);
@@ -509,7 +608,7 @@ class _PackingListPageState extends State<PackingListPage>
                       TextButton(
                         onPressed: () {
                           Navigator.pop(context);
-                          _confirmDeleteItem(itemToEdit, currentHikePlan);
+                          _confirmDeleteItem(itemToEdit);
                         },
                         child: Text(
                           'Delete Item',
@@ -529,7 +628,19 @@ class _PackingListPageState extends State<PackingListPage>
   }
 
   Future<void> _confirmDeleteItem(
-      PackingListItem itemToDelete, HikePlan currentHikePlan) async {
+      PackingListItem itemToDelete) async {
+    
+    // Don't allow deleting if viewing someone else's list
+    if (!_isOwnList) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('You can only edit your own packing list', 
+              style: GoogleFonts.lato()),
+          backgroundColor: AppColors.errorColor(context),
+        ),
+      );
+      return;
+    }
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -554,11 +665,10 @@ class _PackingListPageState extends State<PackingListPage>
     );
 
     if (confirm == true) {
-      final updatedList =
-          List<PackingListItem>.from(currentHikePlan.packingList)
-            ..removeWhere((item) => item.id == itemToDelete.id);
-      _updateHikePlan(currentHikePlan.copyWith(packingList: updatedList),
-          showSuccess: true);
+      setState(() {
+        _userPackingList.removeWhere((item) => item.id == itemToDelete.id);
+      });
+      _updatePackingList(showSuccess: true);
     }
   }
 
@@ -569,90 +679,62 @@ class _PackingListPageState extends State<PackingListPage>
 
     return ScaffoldMessenger(
       key: _scaffoldMessengerKey,
-      child: StreamBuilder<HikePlan?>(
-        stream: _hikePlanService.getHikePlanStream(widget.planId),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return Scaffold(
-                body: Center(
-                    child: CircularProgressIndicator(
-                        color: AppColors.primaryColor(context))));
-          }
-          if (snapshot.hasError) {
-            return Scaffold(
-              appBar: AppBar(title: const Text('Error')),
-              body: const Center(child: Text('Could not load packing list.')),
-            );
-          }
-
-          final HikePlan currentHikePlan = snapshot.data!;
-          final Map<String, List<PackingListItem>> groupedItems = {};
-          for (var item in currentHikePlan.packingList) {
-            groupedItems.putIfAbsent(item.category, () => []).add(item);
-          }
-
-          return Scaffold(
-            backgroundColor: theme.scaffoldBackgroundColor,
-            body: CustomScrollView(
-              controller: _scrollController,
-              slivers: [
-                _buildSliverAppBar(context, currentHikePlan, groupedItems),
-                SliverPersistentHeader(
-                  delegate: _SliverAppBarDelegate(
-                    TabBar(
-                      controller: _tabController,
-                      isScrollable: true,
-                      indicatorColor: theme.colorScheme.primary,
-                      indicatorWeight: 3.0,
-                      labelColor: theme.colorScheme.primary,
-                      unselectedLabelColor: theme.hintColor,
-                      labelStyle:
-                          GoogleFonts.poppins(fontWeight: FontWeight.w600),
-                      unselectedLabelStyle:
-                          GoogleFonts.poppins(fontWeight: FontWeight.w500),
-                      // MUUTETTU: Ei enää "More"-tabia
-                      tabs: _packingCategories
-                          .map((category) => Tab(text: category))
-                          .toList(),
-                    ),
-                  ),
-                  pinned: true,
+      child: Scaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        body: CustomScrollView(
+          controller: _scrollController,
+          slivers: [
+            _buildSliverAppBar(context),
+            SliverPersistentHeader(
+              delegate: _SliverAppBarDelegate(
+                TabBar(
+                  controller: _tabController,
+                  isScrollable: true,
+                  indicatorColor: theme.colorScheme.primary,
+                  indicatorWeight: 3.0,
+                  labelColor: theme.colorScheme.primary,
+                  unselectedLabelColor: theme.hintColor,
+                  labelStyle:
+                      GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                  unselectedLabelStyle:
+                      GoogleFonts.poppins(fontWeight: FontWeight.w500),
+                  tabs: _packingCategories
+                      .map((category) => Tab(text: category))
+                      .toList(),
                 ),
-                SliverFillRemaining(
-                  child: TabBarView(
-                    controller: _tabController,
-                    // MUUTETTU: Ei enää "More"-sivua
-                    children: _packingCategories
-                        .map((category) => _buildCategoryPage(context, category,
-                            groupedItems[category] ?? [], currentHikePlan))
-                        .toList(),
-                  ),
-                )
-              ],
+              ),
+              pinned: true,
             ),
-            floatingActionButton: FloatingActionButton.extended(
-              onPressed: () {
-                // MUUTETTU: Yksinkertaistettu logiikka
-                final currentCategory =
-                    _packingCategories[_tabController!.index];
-                _addOrUpdateItem(
-                    currentHikePlan: currentHikePlan,
-                    defaultCategory: currentCategory);
-              },
-              label: Text('Add Item',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-              icon: const Icon(Icons.add_rounded),
-              backgroundColor: theme.colorScheme.primary,
-              foregroundColor: theme.colorScheme.onPrimary,
-            ),
-          );
-        },
+            SliverFillRemaining(
+              child: TabBarView(
+                controller: _tabController,
+                children: _packingCategories
+                    .map((category) => _buildCategoryPage(context, category))
+                    .toList(),
+              ),
+            )
+          ],
+        ),
+        floatingActionButton: _isOwnList
+            ? FloatingActionButton.extended(
+                onPressed: () {
+                  final currentCategory =
+                      _packingCategories[_tabController!.index];
+                  _addOrUpdateItem(defaultCategory: currentCategory);
+                },
+                label: Text('Add Item',
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                icon: const Icon(Icons.add_rounded),
+                backgroundColor: theme.colorScheme.primary,
+                foregroundColor: theme.colorScheme.onPrimary,
+              )
+            : null,
       ),
     );
   }
 
-  Widget _buildCategoryPage(BuildContext context, String category,
-      List<PackingListItem> items, HikePlan plan) {
+          Widget _buildCategoryPage(BuildContext context, String category) {
+    final items = _userPackingList.where((item) => item.category == category).toList();
     items.sort((a, b) {
       if (a.isPacked && !b.isPacked) return 1;
       if (!a.isPacked && b.isPacked) return -1;
@@ -676,8 +758,8 @@ class _PackingListPageState extends State<PackingListPage>
             child: SlideAnimation(
               verticalOffset: 50.0,
               child: FadeInAnimation(
-                child: _buildPackingListItem(
-                    context, item, _getAppTextTheme(context), plan),
+              child: _buildPackingListItem(
+              context, item, _getAppTextTheme(context)),
               ),
             ),
           );
@@ -721,13 +803,12 @@ class _PackingListPageState extends State<PackingListPage>
     }
   }
 
-  SliverAppBar _buildSliverAppBar(BuildContext context, HikePlan plan,
-      Map<String, List<PackingListItem>> groupedItems) {
+  SliverAppBar _buildSliverAppBar(BuildContext context) {
     final theme = Theme.of(context);
     const double expandedHeight = 400.0;
 
-    final totalItems = plan.packingList.length;
-    final packedItems = plan.packingList.where((i) => i.isPacked).length;
+    final totalItems = _userPackingList.length;
+    final packedItems = _userPackingList.where((i) => i.isPacked).length;
     final progress = totalItems > 0 ? packedItems / totalItems : 0.0;
 
     return SliverAppBar(
@@ -797,14 +878,29 @@ class _PackingListPageState extends State<PackingListPage>
                   const SizedBox(height: 16),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Text(
-                      plan.hikeName,
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 18,
-                        color: theme.colorScheme.onSurface,
-                      ),
+                    child: Column(
+                      children: [
+                        Text(
+                          widget.initialPlan.hikeName,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 18,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                        if (!_isOwnList && _viewingUserName != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Viewing ${_viewingUserName}\'s list',
+                            style: GoogleFonts.lato(
+                              fontSize: 14,
+                              color: theme.colorScheme.primary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -849,17 +945,22 @@ class _PackingListPageState extends State<PackingListPage>
   }
 
   Widget _buildPackingListItem(BuildContext context, PackingListItem item,
-      TextTheme appTextTheme, HikePlan currentHikePlan) {
+      TextTheme appTextTheme) {
     return _OptimizedPackingListItem(
       key: ValueKey(item.id),
       item: item,
       appTextTheme: appTextTheme,
       onStatusChanged: (newStatus) {
-        _onItemStatusChanged(item, newStatus, currentHikePlan);
+        if (_isOwnList) {
+          _onItemStatusChanged(item, newStatus);
+        }
       },
       onEdit: () {
-        _addOrUpdateItem(itemToEdit: item, currentHikePlan: currentHikePlan);
+        if (_isOwnList) {
+          _addOrUpdateItem(itemToEdit: item);
+        }
       },
+      isEditable: _isOwnList,
     );
   }
 }
@@ -869,6 +970,7 @@ class _OptimizedPackingListItem extends StatefulWidget {
   final TextTheme appTextTheme;
   final VoidCallback onEdit;
   final ValueChanged<bool> onStatusChanged;
+  final bool isEditable;
 
   const _OptimizedPackingListItem({
     super.key,
@@ -876,6 +978,7 @@ class _OptimizedPackingListItem extends StatefulWidget {
     required this.appTextTheme,
     required this.onEdit,
     required this.onStatusChanged,
+    this.isEditable = true,
   });
 
   @override
@@ -937,8 +1040,8 @@ class _OptimizedPackingListItemState extends State<_OptimizedPackingListItem> {
               width: 1)),
       margin: const EdgeInsets.symmetric(vertical: 5.0),
       child: InkWell(
-        onTap: _isPending ? null : _handleTap,
-        onLongPress: _isPending ? null : widget.onEdit,
+        onTap: widget.isEditable && !_isPending ? _handleTap : null,
+        onLongPress: widget.isEditable && !_isPending ? widget.onEdit : null,
         borderRadius: BorderRadius.circular(12),
         child: AnimatedOpacity(
           opacity: _isPending ? 0.6 : 1.0,
@@ -953,7 +1056,7 @@ class _OptimizedPackingListItemState extends State<_OptimizedPackingListItem> {
                   children: [
                     Checkbox(
                       value: _localIsPacked,
-                      onChanged: (value) => _handleTap(),
+                      onChanged: widget.isEditable ? (value) => _handleTap() : null,
                       activeColor: theme.colorScheme.primary,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(6)),
@@ -987,12 +1090,13 @@ class _OptimizedPackingListItemState extends State<_OptimizedPackingListItem> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                IconButton(
-                  icon: Icon(Icons.edit_note_rounded,
-                      color: theme.hintColor, size: 24),
-                  onPressed: _isPending ? null : widget.onEdit,
-                  tooltip: 'Edit item',
-                ),
+                if (widget.isEditable)
+                  IconButton(
+                    icon: Icon(Icons.edit_note_rounded,
+                        color: theme.hintColor, size: 24),
+                    onPressed: _isPending ? null : widget.onEdit,
+                    tooltip: 'Edit item',
+                  ),
               ],
             ),
           ),
