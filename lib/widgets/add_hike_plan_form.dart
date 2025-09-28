@@ -219,19 +219,38 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
       statusToSave = HikeStatus.upcoming;
     }
 
-    final resultPlan = HikePlan(
-      id: widget.existingPlan?.id,
-      hikeName: _nameController.text.trim(),
-      location: _locationController.text.trim(),
-      startDate: _startDate!,
-      endDate: _endDate,
-      lengthKm: _lengthController.text.trim().isNotEmpty
-          ? double.tryParse(_lengthController.text.trim().replaceAll(',', '.'))
-          : null,
-      latitude: _latitude,
-      longitude: _longitude,
-      status: statusToSave,
-    );
+    // KORJAUS: Käytä copyWith metodia jos muokataan olemassa olevaa plania
+    // jotta säilytetään packingList, dailyRoutes, foodPlanJson jne.
+    final HikePlan resultPlan;
+    if (widget.existingPlan != null) {
+      // Muokataan olemassa olevaa - säilytetään kaikki muut tiedot
+      resultPlan = widget.existingPlan!.copyWith(
+        hikeName: _nameController.text.trim(),
+        location: _locationController.text.trim(),
+        startDate: _startDate!,
+        endDate: _endDate,
+        lengthKm: _lengthController.text.trim().isNotEmpty
+            ? double.tryParse(_lengthController.text.trim().replaceAll(',', '.'))
+            : null,
+        latitude: _latitude,
+        longitude: _longitude,
+        status: statusToSave,
+      );
+    } else {
+      // Luodaan uusi plan
+      resultPlan = HikePlan(
+        hikeName: _nameController.text.trim(),
+        location: _locationController.text.trim(),
+        startDate: _startDate!,
+        endDate: _endDate,
+        lengthKm: _lengthController.text.trim().isNotEmpty
+            ? double.tryParse(_lengthController.text.trim().replaceAll(',', '.'))
+            : null,
+        latitude: _latitude,
+        longitude: _longitude,
+        status: statusToSave,
+      );
+    }
 
     if (mounted) {
       Navigator.of(context).pop(resultPlan);
