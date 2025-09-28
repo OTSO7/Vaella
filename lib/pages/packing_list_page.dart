@@ -892,7 +892,7 @@ class _PackingListPageState extends State<PackingListPage>
                         if (!_isOwnList && _viewingUserName != null) ...[
                           const SizedBox(height: 4),
                           Text(
-                            'Viewing ${_viewingUserName}\'s list',
+                            'Viewing $_viewingUserName\'s list',
                             style: GoogleFonts.lato(
                               fontSize: 14,
                               color: theme.colorScheme.primary,

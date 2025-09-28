@@ -157,7 +157,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
     if (_participantIds.length >= 4) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Maximum 4 members allowed in a group hike'),
+          content: const Text('Maximum 4 members allowed in a group hike'),
           backgroundColor: Colors.orange.shade700,
         ),
       );
@@ -179,18 +179,18 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
       backgroundColor: Colors.transparent,
       builder: (ctx) {
         return StatefulBuilder(builder: (ctx, setModalState) {
-          Future<void> _search(String q) async {
+          Future<void> search(String q) async {
             setModalState(() => isLoading = true);
             results = await auth.searchUsersByUsername(q.trim());
             setModalState(() => isLoading = false);
           }
 
-          Future<void> _sendInvite(user_model.UserProfile target) async {
+          Future<void> sendInvite(user_model.UserProfile target) async {
             // Double check capacity
             if (_participantIds.length >= 4) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Group is full (4 members max)'),
+                  content: const Text('Group is full (4 members max)'),
                   backgroundColor: Colors.orange.shade700,
                 ),
               );
@@ -264,7 +264,8 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                               children: [
                                 Text('Invite friends to this hike',
                                     style: GoogleFonts.poppins(
-                                        fontWeight: FontWeight.w700, fontSize: 16)),
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 16)),
                                 Text(
                                   '$remainingSlots ${remainingSlots == 1 ? 'slot' : 'slots'} remaining',
                                   style: GoogleFonts.lato(
@@ -289,7 +290,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                         decoration: const InputDecoration(
                             prefixIcon: Icon(Icons.search),
                             hintText: 'Search friends by username'),
-                        onSubmitted: _search,
+                        onSubmitted: search,
                       ),
                     ),
                     if (isLoading)
@@ -306,8 +307,9 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                           itemBuilder: (ctx, i) {
                             final u = results[i];
                             // Check if user is already in the group
-                            final isAlreadyMember = _participantIds.contains(u.uid);
-                            
+                            final isAlreadyMember =
+                                _participantIds.contains(u.uid);
+
                             return ListTile(
                               leading: CircleAvatar(
                                 backgroundImage: (u.photoURL != null &&
@@ -343,7 +345,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                                       ),
                                     )
                                   : TextButton(
-                                      onPressed: () => _sendInvite(u),
+                                      onPressed: () => sendInvite(u),
                                       child: const Text('Invite')),
                             );
                           },
@@ -567,13 +569,13 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
         // Main content
         SliverToBoxAdapter(
           child: Container(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  const Color(0xFF1A1A1A),
-                  const Color(0xFF0A0A0A),
+                  Color(0xFF1A1A1A),
+                  Color(0xFF0A0A0A),
                 ],
               ),
             ),
@@ -611,7 +613,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
       BuildContext context, bool hasRoute, bool hasLocation) {
     final allPoints = _plan.dailyRoutes.expand((r) => r.points).toList();
 
-    return Container(
+    return SizedBox(
       height: 350,
       child: Stack(
         children: [
@@ -799,13 +801,13 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
             right: 0,
             height: 100,
             child: Container(
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
                     Colors.transparent,
-                    const Color(0xFF1A1A1A),
+                    Color(0xFF1A1A1A),
                   ],
                 ),
               ),
@@ -911,7 +913,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
 
   Widget _buildTeamSection(BuildContext context) {
     final canInviteMore = _participantIds.length < 4;
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -943,7 +945,8 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                     _openInviteSheet();
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
                       color: AppColors.primaryColor(context).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
@@ -979,7 +982,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: _participantIds.length >= 4 
+                color: _participantIds.length >= 4
                     ? Colors.orange.withOpacity(0.2)
                     : AppColors.primaryColor(context).withOpacity(0.2),
                 borderRadius: BorderRadius.circular(12),
@@ -989,7 +992,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                 style: GoogleFonts.lato(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: _participantIds.length >= 4 
+                  color: _participantIds.length >= 4
                       ? Colors.orange
                       : AppColors.primaryColor(context),
                 ),
@@ -1299,18 +1302,20 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                   .collection('foodPlans')
                   .snapshots(),
               builder: (context, foodSnapshot) {
-                final foodPlans = foodSnapshot.hasData 
-                    ? foodSnapshot.data!.docs.map((doc) => doc.data() as Map<String, dynamic>).toList()
+                final foodPlans = foodSnapshot.hasData
+                    ? foodSnapshot.data!.docs
+                        .map((doc) => doc.data() as Map<String, dynamic>)
+                        .toList()
                     : <Map<String, dynamic>>[];
 
                 return Container(
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
-                        const Color(0xFF1A1A1A),
-                        const Color(0xFF0A0A0A),
+                        Color(0xFF1A1A1A),
+                        Color(0xFF0A0A0A),
                       ],
                     ),
                   ),
@@ -1320,7 +1325,8 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                       slivers: [
                         // Floating header with glassmorphism
                         SliverToBoxAdapter(
-                          child: _buildFloatingHeader(userProfile, isCurrentUser),
+                          child:
+                              _buildFloatingHeader(userProfile, isCurrentUser),
                         ),
 
                         // Main content with cards
@@ -1329,21 +1335,24 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                           sliver: SliverList(
                             delegate: SliverChildListDelegate([
                               const SizedBox(height: 20),
-                              
+
                               // Overview stats card
                               _buildOverviewStatsCard(planData, foodPlans),
                               const SizedBox(height: 16),
 
                               // Packing progress card
-                              _buildPackingProgressCard(planData, participantId, isCurrentUser),
+                              _buildPackingProgressCard(
+                                  planData, participantId, isCurrentUser),
                               const SizedBox(height: 16),
 
                               // Food planning card
-                              _buildFoodPlanningCard(foodPlans, participantId, isCurrentUser),
+                              _buildFoodPlanningCard(
+                                  foodPlans, participantId, isCurrentUser),
                               const SizedBox(height: 16),
 
                               // Quick actions
-                              _buildQuickActionsCard(participantId, isCurrentUser, planData),
+                              _buildQuickActionsCard(
+                                  participantId, isCurrentUser, planData),
                             ]),
                           ),
                         ),
@@ -1361,13 +1370,13 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
 
   Widget _buildLoadingParticipantPage() {
     return Container(
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            const Color(0xFF1A1A1A),
-            const Color(0xFF0A0A0A),
+            Color(0xFF1A1A1A),
+            Color(0xFF0A0A0A),
           ],
         ),
       ),
@@ -1377,7 +1386,8 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
     );
   }
 
-  Widget _buildFloatingHeader(user_model.UserProfile? userProfile, bool isCurrentUser) {
+  Widget _buildFloatingHeader(
+      user_model.UserProfile? userProfile, bool isCurrentUser) {
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 20, 20, 0),
       child: ClipRRect(
@@ -1420,7 +1430,8 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                                 colors: isCurrentUser
                                     ? [
                                         AppColors.primaryColor(context),
-                                        AppColors.primaryColor(context).withOpacity(0.6),
+                                        AppColors.primaryColor(context)
+                                            .withOpacity(0.6),
                                       ]
                                     : [
                                         Colors.white.withOpacity(0.2),
@@ -1432,7 +1443,8 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                               boxShadow: [
                                 BoxShadow(
                                   color: isCurrentUser
-                                      ? AppColors.primaryColor(context).withOpacity(0.4)
+                                      ? AppColors.primaryColor(context)
+                                          .withOpacity(0.4)
                                       : Colors.black.withOpacity(0.2),
                                   blurRadius: 16,
                                   spreadRadius: 2,
@@ -1468,7 +1480,8 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                           decoration: BoxDecoration(
                             color: AppColors.primaryColor(context),
                             shape: BoxShape.circle,
-                            border: Border.all(color: const Color(0xFF1A1A1A), width: 2),
+                            border: Border.all(
+                                color: const Color(0xFF1A1A1A), width: 2),
                           ),
                           child: const Icon(
                             Icons.star_rounded,
@@ -1480,7 +1493,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                   ],
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Name and username
                 Text(
                   userProfile?.displayName ?? 'Adventurer',
@@ -1502,11 +1515,12 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                     ),
                   ),
                 ],
-                
+
                 if (isCurrentUser) ...[
                   const SizedBox(height: 12),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: AppColors.primaryColor(context).withOpacity(0.2),
                       borderRadius: BorderRadius.circular(16),
@@ -1533,14 +1547,17 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
     );
   }
 
-  Widget _buildOverviewStatsCard(Map<String, dynamic>? planData, List<Map<String, dynamic>> foodPlans) {
+  Widget _buildOverviewStatsCard(
+      Map<String, dynamic>? planData, List<Map<String, dynamic>> foodPlans) {
     final packingList = (planData?['packingList'] as List<dynamic>? ?? []);
-    final packedItems = packingList.where((item) => item['isPacked'] == true).length;
+    final packedItems =
+        packingList.where((item) => item['isPacked'] == true).length;
     final totalItems = packingList.length;
-    
+
     final totalMeals = foodPlans.length;
-    final plannedMeals = foodPlans.where((plan) => 
-        (plan['items'] as List<dynamic>? ?? []).isNotEmpty).length;
+    final plannedMeals = foodPlans
+        .where((plan) => (plan['items'] as List<dynamic>? ?? []).isNotEmpty)
+        .length;
 
     return _buildGlassCard(
       child: Column(
@@ -1572,7 +1589,6 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
             ],
           ),
           const SizedBox(height: 20),
-          
           Row(
             children: [
               Expanded(
@@ -1659,10 +1675,13 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
     );
   }
 
-  Widget _buildPackingProgressCard(Map<String, dynamic>? planData, String participantId, bool isCurrentUser) {
+  Widget _buildPackingProgressCard(Map<String, dynamic>? planData,
+      String participantId, bool isCurrentUser) {
     final packingList = (planData?['packingList'] as List<dynamic>? ?? []);
-    final packedItems = packingList.where((item) => item['isPacked'] == true).toList();
-    final unpackedItems = packingList.where((item) => item['isPacked'] != true).toList();
+    final packedItems =
+        packingList.where((item) => item['isPacked'] == true).toList();
+    final unpackedItems =
+        packingList.where((item) => item['isPacked'] != true).toList();
 
     return _buildGlassCard(
       child: Column(
@@ -1723,10 +1742,9 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
               ),
             ],
           ),
-          
           if (packingList.isNotEmpty) ...[
             const SizedBox(height: 20),
-            
+
             // Progress bar
             Container(
               height: 8,
@@ -1736,7 +1754,8 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
               ),
               child: FractionallySizedBox(
                 alignment: Alignment.centerLeft,
-                widthFactor: (packedItems.length / packingList.length).clamp(0.0, 1.0),
+                widthFactor:
+                    (packedItems.length / packingList.length).clamp(0.0, 1.0),
                 child: Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -1748,7 +1767,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
               ),
             ),
             const SizedBox(height: 16),
-            
+
             // Recent packed items
             if (packedItems.isNotEmpty) ...[
               Text(
@@ -1760,9 +1779,11 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                 ),
               ),
               const SizedBox(height: 8),
-              ...packedItems.take(3).map((item) => _buildPackingItem(item, true)),
+              ...packedItems
+                  .take(3)
+                  .map((item) => _buildPackingItem(item, true)),
             ],
-            
+
             // Pending items
             if (unpackedItems.isNotEmpty) ...[
               const SizedBox(height: 12),
@@ -1775,9 +1796,11 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                 ),
               ),
               const SizedBox(height: 8),
-              ...unpackedItems.take(3).map((item) => _buildPackingItem(item, false)),
+              ...unpackedItems
+                  .take(3)
+                  .map((item) => _buildPackingItem(item, false)),
             ],
-            
+
             if (packingList.length > 6) ...[
               const SizedBox(height: 12),
               Text(
@@ -1821,12 +1844,12 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: isPacked 
+        color: isPacked
             ? Colors.green.withOpacity(0.1)
             : Colors.white.withOpacity(0.05),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: isPacked 
+          color: isPacked
               ? Colors.green.withOpacity(0.3)
               : Colors.white.withOpacity(0.1),
           width: 0.5,
@@ -1835,7 +1858,9 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
       child: Row(
         children: [
           Icon(
-            isPacked ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+            isPacked
+                ? Icons.check_circle_rounded
+                : Icons.radio_button_unchecked_rounded,
             size: 16,
             color: isPacked ? Colors.green : Colors.white.withOpacity(0.4),
           ),
@@ -1871,9 +1896,11 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
     );
   }
 
-  Widget _buildFoodPlanningCard(List<Map<String, dynamic>> foodPlans, String participantId, bool isCurrentUser) {
-    final plannedMeals = foodPlans.where((plan) => 
-        (plan['items'] as List<dynamic>? ?? []).isNotEmpty).length;
+  Widget _buildFoodPlanningCard(List<Map<String, dynamic>> foodPlans,
+      String participantId, bool isCurrentUser) {
+    final plannedMeals = foodPlans
+        .where((plan) => (plan['items'] as List<dynamic>? ?? []).isNotEmpty)
+        .length;
 
     return _buildGlassCard(
       child: Column(
@@ -1938,10 +1965,9 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
               ),
             ],
           ),
-          
           if (foodPlans.isNotEmpty) ...[
             const SizedBox(height: 20),
-            
+
             // Progress bar
             Container(
               height: 8,
@@ -1963,10 +1989,10 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
               ),
             ),
             const SizedBox(height: 16),
-            
+
             // Meal breakdown
             ...foodPlans.take(4).map((plan) => _buildMealItem(plan)),
-            
+
             if (foodPlans.length > 4) ...[
               const SizedBox(height: 8),
               Text(
@@ -2013,7 +2039,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
 
     IconData mealIcon;
     Color mealColor;
-    
+
     switch (mealType.toLowerCase()) {
       case 'breakfast':
         mealIcon = Icons.free_breakfast_outlined;
@@ -2040,12 +2066,12 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isPlanned 
+        color: isPlanned
             ? mealColor.withOpacity(0.1)
             : Colors.white.withOpacity(0.05),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isPlanned 
+          color: isPlanned
               ? mealColor.withOpacity(0.3)
               : Colors.white.withOpacity(0.1),
           width: 0.5,
@@ -2100,7 +2126,9 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
             ),
           ),
           Icon(
-            isPlanned ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+            isPlanned
+                ? Icons.check_circle_rounded
+                : Icons.radio_button_unchecked_rounded,
             size: 16,
             color: isPlanned ? mealColor : Colors.white.withOpacity(0.3),
           ),
@@ -2109,16 +2137,36 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
     );
   }
 
-  Widget _buildPreparationCard(Map<String, dynamic>? planData, String participantId, bool isCurrentUser) {
-    final preparationItems = planData?['preparationItems'] as Map<String, dynamic>? ?? {};
-    final completedItems = preparationItems.entries.where((e) => e.value == true).toList();
-    final pendingItems = preparationItems.entries.where((e) => e.value != true).toList();
+  Widget _buildPreparationCard(Map<String, dynamic>? planData,
+      String participantId, bool isCurrentUser) {
+    final preparationItems =
+        planData?['preparationItems'] as Map<String, dynamic>? ?? {};
+    final completedItems =
+        preparationItems.entries.where((e) => e.value == true).toList();
+    final pendingItems =
+        preparationItems.entries.where((e) => e.value != true).toList();
 
     final prepTasks = [
-      {'key': 'weatherChecked', 'title': 'Weather Forecast', 'icon': Icons.cloud_outlined},
-      {'key': 'routePlanned', 'title': 'Route Planning', 'icon': Icons.map_outlined},
-      {'key': 'gearChecked', 'title': 'Gear Check', 'icon': Icons.backpack_outlined},
-      {'key': 'emergencyPlan', 'title': 'Emergency Plan', 'icon': Icons.emergency_outlined},
+      {
+        'key': 'weatherChecked',
+        'title': 'Weather Forecast',
+        'icon': Icons.cloud_outlined
+      },
+      {
+        'key': 'routePlanned',
+        'title': 'Route Planning',
+        'icon': Icons.map_outlined
+      },
+      {
+        'key': 'gearChecked',
+        'title': 'Gear Check',
+        'icon': Icons.backpack_outlined
+      },
+      {
+        'key': 'emergencyPlan',
+        'title': 'Emergency Plan',
+        'icon': Icons.emergency_outlined
+      },
     ];
 
     return _buildGlassCard(
@@ -2165,7 +2213,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
             ],
           ),
           const SizedBox(height: 20),
-          
+
           // Progress bar
           Container(
             height: 8,
@@ -2175,7 +2223,8 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
             ),
             child: FractionallySizedBox(
               alignment: Alignment.centerLeft,
-              widthFactor: (completedItems.length / prepTasks.length).clamp(0.0, 1.0),
+              widthFactor:
+                  (completedItems.length / prepTasks.length).clamp(0.0, 1.0),
               child: Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -2187,7 +2236,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
             ),
           ),
           const SizedBox(height: 16),
-          
+
           // Preparation tasks
           ...prepTasks.map((task) {
             final isCompleted = preparationItems[task['key']] == true;
@@ -2207,12 +2256,12 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isCompleted 
+        color: isCompleted
             ? Colors.green.withOpacity(0.1)
             : Colors.white.withOpacity(0.05),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: isCompleted 
+          color: isCompleted
               ? Colors.green.withOpacity(0.3)
               : Colors.white.withOpacity(0.1),
           width: 0.5,
@@ -2221,7 +2270,9 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
       child: Row(
         children: [
           Icon(
-            isCompleted ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+            isCompleted
+                ? Icons.check_circle_rounded
+                : Icons.radio_button_unchecked_rounded,
             size: 20,
             color: isCompleted ? Colors.green : Colors.white.withOpacity(0.4),
           ),
@@ -2248,7 +2299,8 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
     );
   }
 
-  Widget _buildQuickActionsCard(String participantId, bool isCurrentUser, Map<String, dynamic>? planData) {
+  Widget _buildQuickActionsCard(String participantId, bool isCurrentUser,
+      Map<String, dynamic>? planData) {
     return _buildGlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2262,7 +2314,6 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
             ),
           ),
           const SizedBox(height: 16),
-          
           Row(
             children: [
               Expanded(

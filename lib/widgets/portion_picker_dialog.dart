@@ -120,8 +120,8 @@ class _PortionPickerDialogState extends State<PortionPickerDialog> {
           onPressed: () => Navigator.pop(context),
         ),
         ElevatedButton(
-          child: const Text('Apply'),
           onPressed: _save,
+          child: const Text('Apply'),
         ),
       ],
     );

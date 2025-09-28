@@ -385,12 +385,10 @@ class _ModernHikePlanHubPageState extends State<ModernHikePlanHubPage>
             ),
           ),
           const SizedBox(height: 20),
-          ...participantIds
-              .map((id) => Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: _buildEnhancedParticipantCard(cs, id),
-                  ))
-              .toList(),
+          ...participantIds.map((id) => Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: _buildEnhancedParticipantCard(cs, id),
+              )),
         ],
       ),
     );
@@ -635,43 +633,35 @@ class _ModernHikePlanHubPageState extends State<ModernHikePlanHubPage>
               child:
                   Text('Gear', style: TextStyle(fontWeight: FontWeight.w600)),
             ),
-            ...participantIds
-                .take(3)
-                .map((id) => Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Text('User ${id.substring(0, 3)}...',
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
-                    ))
-                .toList(),
+            ...participantIds.take(3).map((id) => Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Text('User ${id.substring(0, 3)}...',
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                )),
           ],
         ),
 
         // Category rows
-        ...gearCategories
-            .map((category) => TableRow(
-                  children: [
-                    Padding(
+        ...gearCategories.map((category) => TableRow(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Text(category),
+                ),
+                ...participantIds.take(3).map((id) => Padding(
                       padding: const EdgeInsets.all(8),
-                      child: Text(category),
-                    ),
-                    ...participantIds
-                        .take(3)
-                        .map((id) => Padding(
-                              padding: const EdgeInsets.all(8),
-                              child: Icon(
-                                math.Random().nextBool()
-                                    ? Icons.check_circle
-                                    : Icons.radio_button_unchecked,
-                                color: math.Random().nextBool()
-                                    ? Colors.green
-                                    : cs.outline,
-                                size: 20,
-                              ),
-                            ))
-                        .toList(),
-                  ],
-                ))
-            .toList(),
+                      child: Icon(
+                        math.Random().nextBool()
+                            ? Icons.check_circle
+                            : Icons.radio_button_unchecked,
+                        color: math.Random().nextBool()
+                            ? Colors.green
+                            : cs.outline,
+                        size: 20,
+                      ),
+                    )),
+              ],
+            )),
       ],
     );
   }

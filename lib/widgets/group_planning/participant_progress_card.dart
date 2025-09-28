@@ -285,9 +285,9 @@ class ParticipantProgressCard extends StatelessWidget {
         Row(
           children: [
             _buildQuickStat(
-                cs, 'Prep', '${completedItems}/4', Icons.checklist_rounded),
+                cs, 'Prep', '$completedItems/4', Icons.checklist_rounded),
             const SizedBox(width: 12),
-            _buildQuickStat(cs, 'Pack', '${packedItems}/${packingList.length}',
+            _buildQuickStat(cs, 'Pack', '$packedItems/${packingList.length}',
                 Icons.backpack_rounded),
           ],
         ),

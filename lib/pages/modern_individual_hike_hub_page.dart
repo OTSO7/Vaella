@@ -28,8 +28,8 @@ class ModernIndividualHikeHubPage extends StatefulWidget {
       _ModernIndividualHikeHubPageState();
 }
 
-class _ModernIndividualHikeHubPageState extends State<ModernIndividualHikeHubPage>
-    with TickerProviderStateMixin {
+class _ModernIndividualHikeHubPageState
+    extends State<ModernIndividualHikeHubPage> with TickerProviderStateMixin {
   late HikePlan _plan;
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
@@ -39,12 +39,12 @@ class _ModernIndividualHikeHubPageState extends State<ModernIndividualHikeHubPag
   void initState() {
     super.initState();
     _plan = widget.initialPlan;
-    
+
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 600),
       vsync: this,
     );
-    
+
     _fadeAnimation = CurvedAnimation(
       parent: _fadeController,
       curve: Curves.easeOut,
@@ -88,7 +88,8 @@ class _ModernIndividualHikeHubPageState extends State<ModernIndividualHikeHubPag
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Weather forecast requires location coordinates.'),
+          content:
+              const Text('Weather forecast requires location coordinates.'),
           backgroundColor: AppColors.errorColor(context),
         ),
       );
@@ -107,7 +108,7 @@ class _ModernIndividualHikeHubPageState extends State<ModernIndividualHikeHubPag
     HapticFeedback.lightImpact();
     final currentUserId = context.read<AuthProvider>().userProfile?.uid;
     if (currentUserId == null) return;
-    
+
     final result = await GoRouter.of(context).pushNamed('packingListPage',
         pathParameters: {'planId': _plan.id},
         queryParameters: {'userId': currentUserId},
@@ -134,13 +135,13 @@ class _ModernIndividualHikeHubPageState extends State<ModernIndividualHikeHubPag
       backgroundColor: Colors.transparent,
       builder: (ctx) {
         return StatefulBuilder(builder: (ctx, setModalState) {
-          Future<void> _search(String q) async {
+          Future<void> search(String q) async {
             setModalState(() => isLoading = true);
             results = await auth.searchUsersByUsername(q.trim());
             setModalState(() => isLoading = false);
           }
 
-          Future<void> _sendInvite(user_model.UserProfile target) async {
+          Future<void> sendInvite(user_model.UserProfile target) async {
             try {
               await FirebaseFirestore.instance
                   .collection('users')
@@ -216,7 +217,7 @@ class _ModernIndividualHikeHubPageState extends State<ModernIndividualHikeHubPag
                         decoration: const InputDecoration(
                             prefixIcon: Icon(Icons.search),
                             hintText: 'Search friends by username'),
-                        onSubmitted: _search,
+                        onSubmitted: search,
                       ),
                     ),
                     if (isLoading)
@@ -250,7 +251,7 @@ class _ModernIndividualHikeHubPageState extends State<ModernIndividualHikeHubPag
                                   style: GoogleFonts.lato(
                                       color: cs.onSurfaceVariant)),
                               trailing: TextButton(
-                                  onPressed: () => _sendInvite(u),
+                                  onPressed: () => sendInvite(u),
                                   child: const Text('Invite')),
                             );
                           },
@@ -316,7 +317,7 @@ class _ModernIndividualHikeHubPageState extends State<ModernIndividualHikeHubPag
             SliverToBoxAdapter(
               child: _buildMapHeader(context, hasRoute, hasLocation),
             ),
-            
+
             // Main content
             SliverToBoxAdapter(
               child: Container(
@@ -339,7 +340,7 @@ class _ModernIndividualHikeHubPageState extends State<ModernIndividualHikeHubPag
                       // Action cards
                       _buildActionSection(context, hasLocation, hasRoute),
                       const SizedBox(height: 24),
-                      
+
                       // Invite to group adventure section
                       _buildInvitePrompt(context),
                       const SizedBox(height: 80),
@@ -427,10 +428,11 @@ class _ModernIndividualHikeHubPageState extends State<ModernIndividualHikeHubPag
     );
   }
 
-  Widget _buildMapHeader(BuildContext context, bool hasRoute, bool hasLocation) {
+  Widget _buildMapHeader(
+      BuildContext context, bool hasRoute, bool hasLocation) {
     final allPoints = _plan.dailyRoutes.expand((r) => r.points).toList();
-    
-    return Container(
+
+    return SizedBox(
       height: 350,
       child: Stack(
         children: [
@@ -449,7 +451,8 @@ class _ModernIndividualHikeHubPageState extends State<ModernIndividualHikeHubPag
                 ),
                 children: [
                   TileLayer(
-                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     userAgentPackageName: 'com.example.treknoteflutter',
                   ),
                   PolylineLayer(
@@ -502,7 +505,8 @@ class _ModernIndividualHikeHubPageState extends State<ModernIndividualHikeHubPag
                               decoration: BoxDecoration(
                                 color: Colors.red,
                                 shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 3),
+                                border:
+                                    Border.all(color: Colors.white, width: 3),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withOpacity(0.3),
@@ -523,7 +527,9 @@ class _ModernIndividualHikeHubPageState extends State<ModernIndividualHikeHubPag
                 ],
               ),
             ),
-          ] else if (hasLocation && _plan.latitude != null && _plan.longitude != null) ...[
+          ] else if (hasLocation &&
+              _plan.latitude != null &&
+              _plan.longitude != null) ...[
             // Show location without route
             ClipRRect(
               child: FlutterMap(
@@ -536,7 +542,8 @@ class _ModernIndividualHikeHubPageState extends State<ModernIndividualHikeHubPag
                 ),
                 children: [
                   TileLayer(
-                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     userAgentPackageName: 'com.example.treknoteflutter',
                   ),
                   MarkerLayer(
@@ -605,7 +612,7 @@ class _ModernIndividualHikeHubPageState extends State<ModernIndividualHikeHubPag
               ),
             ),
           ],
-          
+
           // Gradient overlay at bottom only
           Positioned(
             bottom: 0,
@@ -658,7 +665,8 @@ class _ModernIndividualHikeHubPageState extends State<ModernIndividualHikeHubPag
                 _plan.location,
                 style: GoogleFonts.lato(
                   fontSize: 15,
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                  color:
+                      Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                   fontWeight: FontWeight.w400,
                 ),
               ),
@@ -673,7 +681,10 @@ class _ModernIndividualHikeHubPageState extends State<ModernIndividualHikeHubPag
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+        color: Theme.of(context)
+            .colorScheme
+            .surfaceContainerHighest
+            .withOpacity(0.3),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: Theme.of(context).dividerColor.withOpacity(0.3),
@@ -687,7 +698,8 @@ class _ModernIndividualHikeHubPageState extends State<ModernIndividualHikeHubPag
           _buildInfoRow(Icons.timer_outlined, '$dayCount days'),
           if (_plan.lengthKm != null && _plan.lengthKm! > 0) ...[
             const SizedBox(height: 16),
-            _buildInfoRow(Icons.route_rounded, '${_plan.lengthKm!.toStringAsFixed(1)} km'),
+            _buildInfoRow(Icons.route_rounded,
+                '${_plan.lengthKm!.toStringAsFixed(1)} km'),
           ],
         ],
       ),
@@ -722,7 +734,8 @@ class _ModernIndividualHikeHubPageState extends State<ModernIndividualHikeHubPag
     );
   }
 
-  Widget _buildActionSection(BuildContext context, bool hasLocation, bool hasRoute) {
+  Widget _buildActionSection(
+      BuildContext context, bool hasLocation, bool hasRoute) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -774,7 +787,7 @@ class _ModernIndividualHikeHubPageState extends State<ModernIndividualHikeHubPag
     VoidCallback? onTap,
   }) {
     final isEnabled = onTap != null;
-    
+
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(16),
@@ -815,18 +828,27 @@ class _ModernIndividualHikeHubPageState extends State<ModernIndividualHikeHubPag
                       style: GoogleFonts.poppins(
                         fontWeight: FontWeight.w600,
                         fontSize: 16,
-                        color: isEnabled 
-                            ? Theme.of(context).colorScheme.onSurface 
-                            : Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                        color: isEnabled
+                            ? Theme.of(context).colorScheme.onSurface
+                            : Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withOpacity(0.5),
                       ),
                     ),
                     Text(
                       subtitle,
                       style: GoogleFonts.lato(
                         fontSize: 13,
-                        color: isEnabled 
-                            ? Theme.of(context).colorScheme.onSurface.withOpacity(0.6)
-                            : Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+                        color: isEnabled
+                            ? Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withOpacity(0.6)
+                            : Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withOpacity(0.3),
                       ),
                     ),
                   ],
@@ -834,7 +856,8 @@ class _ModernIndividualHikeHubPageState extends State<ModernIndividualHikeHubPag
               ),
               Icon(
                 Icons.arrow_forward_ios_rounded,
-                color: isEnabled ? color.withOpacity(0.6) : color.withOpacity(0.2),
+                color:
+                    isEnabled ? color.withOpacity(0.6) : color.withOpacity(0.2),
                 size: 16,
               ),
             ],

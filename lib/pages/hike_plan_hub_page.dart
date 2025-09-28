@@ -63,15 +63,15 @@ class _HikePlanHubPageState extends State<HikePlanHubPage> {
     }.toList();
 
     final isGroupPlan = ids.length > 1;
-    
+
     if (mounted && !_hasNavigated) {
       _hasNavigated = true;
-      
+
       // Navigate to appropriate page based on plan type
-      final targetPage = isGroupPlan 
+      final targetPage = isGroupPlan
           ? GroupHikeHubPage(initialPlan: _plan)
           : ModernIndividualHikeHubPage(initialPlan: _plan);
-      
+
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) => targetPage,
@@ -208,13 +208,13 @@ class _HikePlanHubPageState extends State<HikePlanHubPage> {
       backgroundColor: Colors.transparent,
       builder: (ctx) {
         return StatefulBuilder(builder: (ctx, setModalState) {
-          Future<void> _search(String q) async {
+          Future<void> search(String q) async {
             setModalState(() => isLoading = true);
             results = await auth.searchUsersByUsername(q.trim());
             setModalState(() => isLoading = false);
           }
 
-          Future<void> _sendInvite(user_model.UserProfile target) async {
+          Future<void> sendInvite(user_model.UserProfile target) async {
             try {
               await FirebaseFirestore.instance
                   .collection('users')
@@ -289,7 +289,7 @@ class _HikePlanHubPageState extends State<HikePlanHubPage> {
                         decoration: const InputDecoration(
                             prefixIcon: Icon(Icons.search),
                             hintText: 'Search friends by username'),
-                        onSubmitted: _search,
+                        onSubmitted: search,
                       ),
                     ),
                     if (isLoading)
@@ -323,7 +323,7 @@ class _HikePlanHubPageState extends State<HikePlanHubPage> {
                                   style: GoogleFonts.lato(
                                       color: cs.onSurfaceVariant)),
                               trailing: TextButton(
-                                  onPressed: () => _sendInvite(u),
+                                  onPressed: () => sendInvite(u),
                                   child: const Text('Invite')),
                             );
                           },
@@ -694,10 +694,10 @@ class _HeaderBackground extends StatelessWidget {
                 point: planCenter!,
                 width: 38,
                 height: 38,
-                child: DecoratedBox(
-                  decoration: const BoxDecoration(
+                child: const DecoratedBox(
+                  decoration: BoxDecoration(
                       color: Colors.redAccent, shape: BoxShape.circle),
-                  child: const Icon(Icons.place, color: Colors.white, size: 20),
+                  child: Icon(Icons.place, color: Colors.white, size: 20),
                 ),
               ),
             ],
@@ -796,7 +796,8 @@ class _GlassHeaderInfo extends StatelessWidget {
               Row(
                 children: [
                   if (location.isNotEmpty) ...[
-                    Icon(Icons.place_outlined, size: 12, color: Colors.white70),
+                    const Icon(Icons.place_outlined,
+                        size: 12, color: Colors.white70),
                     const SizedBox(width: 4),
                     Expanded(
                       flex: 3,
@@ -812,7 +813,7 @@ class _GlassHeaderInfo extends StatelessWidget {
                     ),
                     const SizedBox(width: 12),
                   ],
-                  Icon(Icons.calendar_month_outlined,
+                  const Icon(Icons.calendar_month_outlined,
                       size: 12, color: Colors.white70),
                   const SizedBox(width: 4),
                   Expanded(

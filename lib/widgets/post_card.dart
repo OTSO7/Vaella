@@ -306,15 +306,24 @@ class _PostCardState extends State<PostCard>
                                         key: const ValueKey('image'),
                                         imageUrl: mainImageUrl,
                                         fit: BoxFit.cover,
-                                        placeholder: (context, url) => Container(
-                                          color: theme.colorScheme.surfaceContainer.withOpacity(0.5),
-                                          child: const Center(child: CupertinoActivityIndicator()),
+                                        placeholder: (context, url) =>
+                                            Container(
+                                          color: theme
+                                              .colorScheme.surfaceContainer
+                                              .withOpacity(0.5),
+                                          child: const Center(
+                                              child:
+                                                  CupertinoActivityIndicator()),
                                         ),
-                                        errorWidget: (context, url, error) => Container(
-                                          color: theme.colorScheme.surfaceContainerHighest,
+                                        errorWidget: (context, url, error) =>
+                                            Container(
+                                          color: theme.colorScheme
+                                              .surfaceContainerHighest,
                                           child: Icon(
                                             CupertinoIcons.photo,
-                                            color: theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
+                                            color: theme
+                                                .colorScheme.onSurfaceVariant
+                                                .withOpacity(0.3),
                                             size: 40,
                                           ),
                                         ),
@@ -327,7 +336,8 @@ class _PostCardState extends State<PostCard>
                                   child: Container(
                                     color: theme.colorScheme.surfaceContainer,
                                     child: const Center(
-                                      child: Icon(CupertinoIcons.photo, size: 40),
+                                      child:
+                                          Icon(CupertinoIcons.photo, size: 40),
                                     ),
                                   ),
                                 ),
@@ -355,23 +365,22 @@ class _PostCardState extends State<PostCard>
                                 onTap: () => setState(
                                     () => _showRouteMap = !_showRouteMap),
                                 child: Container(
-                                    decoration: BoxDecoration(
-                                      color: isDark
-                                          ? Colors.black.withOpacity(0.7)
-                                          : Colors.white.withOpacity(0.95),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    padding: const EdgeInsets.all(8),
-                                    child: Icon(
-                                      _showRouteMap
-                                          ? CupertinoIcons.photo
-                                          : CupertinoIcons.map,
-                                      size: 20,
-                                      color: isDark
-                                          ? Colors.white
-                                          : Colors.black87,
-                                    ),
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? Colors.black.withOpacity(0.7)
+                                        : Colors.white.withOpacity(0.95),
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
+                                  padding: const EdgeInsets.all(8),
+                                  child: Icon(
+                                    _showRouteMap
+                                        ? CupertinoIcons.photo
+                                        : CupertinoIcons.map,
+                                    size: 20,
+                                    color:
+                                        isDark ? Colors.white : Colors.black87,
+                                  ),
+                                ),
                               ),
                             ),
                         ],
@@ -416,7 +425,8 @@ class _PostCardState extends State<PostCard>
                               widget.post.location,
                               style: TextStyle(
                                 fontSize: 14,
-                                color: theme.colorScheme.primary.withOpacity(0.85),
+                                color:
+                                    theme.colorScheme.primary.withOpacity(0.85),
                                 fontWeight: FontWeight.w500,
                                 letterSpacing: -0.2,
                               ),
@@ -685,7 +695,6 @@ class _ModernRouteMap extends StatelessWidget {
   final List<dynamic> dailyRoutes;
 
   const _ModernRouteMap({
-    super.key,
     required this.dailyRoutes,
   });
 

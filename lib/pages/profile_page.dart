@@ -846,7 +846,7 @@ class _NotificationsBellQuickMenuState extends State<_NotificationsBellQuickMenu
                         const SizedBox(height: 8),
                         Text('No recent notifications', style: GoogleFonts.lato(color: cs.onSurfaceVariant)),
                         const SizedBox(height: 8),
-                        _SeeAllButton(),
+                        const _SeeAllButton(),
                       ],
                     ),
                   );

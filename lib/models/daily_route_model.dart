@@ -50,6 +50,8 @@ class DailyRoute {
   final String? notes;
   final int colorValue;
   final RouteSummary summary;
+  final List<double> elevationProfile; // Elevation data for each point
+  final List<double> distances; // Cumulative distances for each point
 
   // MUUTOS: Lisätty lista käyttäjän klikkaamille pisteille.
   // Tämä on väliaikaista dataa kartan muokkausta varten, EI tallenneta Firestoreen.
@@ -62,8 +64,12 @@ class DailyRoute {
     required this.colorValue,
     RouteSummary? summary,
     List<LatLng>? userClickedPoints,
+    List<double>? elevationProfile,
+    List<double>? distances,
   })  : summary = summary ?? RouteSummary(),
-        userClickedPoints = userClickedPoints ?? [];
+        userClickedPoints = userClickedPoints ?? [],
+        elevationProfile = elevationProfile ?? [],
+        distances = distances ?? [];
 
   Color get routeColor => Color(colorValue);
 
@@ -74,6 +80,8 @@ class DailyRoute {
     int? colorValue,
     RouteSummary? summary,
     List<LatLng>? userClickedPoints,
+    List<double>? elevationProfile,
+    List<double>? distances,
   }) {
     return DailyRoute(
       dayIndex: dayIndex ?? this.dayIndex,
@@ -82,6 +90,8 @@ class DailyRoute {
       colorValue: colorValue ?? this.colorValue,
       summary: summary ?? this.summary,
       userClickedPoints: userClickedPoints ?? List.from(this.userClickedPoints),
+      elevationProfile: elevationProfile ?? List.from(this.elevationProfile),
+      distances: distances ?? List.from(this.distances),
     );
   }
 
@@ -102,6 +112,20 @@ class DailyRoute {
           decoded.map((p) => LatLng(p[0] as double, p[1] as double)).toList();
     }
 
+    // Load elevation profile
+    List<double> elevationProfile = [];
+    if (data['elevationProfile'] != null && data['elevationProfile'] is String) {
+      final decoded = json.decode(data['elevationProfile']) as List;
+      elevationProfile = decoded.map((e) => (e as num).toDouble()).toList();
+    }
+
+    // Load distances
+    List<double> distances = [];
+    if (data['distances'] != null && data['distances'] is String) {
+      final decoded = json.decode(data['distances']) as List;
+      distances = decoded.map((d) => (d as num).toDouble()).toList();
+    }
+
     return DailyRoute(
       dayIndex: data['dayIndex'] ?? 0,
       points: points,
@@ -111,6 +135,8 @@ class DailyRoute {
       notes: data['notes'],
       colorValue: data['colorValue'] ?? Colors.blue.value,
       userClickedPoints: userPoints,
+      elevationProfile: elevationProfile,
+      distances: distances,
     );
   }
 
@@ -119,6 +145,8 @@ class DailyRoute {
         json.encode(points.map((p) => [p.latitude, p.longitude]).toList());
     final encodedUserPoints = json.encode(
         userClickedPoints.map((p) => [p.latitude, p.longitude]).toList());
+    final encodedElevationProfile = json.encode(elevationProfile);
+    final encodedDistances = json.encode(distances);
 
     return {
       'dayIndex': dayIndex,
@@ -128,6 +156,8 @@ class DailyRoute {
       'colorValue': colorValue,
       'userClickedPoints':
           encodedUserPoints, // Tallenetaan myös klikatut pisteet
+      'elevationProfile': encodedElevationProfile,
+      'distances': encodedDistances,
     };
   }
 }

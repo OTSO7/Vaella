@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TrekNote - 3D Route Fly-over Demo</title>
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.0.0/dist/maplibre-gl.css">
+    <script src="https://unpkg.com/maplibre-gl@4.0.0/dist/maplibre-gl.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: rgba(0, 0, 0, 0.3);
+            color: white;
+            padding: 1rem 2rem;
+            backdrop-filter: blur(10px);
+        }
+        
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .main-container {
+            flex: 1;
+            display: flex;
+            padding: 1rem;
+            gap: 1rem;
+            max-width: 1400px;
+            width: 100%;
+            margin: 0 auto;
+        }
+        
+        .map-container {
+            flex: 1;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            position: relative;
+        }
+        
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .controls-panel {
+            width: 320px;
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        
+        .control-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        
+        .control-section h3 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #4a5568;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .btn {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.875rem;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #f7fafc;
+            color: #4a5568;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .btn-secondary:hover {
+            background: #edf2f7;
+        }
+        
+        .btn.active {
+            background: #48bb78;
+            color: white;
+        }
+        
+        .slider-control {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.875rem;
+            color: #2d3748;
+        }
+        
+        .slider-value {
+            font-weight: 600;
+            color: #667eea;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #e2e8f0;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+        }
+        
+        .route-selector {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .route-option {
+            padding: 0.75rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .route-option:hover {
+            border-color: #667eea;
+            background: #f7fafc;
+        }
+        
+        .route-option.selected {
+            border-color: #667eea;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+        }
+        
+        .route-color {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .route-info {
+            flex: 1;
+        }
+        
+        .route-name {
+            font-weight: 500;
+            color: #2d3748;
+        }
+        
+        .route-stats {
+            font-size: 0.75rem;
+            color: #718096;
+        }
+        
+        .stats-overlay {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            min-width: 200px;
+        }
+        
+        .stat-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+            color: #2d3748;
+        }
+        
+        .stat-icon {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #667eea;
+        }
+        
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #e2e8f0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 768px) {
+            .main-container {
+                flex-direction: column;
+            }
+            
+            .controls-panel {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+            </svg>
+            TrekNote 3D Route Fly-over
+        </h1>
+    </div>
+    
+    <div class="main-container">
+        <div class="map-container">
+            <div id="map"></div>
+            <div class="stats-overlay" id="statsOverlay">
+                <div class="stat-row">
+                    <span class="stat-icon">📍</span>
+                    <span>Distance: <strong id="statDistance">0 km</strong></span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-icon">⏱️</span>
+                    <span>Duration: <strong id="statDuration">0h 0m</strong></span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-icon">📈</span>
+                    <span>Ascent: <strong id="statAscent">0 m</strong></span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-icon">📉</span>
+                    <span>Descent: <strong id="statDescent">0 m</strong></span>
+                </div>
+            </div>
+            <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+                <div class="spinner"></div>
+            </div>
+        </div>
+        
+        <div class="controls-panel">
+            <div class="control-section">
+                <h3>Route Selection</h3>
+                <div class="route-selector" id="routeSelector">
+                    <!-- Routes will be added dynamically -->
+                </div>
+            </div>
+            
+            <div class="control-section">
+                <h3>Playback Controls</h3>
+                <div class="button-group">
+                    <button class="btn btn-primary" id="playBtn" onclick="toggleAnimation()">
+                        ▶️ Play
+                    </button>
+                    <button class="btn btn-secondary" onclick="resetAnimation()">
+                        🔄 Reset
+                    </button>
+                </div>
+            </div>
+            
+            <div class="control-section">
+                <h3>Camera Settings</h3>
+                
+                <div class="slider-control">
+                    <div class="slider-label">
+                        <span>Speed</span>
+                        <span class="slider-value" id="speedValue">1.0x</span>
+                    </div>
+                    <input type="range" id="speedSlider" min="0.25" max="4" step="0.25" value="1" 
+                           oninput="updateSpeed(this.value)">
+                </div>
+                
+                <div class="slider-control">
+                    <div class="slider-label">
+                        <span>Camera Pitch</span>
+                        <span class="slider-value" id="pitchValue">60°</span>
+                    </div>
+                    <input type="range" id="pitchSlider" min="0" max="85" step="5" value="60" 
+                           oninput="updatePitch(this.value)">
+                </div>
+                
+                <div class="slider-control">
+                    <div class="slider-label">
+                        <span>Zoom Level</span>
+                        <span class="slider-value" id="zoomValue">14</span>
+                    </div>
+                    <input type="range" id="zoomSlider" min="10" max="18" step="0.5" value="14" 
+                           oninput="updateZoom(this.value)">
+                </div>
+            </div>
+            
+            <div class="control-section">
+                <h3>View Options</h3>
+                <div class="button-group">
+                    <button class="btn btn-secondary" id="terrainBtn" onclick="toggleTerrain()">
+                        🏔️ Terrain
+                    </button>
+                    <button class="btn btn-secondary" id="labelsBtn" onclick="toggleLabels()">
+                        🏷️ Labels
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Sample route data - Replace with actual route data
+        const sampleRoutes = [
+            {
+                name: "Mountain Trail",
+                color: "#4CAF50",
+                stats: { distance: 12.5, duration: "3h 30m", ascent: 450, descent: 320 },
+                points: [
+                    { lat: 60.1699, lng: 24.9384 }, // Helsinki
+                    { lat: 60.1750, lng: 24.9450 },
+                    { lat: 60.1800, lng: 24.9500 },
+                    { lat: 60.1850, lng: 24.9550 },
+                    { lat: 60.1900, lng: 24.9600 },
+                    { lat: 60.1950, lng: 24.9650 },
+                    { lat: 60.2000, lng: 24.9700 },
+                ]
+            },
+            {
+                name: "Coastal Path",
+                color: "#2196F3",
+                stats: { distance: 8.2, duration: "2h 15m", ascent: 120, descent: 110 },
+                points: [
+                    { lat: 60.1699, lng: 24.9384 },
+                    { lat: 60.1650, lng: 24.9300 },
+                    { lat: 60.1600, lng: 24.9200 },
+                    { lat: 60.1550, lng: 24.9100 },
+                    { lat: 60.1500, lng: 24.9000 },
+                ]
+            },
+            {
+                name: "Forest Loop",
+                color: "#FF9800",
+                stats: { distance: 6.7, duration: "1h 45m", ascent: 85, descent: 85 },
+                points: [
+                    { lat: 60.1699, lng: 24.9384 },
+                    { lat: 60.1720, lng: 24.9420 },
+                    { lat: 60.1740, lng: 24.9380 },
+                    { lat: 60.1720, lng: 24.9340 },
+                    { lat: 60.1699, lng: 24.9384 },
+                ]
+            }
+        ];
+
+        let map;
+        let currentRoute = sampleRoutes[0];
+        let animationIndex = 0;
+        let isAnimating = false;
+        let animationId = null;
+        let animationSpeed = 1.0;
+        let showTerrain = true;
+        let showLabels = true;
+
+        // Initialize map
+        function initMap() {
+            map = new maplibregl.Map({
+                container: 'map',
+                style: {
+                    version: 8,
+                    sources: {
+                        osm: {
+                            type: 'raster',
+                            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                            tileSize: 256,
+                            attribution: '© OpenStreetMap Contributors'
+                        }
+                    },
+                    layers: [
+                        {
+                            id: 'osm',
+                            type: 'raster',
+                            source: 'osm'
+                        }
+                    ]
+                },
+                center: [24.9384, 60.1699],
+                zoom: 14,
+                pitch: 60,
+                bearing: 0,
+                antialias: true
+            });
+
+            map.on('load', () => {
+                loadRoute(currentRoute);
+                createRouteSelector();
+            });
+        }
+
+        // Create route selector UI
+        function createRouteSelector() {
+            const selector = document.getElementById('routeSelector');
+            selector.innerHTML = '';
+            
+            sampleRoutes.forEach((route, index) => {
+                const option = document.createElement('div');
+                option.className = 'route-option' + (index === 0 ? ' selected' : '');
+                option.innerHTML = `
+                    <div class="route-color" style="background: ${route.color}"></div>
+                    <div class="route-info">
+                        <div class="route-name">${route.name}</div>
+                        <div class="route-stats">${route.stats.distance} km • ${route.stats.duration}</div>
+                    </div>
+                `;
+                option.onclick = () => selectRoute(index);
+                selector.appendChild(option);
+            });
+        }
+
+        // Select a route
+        function selectRoute(index) {
+            currentRoute = sampleRoutes[index];
+            document.querySelectorAll('.route-option').forEach((el, i) => {
+                el.classList.toggle('selected', i === index);
+            });
+            resetAnimation();
+            loadRoute(currentRoute);
+            updateStats(currentRoute.stats);
+        }
+
+        // Load route on map
+        function loadRoute(route) {
+            // Remove existing route layers
+            if (map.getLayer('route-line')) map.removeLayer('route-line');
+            if (map.getLayer('start-point')) map.removeLayer('start-point');
+            if (map.getLayer('end-point')) map.removeLayer('end-point');
+            if (map.getSource('route')) map.removeSource('route');
+            if (map.getSource('start')) map.removeSource('start');
+            if (map.getSource('end')) map.removeSource('end');
+
+            // Add route line
+            const routeGeoJson = {
+                type: 'Feature',
+                geometry: {
+                    type: 'LineString',
+                    coordinates: route.points.map(p => [p.lng, p.lat])
+                }
+            };
+
+            map.addSource('route', {
+                type: 'geojson',
+                data: routeGeoJson
+            });
+
+            map.addLayer({
+                id: 'route-line',
+                type: 'line',
+                source: 'route',
+                layout: {
+                    'line-join': 'round',
+                    'line-cap': 'round'
+                },
+                paint: {
+                    'line-color': route.color,
+                    'line-width': 4,
+                    'line-opacity': 0.8
+                }
+            });
+
+            // Add start marker
+            map.addSource('start', {
+                type: 'geojson',
+                data: {
+                    type: 'Feature',
+                    geometry: {
+                        type: 'Point',
+                        coordinates: [route.points[0].lng, route.points[0].lat]
+                    }
+                }
+            });
+
+            map.addLayer({
+                id: 'start-point',
+                type: 'circle',
+                source: 'start',
+                paint: {
+                    'circle-radius': 10,
+                    'circle-color': '#4CAF50',
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': '#fff'
+                }
+            });
+
+            // Add end marker
+            const lastPoint = route.points[route.points.length - 1];
+            map.addSource('end', {
+                type: 'geojson',
+                data: {
+                    type: 'Feature',
+                    geometry: {
+                        type: 'Point',
+                        coordinates: [lastPoint.lng, lastPoint.lat]
+                    }
+                }
+            });
+
+            map.addLayer({
+                id: 'end-point',
+                type: 'circle',
+                source: 'end',
+                paint: {
+                    'circle-radius': 10,
+                    'circle-color': '#F44336',
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': '#fff'
+                }
+            });
+
+            // Fit map to route
+            const bounds = new maplibregl.LngLatBounds();
+            route.points.forEach(point => {
+                bounds.extend([point.lng, point.lat]);
+            });
+            map.fitBounds(bounds, { padding: 50 });
+        }
+
+        // Update statistics display
+        function updateStats(stats) {
+            document.getElementById('statDistance').textContent = stats.distance + ' km';
+            document.getElementById('statDuration').textContent = stats.duration;
+            document.getElementById('statAscent').textContent = stats.ascent + ' m';
+            document.getElementById('statDescent').textContent = stats.descent + ' m';
+        }
+
+        // Animation functions
+        function animate() {
+            if (!isAnimating || animationIndex >= currentRoute.points.length - 1) {
+                isAnimating = false;
+                document.getElementById('playBtn').innerHTML = '▶️ Play';
+                return;
+            }
+
+            const current = currentRoute.points[animationIndex];
+            const next = currentRoute.points[animationIndex + 1];
+
+            // Calculate bearing
+            const bearing = getBearing(current, next);
+
+            // Animate camera along route
+            map.easeTo({
+                center: [current.lng, current.lat],
+                bearing: bearing,
+                duration: 1000 / animationSpeed,
+                easing: (t) => t
+            });
+
+            animationIndex++;
+            animationId = setTimeout(animate, 1000 / animationSpeed);
+        }
+
+        function getBearing(start, end) {
+            const startLat = start.lat * Math.PI / 180;
+            const startLng = start.lng * Math.PI / 180;
+            const endLat = end.lat * Math.PI / 180;
+            const endLng = end.lng * Math.PI / 180;
+            const dLng = endLng - startLng;
+
+            const x = Math.sin(dLng) * Math.cos(endLat);
+            const y = Math.cos(startLat) * Math.sin(endLat) - 
+                      Math.sin(startLat) * Math.cos(endLat) * Math.cos(dLng);
+
+            return (Math.atan2(x, y) * 180 / Math.PI + 360) % 360;
+        }
+
+        function toggleAnimation() {
+            isAnimating = !isAnimating;
+            const btn = document.getElementById('playBtn');
+            
+            if (isAnimating) {
+                btn.innerHTML = '⏸️ Pause';
+                btn.classList.add('active');
+                animate();
+            } else {
+                btn.innerHTML = '▶️ Play';
+                btn.classList.remove('active');
+                if (animationId) {
+                    clearTimeout(animationId);
+                }
+            }
+        }
+
+        function resetAnimation() {
+            isAnimating = false;
+            animationIndex = 0;
+            const btn = document.getElementById('playBtn');
+            btn.innerHTML = '▶️ Play';
+            btn.classList.remove('active');
+            
+            if (animationId) {
+                clearTimeout(animationId);
+            }
+            
+            if (currentRoute.points.length > 0) {
+                map.flyTo({
+                    center: [currentRoute.points[0].lng, currentRoute.points[0].lat],
+                    zoom: 14,
+                    pitch: 60,
+                    bearing: 0
+                });
+            }
+        }
+
+        function updateSpeed(value) {
+            animationSpeed = parseFloat(value);
+            document.getElementById('speedValue').textContent = value + 'x';
+        }
+
+        function updatePitch(value) {
+            map.setPitch(parseInt(value));
+            document.getElementById('pitchValue').textContent = value + '°';
+        }
+
+        function updateZoom(value) {
+            map.setZoom(parseFloat(value));
+            document.getElementById('zoomValue').textContent = value;
+        }
+
+        function toggleTerrain() {
+            showTerrain = !showTerrain;
+            const btn = document.getElementById('terrainBtn');
+            btn.classList.toggle('active', showTerrain);
+            // Terrain implementation would go here
+        }
+
+        function toggleLabels() {
+            showLabels = !showLabels;
+            const btn = document.getElementById('labelsBtn');
+            btn.classList.toggle('active', showLabels);
+            // Labels implementation would go here
+        }
+
+        // Initialize the map when page loads
+        window.addEventListener('load', initMap);
+    </script>
+</body>
+</html>
