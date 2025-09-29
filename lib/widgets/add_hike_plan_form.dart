@@ -22,7 +22,6 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _locationController = TextEditingController();
-  final _lengthController = TextEditingController();
 
   DateTime? _startDate;
   DateTime? _endDate;
@@ -44,10 +43,6 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
     if (widget.existingPlan != null) {
       _nameController.text = widget.existingPlan!.hikeName;
       _locationController.text = widget.existingPlan!.location;
-      if (widget.existingPlan!.lengthKm != null) {
-        _lengthController.text =
-            widget.existingPlan!.lengthKm!.toStringAsFixed(1);
-      }
       _startDate = widget.existingPlan!.startDate;
       _endDate = widget.existingPlan!.endDate;
       _latitude = widget.existingPlan!.latitude;
@@ -63,7 +58,6 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
     _nameController.dispose();
     _locationController.removeListener(_onTextChanged);
     _locationController.dispose();
-    _lengthController.dispose();
     _debounce?.cancel();
     _locationFocusNode.removeListener(_onLocationFocusChanged);
     _locationFocusNode.dispose();
@@ -224,28 +218,24 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
     final HikePlan resultPlan;
     if (widget.existingPlan != null) {
       // Muokataan olemassa olevaa - säilytetään kaikki muut tiedot
+      // lengthKm lasketaan automaattisesti route datasta
       resultPlan = widget.existingPlan!.copyWith(
         hikeName: _nameController.text.trim(),
         location: _locationController.text.trim(),
         startDate: _startDate!,
         endDate: _endDate,
-        lengthKm: _lengthController.text.trim().isNotEmpty
-            ? double.tryParse(_lengthController.text.trim().replaceAll(',', '.'))
-            : null,
         latitude: _latitude,
         longitude: _longitude,
         status: statusToSave,
       );
     } else {
       // Luodaan uusi plan
+      // lengthKm lasketaan automaattisesti route datasta
       resultPlan = HikePlan(
         hikeName: _nameController.text.trim(),
         location: _locationController.text.trim(),
         startDate: _startDate!,
         endDate: _endDate,
-        lengthKm: _lengthController.text.trim().isNotEmpty
-            ? double.tryParse(_lengthController.text.trim().replaceAll(',', '.'))
-            : null,
         latitude: _latitude,
         longitude: _longitude,
         status: statusToSave,
@@ -305,27 +295,6 @@ class _AddHikePlanFormState extends State<AddHikePlanForm> {
                   ),
                   const SizedBox(height: 18),
                   _buildLocationField(context),
-                  const SizedBox(height: 18),
-                  _buildStyledTextFormField(
-                    controller: _lengthController,
-                    labelText: 'Length (km)',
-                    hintText: 'e.g., 25.5',
-                    icon: Icons.directions_walk_outlined,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    validator: (value) {
-                      if (value != null && value.trim().isNotEmpty) {
-                        final val = value.trim().replaceAll(',', '.');
-                        if (double.tryParse(val) == null) {
-                          return 'Please enter a valid number';
-                        }
-                        if (double.parse(val) < 0) {
-                          return 'Length must be a positive number';
-                        }
-                      }
-                      return null;
-                    },
-                  ),
                   const SizedBox(height: 18),
                   _buildDateRangeField(context),
                   const SizedBox(height: 28),

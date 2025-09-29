@@ -74,7 +74,7 @@ class _ElevationProfileChartState extends State<ElevationProfileChart> {
       // In production, you would cache this data or use a paid API
       final elevationData = _generateMockElevationData(widget.routePoints);
       final profile = ElevationService.calculateProfile(elevationData);
-      
+
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_isMounted && mounted) {
           setState(() {
@@ -104,23 +104,23 @@ class _ElevationProfileChartState extends State<ElevationProfileChart> {
     final random = math.Random(points.length);
     double baseElevation = 100 + random.nextDouble() * 200;
     List<ElevationPoint> elevations = [];
-    
+
     for (int i = 0; i < points.length; i++) {
       // Create some variation in elevation
       double variation = (random.nextDouble() - 0.5) * 20;
       // Add some trend (uphill/downhill sections)
       double trend = math.sin(i / points.length * math.pi * 2) * 50;
-      
+
       baseElevation += variation;
       baseElevation = baseElevation.clamp(50, 500);
-      
+
       elevations.add(ElevationPoint(
         latitude: points[i].latitude,
         longitude: points[i].longitude,
         elevation: baseElevation + trend,
       ));
     }
-    
+
     return elevations;
   }
 
@@ -189,8 +189,8 @@ class _ElevationProfileChartState extends State<ElevationProfileChart> {
             Text(
               'Elevation Profile',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
             if (_profile != null)
               Row(
@@ -254,7 +254,8 @@ class _ElevationProfileChartState extends State<ElevationProfileChart> {
       return FlSpot(index, elevation);
     }).toList();
 
-    final minY = (_profile!.minElevation - 50).clamp(0.0, double.infinity).toDouble();
+    final minY =
+        (_profile!.minElevation - 50).clamp(0.0, double.infinity).toDouble();
     final maxY = (_profile!.maxElevation + 50).toDouble();
 
     return LineChart(
@@ -275,15 +276,22 @@ class _ElevationProfileChartState extends State<ElevationProfileChart> {
             sideTitles: SideTitles(
               showTitles: true,
               reservedSize: 40,
-              interval: (maxY - minY) / 4,
+              interval: (maxY - minY) / 2,
               getTitlesWidget: (value, meta) {
-                return Text(
-                  '${value.toStringAsFixed(0)}m',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: Colors.grey,
-                  ),
-                );
+                // Only show labels for the min, middle, and max values
+                if (value == minY || 
+                    (value - minY).abs() < 1 || 
+                    (value - (minY + (maxY - minY) / 2)).abs() < 1 ||
+                    (value - maxY).abs() < 1) {
+                  return Text(
+                    '${value.toStringAsFixed(0)}m',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: Colors.grey,
+                    ),
+                  );
+                }
+                return const SizedBox.shrink();
               },
             ),
           ),
@@ -299,9 +307,11 @@ class _ElevationProfileChartState extends State<ElevationProfileChart> {
               reservedSize: 22,
               interval: spots.length / 5,
               getTitlesWidget: (value, meta) {
-                if (value == 0) return const Text('Start', style: TextStyle(fontSize: 10));
-                if (value >= spots.length - 1) return const Text('End', style: TextStyle(fontSize: 10));
-                
+                if (value == 0)
+                  return const Text('Start', style: TextStyle(fontSize: 10));
+                if (value >= spots.length - 1)
+                  return const Text('End', style: TextStyle(fontSize: 10));
+
                 // Calculate distance
                 final distance = _calculateDistanceAtIndex(value.toInt());
                 return Text(
@@ -370,10 +380,10 @@ class _ElevationProfileChartState extends State<ElevationProfileChart> {
 
   double _calculateDistanceAtIndex(int index) {
     if (index <= 0 || index >= widget.routePoints.length) return 0;
-    
-    final Distance distance = const Distance();
+
+    const Distance distance = Distance();
     double totalDistance = 0;
-    
+
     for (int i = 1; i <= index && i < widget.routePoints.length; i++) {
       totalDistance += distance.as(
         LengthUnit.Meter,
@@ -381,7 +391,7 @@ class _ElevationProfileChartState extends State<ElevationProfileChart> {
         widget.routePoints[i],
       );
     }
-    
+
     return totalDistance / 1000; // Convert to kilometers
   }
 }

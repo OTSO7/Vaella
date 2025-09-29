@@ -9,13 +9,11 @@ import 'package:uuid/uuid.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:provider/provider.dart';
 
 import '../models/hike_plan_model.dart';
 import '../models/packing_list_item.dart';
 import '../services/hike_plan_service.dart';
 import '../utils/app_colors.dart';
-import '../providers/auth_provider.dart';
 
 class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   _SliverAppBarDelegate(this._tabBar);
@@ -85,7 +83,7 @@ class _PackingListPageState extends State<PackingListPage>
 
   late final ScrollController _scrollController;
   TabController? _tabController;
-  
+
   // User-specific packing list
   List<PackingListItem> _userPackingList = [];
   late String _currentUserId;
@@ -99,18 +97,18 @@ class _PackingListPageState extends State<PackingListPage>
     _scrollController = ScrollController();
     _tabController =
         TabController(length: _packingCategories.length, vsync: this);
-    
+
     // Determine if this is a group hike
-    _isGroupHike = widget.initialPlan.collabOwnerId != null || 
-                   widget.initialPlan.collaboratorIds.isNotEmpty;
-    
+    _isGroupHike = widget.initialPlan.collabOwnerId != null ||
+        widget.initialPlan.collaboratorIds.isNotEmpty;
+
     // Get current user ID
     final currentUser = FirebaseAuth.instance.currentUser;
     _currentUserId = widget.userId ?? currentUser?.uid ?? '';
-    
+
     // Check if viewing own list
     _isOwnList = widget.userId == null || widget.userId == currentUser?.uid;
-    
+
     // Load user-specific packing list if group hike
     if (_isGroupHike) {
       _loadUserPackingList();
@@ -217,7 +215,7 @@ class _PackingListPageState extends State<PackingListPage>
 
   Future<void> _loadUserPackingList() async {
     if (!_isGroupHike || _currentUserId.isEmpty) return;
-    
+
     try {
       final doc = await FirebaseFirestore.instance
           .collection('users')
@@ -225,13 +223,14 @@ class _PackingListPageState extends State<PackingListPage>
           .collection('plans')
           .doc(widget.planId)
           .get();
-      
+
       if (doc.exists) {
         final data = doc.data();
         if (data != null && data['packingList'] != null) {
           setState(() {
             _userPackingList = (data['packingList'] as List<dynamic>)
-                .map((item) => PackingListItem.fromMap(item as Map<String, dynamic>))
+                .map((item) =>
+                    PackingListItem.fromMap(item as Map<String, dynamic>))
                 .toList();
           });
         }
@@ -247,11 +246,12 @@ class _PackingListPageState extends State<PackingListPage>
           .collection('users')
           .doc(userId)
           .get();
-      
+
       if (doc.exists && mounted) {
         final data = doc.data();
         setState(() {
-          _viewingUserName = data?['displayName'] ?? data?['username'] ?? 'User';
+          _viewingUserName =
+              data?['displayName'] ?? data?['username'] ?? 'User';
         });
       }
     } catch (e) {
@@ -274,12 +274,14 @@ class _PackingListPageState extends State<PackingListPage>
               .collection('plans')
               .doc(widget.planId)
               .set({
-            'packingList': _userPackingList.map((item) => item.toMap()).toList(),
+            'packingList':
+                _userPackingList.map((item) => item.toMap()).toList(),
             'lastUpdated': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
         } else {
           // For individual hikes, update the main plan
-          final updatedPlan = widget.initialPlan.copyWith(packingList: _userPackingList);
+          final updatedPlan =
+              widget.initialPlan.copyWith(packingList: _userPackingList);
           await _hikePlanService.updateHikePlan(updatedPlan);
         }
 
@@ -319,8 +321,7 @@ class _PackingListPageState extends State<PackingListPage>
     });
   }
 
-  void _onItemStatusChanged(
-      PackingListItem item, bool newPackedStatus) {
+  void _onItemStatusChanged(PackingListItem item, bool newPackedStatus) {
     print(
         'PackingListPage: Status changed for item: ${item.name} to $newPackedStatus');
 
@@ -466,14 +467,12 @@ class _PackingListPageState extends State<PackingListPage>
   }
 
   void _addOrUpdateItem(
-      {PackingListItem? itemToEdit,
-      String? defaultCategory}) {
-    
+      {PackingListItem? itemToEdit, String? defaultCategory}) {
     // Don't allow editing if viewing someone else's list
     if (!_isOwnList) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('You can only edit your own packing list', 
+          content: Text('You can only edit your own packing list',
               style: GoogleFonts.lato()),
           backgroundColor: AppColors.errorColor(context),
         ),
@@ -585,7 +584,7 @@ class _PackingListPageState extends State<PackingListPage>
                             }
                           }
                         });
-                        
+
                         _updatePackingList(showSuccess: true);
                         _newItemNameController.clear();
                         _newItemQuantityController.clear();
@@ -627,14 +626,12 @@ class _PackingListPageState extends State<PackingListPage>
     );
   }
 
-  Future<void> _confirmDeleteItem(
-      PackingListItem itemToDelete) async {
-    
+  Future<void> _confirmDeleteItem(PackingListItem itemToDelete) async {
     // Don't allow deleting if viewing someone else's list
     if (!_isOwnList) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('You can only edit your own packing list', 
+          content: Text('You can only edit your own packing list',
               style: GoogleFonts.lato()),
           backgroundColor: AppColors.errorColor(context),
         ),
@@ -694,8 +691,7 @@ class _PackingListPageState extends State<PackingListPage>
                   indicatorWeight: 3.0,
                   labelColor: theme.colorScheme.primary,
                   unselectedLabelColor: theme.hintColor,
-                  labelStyle:
-                      GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                  labelStyle: GoogleFonts.poppins(fontWeight: FontWeight.w600),
                   unselectedLabelStyle:
                       GoogleFonts.poppins(fontWeight: FontWeight.w500),
                   tabs: _packingCategories
@@ -733,8 +729,9 @@ class _PackingListPageState extends State<PackingListPage>
     );
   }
 
-          Widget _buildCategoryPage(BuildContext context, String category) {
-    final items = _userPackingList.where((item) => item.category == category).toList();
+  Widget _buildCategoryPage(BuildContext context, String category) {
+    final items =
+        _userPackingList.where((item) => item.category == category).toList();
     items.sort((a, b) {
       if (a.isPacked && !b.isPacked) return 1;
       if (!a.isPacked && b.isPacked) return -1;
@@ -758,8 +755,8 @@ class _PackingListPageState extends State<PackingListPage>
             child: SlideAnimation(
               verticalOffset: 50.0,
               child: FadeInAnimation(
-              child: _buildPackingListItem(
-              context, item, _getAppTextTheme(context)),
+                child: _buildPackingListItem(
+                    context, item, _getAppTextTheme(context)),
               ),
             ),
           );
@@ -944,8 +941,8 @@ class _PackingListPageState extends State<PackingListPage>
     );
   }
 
-  Widget _buildPackingListItem(BuildContext context, PackingListItem item,
-      TextTheme appTextTheme) {
+  Widget _buildPackingListItem(
+      BuildContext context, PackingListItem item, TextTheme appTextTheme) {
     return _OptimizedPackingListItem(
       key: ValueKey(item.id),
       item: item,
@@ -1056,7 +1053,8 @@ class _OptimizedPackingListItemState extends State<_OptimizedPackingListItem> {
                   children: [
                     Checkbox(
                       value: _localIsPacked,
-                      onChanged: widget.isEditable ? (value) => _handleTap() : null,
+                      onChanged:
+                          widget.isEditable ? (value) => _handleTap() : null,
                       activeColor: theme.colorScheme.primary,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(6)),

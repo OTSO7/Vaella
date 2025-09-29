@@ -34,35 +34,35 @@ class _SmoothRouteAnimatorState extends State<SmoothRouteAnimator>
     with SingleTickerProviderStateMixin {
   late MapController _mapController;
   late AnimationController _animationController;
-  
+
   LatLng _currentPosition = const LatLng(0, 0);
-  double _currentBearing = 0;
+  final double _currentBearing = 0;
   double _smoothedBearing = 0;
   int _currentSegmentIndex = 0;
   Timer? _animationTimer;
   double _animationProgress = 0.0;
-  
+
   // Pre-calculated route data
-  List<double> _segmentDistances = [];
+  final List<double> _segmentDistances = [];
   double _totalDistance = 0;
-  List<double> _cumulativeDistances = [];
+  final List<double> _cumulativeDistances = [];
 
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
-    
+
     if (widget.routePoints.isNotEmpty) {
       _currentPosition = widget.routePoints.first;
       _precalculateRouteData();
     }
-    
+
     // Much longer duration for smoother animation (60 seconds base)
     _animationController = AnimationController(
       vsync: this,
       duration: Duration(seconds: (60 / widget.animationSpeed).round()),
     );
-    
+
     _animationController.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
         _stopAnimation();
@@ -73,14 +73,14 @@ class _SmoothRouteAnimatorState extends State<SmoothRouteAnimator>
 
   void _precalculateRouteData() {
     if (widget.routePoints.length < 2) return;
-    
+
     _segmentDistances.clear();
     _cumulativeDistances.clear();
     _totalDistance = 0;
     _cumulativeDistances.add(0);
-    
+
     const Distance calculator = Distance();
-    
+
     for (int i = 1; i < widget.routePoints.length; i++) {
       final distance = calculator.as(
         LengthUnit.Meter,
@@ -99,9 +99,9 @@ class _SmoothRouteAnimatorState extends State<SmoothRouteAnimator>
       _animationProgress = 0.0;
       _currentSegmentIndex = 0;
     }
-    
+
     _animationController.forward();
-    
+
     // Use timer for smooth updates (60 FPS)
     _animationTimer?.cancel();
     _animationTimer = Timer.periodic(const Duration(milliseconds: 16), (_) {
@@ -116,13 +116,13 @@ class _SmoothRouteAnimatorState extends State<SmoothRouteAnimator>
 
   void _updateAnimation() {
     if (!mounted || widget.routePoints.length < 2) return;
-    
+
     // Get current animation progress
     _animationProgress = _animationController.value;
-    
+
     // Calculate position along entire route
     final targetDistance = _animationProgress * _totalDistance;
-    
+
     // Find current segment
     int segmentIndex = 0;
     for (int i = 1; i < _cumulativeDistances.length; i++) {
@@ -131,54 +131,65 @@ class _SmoothRouteAnimatorState extends State<SmoothRouteAnimator>
         break;
       }
     }
-    
+
     if (segmentIndex >= widget.routePoints.length - 1) {
       segmentIndex = widget.routePoints.length - 2;
     }
-    
+
     // Calculate position within segment
     final segmentStartDistance = _cumulativeDistances[segmentIndex];
     final segmentEndDistance = _cumulativeDistances[segmentIndex + 1];
     final segmentLength = segmentEndDistance - segmentStartDistance;
     final distanceInSegment = targetDistance - segmentStartDistance;
-    final segmentProgress = segmentLength > 0 ? distanceInSegment / segmentLength : 0;
-    
+    final segmentProgress =
+        segmentLength > 0 ? distanceInSegment / segmentLength : 0;
+
     // Interpolate position
     final start = widget.routePoints[segmentIndex];
     final end = widget.routePoints[segmentIndex + 1];
-    
-    final lat = start.latitude + (end.latitude - start.latitude) * segmentProgress;
-    final lng = start.longitude + (end.longitude - start.longitude) * segmentProgress;
-    
+
+    final lat =
+        start.latitude + (end.latitude - start.latitude) * segmentProgress;
+    final lng =
+        start.longitude + (end.longitude - start.longitude) * segmentProgress;
+
     _currentPosition = LatLng(lat, lng);
-    
+
     // Calculate bearing with smoothing
     final targetBearing = _calculateBearing(start, end);
-    
+
     // Smooth bearing changes to avoid jerky rotation
     double bearingDiff = targetBearing - _smoothedBearing;
-    
+
     // Normalize bearing difference to [-180, 180]
-    while (bearingDiff > 180) bearingDiff -= 360;
-    while (bearingDiff < -180) bearingDiff += 360;
-    
+    while (bearingDiff > 180) {
+      bearingDiff -= 360;
+    }
+    while (bearingDiff < -180) {
+      bearingDiff += 360;
+    }
+
     // Apply smoothing (10% of difference per frame)
     _smoothedBearing += bearingDiff * 0.1;
-    
+
     // Normalize smoothed bearing to [0, 360]
-    while (_smoothedBearing < 0) _smoothedBearing += 360;
-    while (_smoothedBearing >= 360) _smoothedBearing -= 360;
-    
+    while (_smoothedBearing < 0) {
+      _smoothedBearing += 360;
+    }
+    while (_smoothedBearing >= 360) {
+      _smoothedBearing -= 360;
+    }
+
     // Update map position
     final zoom = 16.5 - (math.log(widget.cameraHeight / 200) / math.ln2);
-    
+
     try {
       _mapController.move(_currentPosition, zoom);
       _mapController.rotate(_smoothedBearing);
     } catch (e) {
       // Ignore controller errors during animation
     }
-    
+
     // Update UI only when segment changes
     if (segmentIndex != _currentSegmentIndex) {
       _currentSegmentIndex = segmentIndex;
@@ -204,11 +215,11 @@ class _SmoothRouteAnimatorState extends State<SmoothRouteAnimator>
   @override
   void didUpdateWidget(SmoothRouteAnimator oldWidget) {
     super.didUpdateWidget(oldWidget);
-    
+
     if (widget.routePoints != oldWidget.routePoints) {
       _precalculateRouteData();
     }
-    
+
     if (widget.isPlaying != oldWidget.isPlaying) {
       if (widget.isPlaying) {
         _startAnimation();
@@ -216,7 +227,7 @@ class _SmoothRouteAnimatorState extends State<SmoothRouteAnimator>
         _stopAnimation();
       }
     }
-    
+
     if (widget.animationSpeed != oldWidget.animationSpeed) {
       _animationController.duration = Duration(
         seconds: (60 / widget.animationSpeed).round(),
@@ -290,33 +301,35 @@ class _SmoothRouteAnimatorState extends State<SmoothRouteAnimator>
                     maxZoom: 20,
                     tileProvider: NetworkTileProvider(),
                   ),
-                  
+
                   // Hillshade overlay for 3D effect
                   if (widget.showTerrain)
                     Opacity(
                       opacity: 0.6,
                       child: TileLayer(
-                        urlTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}',
+                        urlTemplate:
+                            'https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}',
                         userAgentPackageName: 'com.example.app',
                         maxZoom: 20,
                         tileProvider: NetworkTileProvider(),
                       ),
                     ),
-                  
+
                   // Shadow polyline for depth
                   if (widget.showTerrain)
                     PolylineLayer(
                       polylines: [
                         Polyline(
-                          points: widget.routePoints.map((p) => 
-                            LatLng(p.latitude - 0.0003, p.longitude + 0.0003)
-                          ).toList(),
+                          points: widget.routePoints
+                              .map((p) => LatLng(
+                                  p.latitude - 0.0003, p.longitude + 0.0003))
+                              .toList(),
                           strokeWidth: 8.0,
                           color: Colors.black.withOpacity(0.3),
                         ),
                       ],
                     ),
-                  
+
                   // Route polylines
                   PolylineLayer(
                     polylines: [
@@ -331,7 +344,8 @@ class _SmoothRouteAnimatorState extends State<SmoothRouteAnimator>
                       // Completed portion
                       if (_currentSegmentIndex > 0)
                         Polyline(
-                          points: widget.routePoints.sublist(0, _currentSegmentIndex + 1),
+                          points: widget.routePoints
+                              .sublist(0, _currentSegmentIndex + 1),
                           strokeWidth: 6.0,
                           color: widget.routeColor,
                           borderStrokeWidth: 2.0,
@@ -339,7 +353,7 @@ class _SmoothRouteAnimatorState extends State<SmoothRouteAnimator>
                         ),
                     ],
                   ),
-                  
+
                   // Markers
                   MarkerLayer(
                     markers: [
@@ -361,7 +375,8 @@ class _SmoothRouteAnimatorState extends State<SmoothRouteAnimator>
                               ),
                             ],
                           ),
-                          child: const Icon(Icons.play_arrow, color: Colors.white, size: 18),
+                          child: const Icon(Icons.play_arrow,
+                              color: Colors.white, size: 18),
                         ),
                       ),
                       // End marker
@@ -382,7 +397,8 @@ class _SmoothRouteAnimatorState extends State<SmoothRouteAnimator>
                               ),
                             ],
                           ),
-                          child: const Icon(Icons.flag, color: Colors.white, size: 18),
+                          child: const Icon(Icons.flag,
+                              color: Colors.white, size: 18),
                         ),
                       ),
                       // Current position marker (animated)
@@ -400,7 +416,8 @@ class _SmoothRouteAnimatorState extends State<SmoothRouteAnimator>
                                 decoration: BoxDecoration(
                                   color: Colors.blue,
                                   shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 2),
+                                  border:
+                                      Border.all(color: Colors.white, width: 2),
                                   boxShadow: [
                                     BoxShadow(
                                       color: Colors.blue.withOpacity(0.6),
@@ -426,7 +443,7 @@ class _SmoothRouteAnimatorState extends State<SmoothRouteAnimator>
             ),
           ),
         ),
-        
+
         // 3D terrain effect overlay
         if (widget.showTerrain)
           Positioned.fill(
@@ -445,7 +462,7 @@ class _SmoothRouteAnimatorState extends State<SmoothRouteAnimator>
               ),
             ),
           ),
-        
+
         // Progress bar
         Positioned(
           bottom: 100,

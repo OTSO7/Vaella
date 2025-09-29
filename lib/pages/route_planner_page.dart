@@ -327,7 +327,8 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                color:
+                    theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
@@ -388,7 +389,7 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
     if (dayRoute.points.isEmpty || dayRoute.summary.distance == 0) {
       return _buildMapPreviewContainer(context, dayRoute, dayIndex);
     }
-    
+
     return DefaultTabController(
       length: 2,
       child: Column(
@@ -396,8 +397,10 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
           Container(
             height: 40,
             decoration: BoxDecoration(
-              color:
-                  Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+              color: Theme.of(context)
+                  .colorScheme
+                  .surfaceContainerHighest
+                  .withOpacity(0.3),
               borderRadius: BorderRadius.circular(10),
             ),
             child: TabBar(
@@ -440,9 +443,12 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
 
     // Debug print to understand what data we have
     print('Building elevation graph for day ${dayRoute.dayIndex}:');
-    print('  - Has points: ${dayRoute.points.isNotEmpty} (${dayRoute.points.length} points)');
-    print('  - Has distance: ${dayRoute.summary.distance > 0} (${dayRoute.summary.distance}m)');
-    print('  - Has elevation data: ${dayRoute.elevationProfile.isNotEmpty} (${dayRoute.elevationProfile.length} points)');
+    print(
+        '  - Has points: ${dayRoute.points.isNotEmpty} (${dayRoute.points.length} points)');
+    print(
+        '  - Has distance: ${dayRoute.summary.distance > 0} (${dayRoute.summary.distance}m)');
+    print(
+        '  - Has elevation data: ${dayRoute.elevationProfile.isNotEmpty} (${dayRoute.elevationProfile.length} points)');
     print('  - Has user clicked points: ${dayRoute.userClickedPoints.length}');
 
     // Check if route is empty or has no distance
@@ -452,7 +458,7 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
-          color: theme.colorScheme.surfaceVariant.withOpacity(0.1),
+          color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.1),
         ),
         child: Center(
           child: Column(
@@ -487,56 +493,57 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
 
     // Generate elevation data - always ensure we get data
     List<FlSpot> spots = _generateSimpleElevationData(dayRoute);
-    
+
     // If still no data, force generate based on what we have
     if (spots.isEmpty || spots.length < 2) {
       print('  - No spots generated, creating fallback data');
       final distance = dayRoute.summary.distance;
       spots = [];
-      
+
       // Always create points that span the FULL distance
       const numPoints = 40;
       final baseElevation = 300.0 + (dayRoute.dayIndex * 50);
-      
+
       for (int i = 0; i <= numPoints; i++) {
         final progress = i / numPoints;
         final x = progress * distance; // Ensure we go from 0 to full distance
         double y = baseElevation;
-        
+
         // Create realistic elevation profile
         y += math.sin(progress * math.pi * 2) * 40;
         y += math.cos(progress * math.pi * 4) * 20;
         y += math.sin(progress * math.pi * 8) * 10;
-        
+
         // Add some variation based on ascent/descent if available
         if (dayRoute.summary.ascent > 0) {
           y += progress * dayRoute.summary.ascent * 0.3;
         }
-        
+
         spots.add(FlSpot(x, y));
       }
     }
-    
+
     // IMPORTANT: Ensure the graph spans the full distance
     if (spots.isNotEmpty && spots.last.x < dayRoute.summary.distance) {
       // Add a final point at the exact distance if needed
       final lastY = spots.last.y;
       spots.add(FlSpot(dayRoute.summary.distance, lastY));
     }
-    
-    print('  - Final spots count: ${spots.length}, x range: ${spots.first.x} to ${spots.last.x}');
-    
+
+    print(
+        '  - Final spots count: ${spots.length}, x range: ${spots.first.x} to ${spots.last.x}');
+
     // Calculate min and max with some padding
     double minY = spots.map((s) => s.y).reduce(math.min);
     double maxY = spots.map((s) => s.y).reduce(math.max);
-    
+
     // Ensure we have a reasonable range
     if ((maxY - minY) < 50) {
       final center = (maxY + minY) / 2;
       minY = center - 50;
       maxY = center + 50;
     }
-    
+
     // Add padding
     final range = maxY - minY;
     minY -= range * 0.1;
@@ -576,7 +583,7 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
                     ),
                   ),
                   Text(
-                    '${_formatDistance(dayRoute.summary.distance)}',
+                    _formatDistance(dayRoute.summary.distance),
                     style: GoogleFonts.poppins(
                       fontSize: 12,
                       color: theme.colorScheme.onSurface.withOpacity(0.6),
@@ -585,7 +592,8 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
                 ],
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: dayRoute.routeColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(20),
@@ -640,7 +648,8 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
                             '${value.toInt()}m',
                             style: GoogleFonts.poppins(
                               fontSize: 9,
-                              color: theme.colorScheme.onSurface.withOpacity(0.5),
+                              color:
+                                  theme.colorScheme.onSurface.withOpacity(0.5),
                             ),
                             textAlign: TextAlign.right,
                           ),
@@ -665,7 +674,8 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
                             'Start',
                             style: GoogleFonts.poppins(
                               fontSize: 9,
-                              color: theme.colorScheme.onSurface.withOpacity(0.5),
+                              color:
+                                  theme.colorScheme.onSurface.withOpacity(0.5),
                             ),
                           );
                         } else if (value >= dayRoute.summary.distance - 10) {
@@ -673,7 +683,8 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
                             'End',
                             style: GoogleFonts.poppins(
                               fontSize: 9,
-                              color: theme.colorScheme.onSurface.withOpacity(0.5),
+                              color:
+                                  theme.colorScheme.onSurface.withOpacity(0.5),
                             ),
                           );
                         } else {
@@ -681,7 +692,8 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
                             '${(value / 1000).toStringAsFixed(1)}km',
                             style: GoogleFonts.poppins(
                               fontSize: 9,
-                              color: theme.colorScheme.onSurface.withOpacity(0.5),
+                              color:
+                                  theme.colorScheme.onSurface.withOpacity(0.5),
                             ),
                           );
                         }
@@ -705,10 +717,13 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
                   ),
                 ),
                 minX: 0,
-                maxX: dayRoute.summary.distance > 0 ? dayRoute.summary.distance : 1000, // Ensure valid max
+                maxX: dayRoute.summary.distance > 0
+                    ? dayRoute.summary.distance
+                    : 1000, // Ensure valid max
                 minY: minY,
                 maxY: maxY,
-                clipData: const FlClipData.all(), // Ensure data is clipped to bounds
+                clipData:
+                    const FlClipData.all(), // Ensure data is clipped to bounds
                 lineBarsData: [
                   LineChartBarData(
                     spots: spots,
@@ -791,13 +806,13 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
   List<FlSpot> _generateSimpleElevationData(DailyRoute dayRoute) {
     final points = <FlSpot>[];
     final distance = dayRoute.summary.distance;
-    
+
     print('Generating elevation data:');
     print('  - Distance: $distance');
     print('  - User clicked points: ${dayRoute.userClickedPoints.length}');
     print('  - Route points: ${dayRoute.points.length}');
     print('  - Elevation profile length: ${dayRoute.elevationProfile.length}');
-    
+
     // If no distance, return empty
     if (distance <= 0) {
       print('  - No distance, returning empty');
@@ -805,13 +820,14 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
     }
 
     // Try to use real elevation data first if available and valid
-    if (dayRoute.elevationProfile.isNotEmpty && dayRoute.elevationProfile.length > 1) {
+    if (dayRoute.elevationProfile.isNotEmpty &&
+        dayRoute.elevationProfile.length > 1) {
       print('  - Using elevation profile data');
       final numPoints = dayRoute.elevationProfile.length;
-      
+
       // Always ensure we cover the full distance
       points.add(FlSpot(0, dayRoute.elevationProfile.first.toDouble()));
-      
+
       // Add intermediate points
       final step = numPoints > 50 ? numPoints ~/ 50 : 1;
       for (int i = step; i < numPoints - 1; i += step) {
@@ -822,12 +838,13 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
           points.add(FlSpot(x, y));
         }
       }
-      
+
       // ALWAYS add the final point at the full distance
       points.add(FlSpot(distance, dayRoute.elevationProfile.last.toDouble()));
-      
+
       if (points.length >= 2) {
-        print('  - Generated ${points.length} points from elevation profile, last x: ${points.last.x}');
+        print(
+            '  - Generated ${points.length} points from elevation profile, last x: ${points.last.x}');
         return points;
       }
     }
@@ -835,28 +852,29 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
     // Generate elevation profile that ALWAYS spans the full distance
     const numPoints = 40; // More points for smoother curve
     final baseElevation = 300.0 + (dayRoute.dayIndex * 50);
-    
+
     // ALWAYS start at 0 and end at full distance
     for (int i = 0; i <= numPoints; i++) {
       final progress = i / numPoints;
-      final x = progress * distance; // This ensures we go from 0 to full distance
+      final x =
+          progress * distance; // This ensures we go from 0 to full distance
       double y = baseElevation;
-      
+
       // Create realistic elevation profile
-      if (dayRoute.userClickedPoints.length == 2 || 
+      if (dayRoute.userClickedPoints.length == 2 ||
           (dayRoute.userClickedPoints.isEmpty && dayRoute.points.length >= 2)) {
         // Simple route (2 points)
-        y += math.sin(progress * math.pi * 1.5) * 50;  // Main hill
-        y += math.cos(progress * math.pi * 3) * 25;    // Secondary hills
-        y += math.sin(progress * math.pi * 6) * 15;    // Small variations
-        y += math.cos(progress * math.pi * 10) * 8;    // Tiny variations
+        y += math.sin(progress * math.pi * 1.5) * 50; // Main hill
+        y += math.cos(progress * math.pi * 3) * 25; // Secondary hills
+        y += math.sin(progress * math.pi * 6) * 15; // Small variations
+        y += math.cos(progress * math.pi * 10) * 8; // Tiny variations
       } else {
         // Complex route (multiple waypoints)
         y += math.sin(progress * math.pi * 2) * 40;
         y += math.cos(progress * math.pi * 4) * 20;
         y += math.sin(progress * math.pi * 8) * 10;
       }
-      
+
       // Add overall trend based on ascent/descent if available
       if (dayRoute.summary.ascent > 0) {
         y += progress * dayRoute.summary.ascent * 0.3;
@@ -864,65 +882,69 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
       if (dayRoute.summary.descent > 0) {
         y -= (1 - progress) * dayRoute.summary.descent * 0.2;
       }
-      
+
       points.add(FlSpot(x, y));
     }
-    
+
     // Verify we span the full distance
     if (points.isNotEmpty) {
       // Ensure the last point is exactly at the distance
       if (points.last.x < distance) {
         points[points.length - 1] = FlSpot(distance, points.last.y);
       }
-      print('  - Generated ${points.length} points, x range: 0 to ${points.last.x} (should be $distance)');
+      print(
+          '  - Generated ${points.length} points, x range: 0 to ${points.last.x} (should be $distance)');
     }
-    
+
     return points;
   }
 
   List<FlSpot> _generateElevationData(DailyRoute dayRoute) {
     final points = <FlSpot>[];
-    
+
     // Debug print to see what data we have
     print('Debug elevation data for day ${dayRoute.dayIndex}:');
     print('  - Points count: ${dayRoute.points.length}');
     print('  - Elevation profile count: ${dayRoute.elevationProfile.length}');
     print('  - Distances count: ${dayRoute.distances.length}');
     print('  - Summary distance: ${dayRoute.summary.distance}');
-    
+
     // Check if we have valid route data
     if (dayRoute.summary.distance <= 0 || dayRoute.points.isEmpty) {
       print('  - No valid route data, returning empty');
       return points;
     }
-    
+
     // First priority: Use real elevation data if available
     if (dayRoute.elevationProfile.isNotEmpty && dayRoute.distances.isNotEmpty) {
       print('  - Using real elevation data');
-      final numPoints = math.min(dayRoute.elevationProfile.length, dayRoute.distances.length);
+      final numPoints =
+          math.min(dayRoute.elevationProfile.length, dayRoute.distances.length);
       final step = numPoints > 200 ? numPoints ~/ 200 : 1;
-      
+
       for (int i = 0; i < numPoints; i += step) {
         final distance = dayRoute.distances[i];
         final elevation = dayRoute.elevationProfile[i];
-        
-        if (!distance.isNaN && !distance.isInfinite && 
-            !elevation.isNaN && !elevation.isInfinite) {
+
+        if (!distance.isNaN &&
+            !distance.isInfinite &&
+            !elevation.isNaN &&
+            !elevation.isInfinite) {
           points.add(FlSpot(distance, elevation));
         }
       }
-      
+
       if (points.isNotEmpty) {
         print('  - Generated ${points.length} elevation points from real data');
         return points;
       }
     }
-    
+
     // Second priority: If we have elevation data but no distances, calculate distances
     if (dayRoute.elevationProfile.isNotEmpty) {
       print('  - Have elevation data but no distances, calculating distances');
       final numPoints = dayRoute.elevationProfile.length;
-      
+
       // Calculate distances based on the actual route points if available
       if (dayRoute.points.length == numPoints) {
         double cumulativeDistance = 0;
@@ -930,10 +952,11 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
           if (i > 0) {
             final prevPoint = dayRoute.points[i - 1];
             final currPoint = dayRoute.points[i];
-            final segmentDistance = _calculateDistanceBetweenPoints(prevPoint, currPoint);
+            final segmentDistance =
+                _calculateDistanceBetweenPoints(prevPoint, currPoint);
             cumulativeDistance += segmentDistance;
           }
-          
+
           final elevation = dayRoute.elevationProfile[i];
           if (!elevation.isNaN && !elevation.isInfinite) {
             points.add(FlSpot(cumulativeDistance, elevation));
@@ -941,80 +964,84 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
         }
       } else {
         // Fallback: distribute distances evenly
-        final distanceStep = dayRoute.summary.distance / math.max(1, numPoints - 1);
+        final distanceStep =
+            dayRoute.summary.distance / math.max(1, numPoints - 1);
         for (int i = 0; i < numPoints; i++) {
           final distance = i * distanceStep;
           final elevation = dayRoute.elevationProfile[i];
-          
+
           if (!elevation.isNaN && !elevation.isInfinite) {
             points.add(FlSpot(distance, elevation));
           }
         }
       }
-      
+
       if (points.isNotEmpty) {
-        print('  - Generated ${points.length} elevation points from elevation data only');
+        print(
+            '  - Generated ${points.length} elevation points from elevation data only');
         return points;
       }
     }
-    
+
     // Third priority: If we have route points but no elevation, try to generate from points
     if (dayRoute.points.isNotEmpty && dayRoute.points.length >= 2) {
       print('  - No elevation data, generating from route points');
       // Calculate cumulative distances from route points
       double cumulativeDistance = 0;
       final baseElevation = 300.0 + (dayRoute.dayIndex * 50.0);
-      
+
       for (int i = 0; i < dayRoute.points.length; i++) {
         if (i > 0) {
           final prevPoint = dayRoute.points[i - 1];
           final currPoint = dayRoute.points[i];
-          final segmentDistance = _calculateDistanceBetweenPoints(prevPoint, currPoint);
+          final segmentDistance =
+              _calculateDistanceBetweenPoints(prevPoint, currPoint);
           cumulativeDistance += segmentDistance;
         }
-        
+
         // Generate a simple elevation profile with some variation
         final progress = i / (dayRoute.points.length - 1);
         double elevation = baseElevation;
-        
+
         // Add some realistic variation
         elevation += math.sin(progress * math.pi * 2) * 50;
         elevation += math.cos(progress * math.pi * 4) * 20;
-        
+
         // Ensure we don't add too many points for performance
-        if (i % math.max(1, dayRoute.points.length ~/ 100) == 0 || 
-            i == 0 || 
+        if (i % math.max(1, dayRoute.points.length ~/ 100) == 0 ||
+            i == 0 ||
             i == dayRoute.points.length - 1) {
           points.add(FlSpot(cumulativeDistance, elevation));
         }
       }
-      
+
       if (points.isNotEmpty) {
-        print('  - Generated ${points.length} elevation points from route points');
+        print(
+            '  - Generated ${points.length} elevation points from route points');
         return points;
       }
     }
-    
+
     // Fallback: Generate a realistic profile based on summary statistics
     print('  - Using fallback elevation generation');
     final distance = dayRoute.summary.distance;
     final ascent = dayRoute.summary.ascent;
     final descent = dayRoute.summary.descent;
-    
+
     // Base elevation varies per day to ensure visual difference
     final baseElevation = 300.0 + (dayRoute.dayIndex * 100.0);
-    final numPoints = 100;
-    
+    const numPoints = 100;
+
     // Generate a smooth, realistic elevation profile
     for (int i = 0; i <= numPoints; i++) {
       final progress = i / numPoints;
       final x = progress * distance;
       double y = baseElevation;
-      
+
       // Create a unique but realistic profile for each day
       // Use sine waves with different frequencies for each day
       final frequency = 2.0 + dayRoute.dayIndex * 0.5;
-      
+
       // Main elevation trend
       if (ascent > descent) {
         // Net uphill
@@ -1030,17 +1057,17 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
         y += math.sin(progress * math.pi * frequency) * ascent * 0.5;
         y += math.cos(progress * math.pi * frequency * 1.5) * descent * 0.3;
       }
-      
+
       // Add some minor variations for realism
       y += math.sin(progress * math.pi * frequency * 4) * 10;
-      
+
       points.add(FlSpot(x, y));
     }
-    
+
     print('  - Generated ${points.length} fallback elevation points');
     return points;
   }
-  
+
   // Helper function to calculate distance between two LatLng points
   double _calculateDistanceBetweenPoints(LatLng start, LatLng end) {
     const double earthRadius = 6371000; // meters
@@ -1067,7 +1094,7 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -1128,7 +1155,7 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
                           : [],
                     ),
                     child: isSelected
-                        ? Icon(
+                        ? const Icon(
                             Icons.check,
                             color: Colors.white,
                             size: 18,
@@ -1203,9 +1230,9 @@ class _RoutePlannerPageState extends State<RoutePlannerPage> {
                     ),
                   );
                 }
-                
+
                 return _RoutePreviewMap(
-                  key: ValueKey('${dayRoute.points.hashCode}_${index}'),
+                  key: ValueKey('${dayRoute.points.hashCode}_$index'),
                   dayRoute: dayRoute,
                   planLocation: planLocation,
                 );
@@ -1549,24 +1576,29 @@ class _RoutePreviewMapState extends State<_RoutePreviewMap> {
 
   void _fitMapToRoute() {
     if (!mounted) return;
-    
+
     try {
-      if (widget.dayRoute.points.isNotEmpty && widget.dayRoute.points.length >= 2) {
+      if (widget.dayRoute.points.isNotEmpty &&
+          widget.dayRoute.points.length >= 2) {
         // Validate all points before creating bounds
         final validPoints = widget.dayRoute.points.where((point) {
-          return point.latitude.isFinite && 
-                 point.longitude.isFinite &&
-                 point.latitude.abs() <= 90 &&
-                 point.longitude.abs() <= 180;
+          return point.latitude.isFinite &&
+              point.longitude.isFinite &&
+              point.latitude.abs() <= 90 &&
+              point.longitude.abs() <= 180;
         }).toList();
-        
+
         if (validPoints.length >= 2) {
           final bounds = LatLngBounds.fromPoints(validPoints);
           // Validate bounds coordinates
-          if (bounds.north.isFinite && bounds.south.isFinite &&
-              bounds.east.isFinite && bounds.west.isFinite &&
-              bounds.north <= 90 && bounds.south >= -90 &&
-              bounds.east <= 180 && bounds.west >= -180) {
+          if (bounds.north.isFinite &&
+              bounds.south.isFinite &&
+              bounds.east.isFinite &&
+              bounds.west.isFinite &&
+              bounds.north <= 90 &&
+              bounds.south >= -90 &&
+              bounds.east <= 180 &&
+              bounds.west >= -180) {
             _mapController.fitCamera(
               CameraFit.bounds(
                 bounds: bounds,
@@ -1577,7 +1609,7 @@ class _RoutePreviewMapState extends State<_RoutePreviewMap> {
           }
         }
       }
-      
+
       // Fallback to plan location
       if (widget.planLocation != null) {
         _mapController.move(widget.planLocation!, 10.0);
@@ -1599,15 +1631,18 @@ class _RoutePreviewMapState extends State<_RoutePreviewMap> {
     // Determine initial center and zoom with validation
     LatLng initialCenter;
     double initialZoom;
-    
-    if (widget.dayRoute.points.isNotEmpty && widget.dayRoute.points.length >= 2) {
+
+    if (widget.dayRoute.points.isNotEmpty &&
+        widget.dayRoute.points.length >= 2) {
       // If we have valid points, try to calculate center from them
       try {
         final bounds = LatLngBounds.fromPoints(widget.dayRoute.points);
         initialCenter = bounds.center;
         // Validate center coordinates
-        if (initialCenter.latitude.isNaN || initialCenter.longitude.isNaN ||
-            initialCenter.latitude.isInfinite || initialCenter.longitude.isInfinite) {
+        if (initialCenter.latitude.isNaN ||
+            initialCenter.longitude.isNaN ||
+            initialCenter.latitude.isInfinite ||
+            initialCenter.longitude.isInfinite) {
           initialCenter = widget.planLocation ?? const LatLng(65.0, 25.5);
         }
         initialZoom = 12.0;
@@ -1627,15 +1662,21 @@ class _RoutePreviewMapState extends State<_RoutePreviewMap> {
     }
 
     // Final validation of coordinates
-    if (initialCenter.latitude.isNaN || initialCenter.longitude.isNaN ||
-        initialCenter.latitude.isInfinite || initialCenter.longitude.isInfinite ||
-        initialCenter.latitude.abs() > 90 || initialCenter.longitude.abs() > 180) {
+    if (initialCenter.latitude.isNaN ||
+        initialCenter.longitude.isNaN ||
+        initialCenter.latitude.isInfinite ||
+        initialCenter.longitude.isInfinite ||
+        initialCenter.latitude.abs() > 90 ||
+        initialCenter.longitude.abs() > 180) {
       initialCenter = const LatLng(65.0, 25.5);
       initialZoom = 5.0;
     }
 
     // Validate zoom level
-    if (initialZoom.isNaN || initialZoom.isInfinite || initialZoom < 1 || initialZoom > 18) {
+    if (initialZoom.isNaN ||
+        initialZoom.isInfinite ||
+        initialZoom < 1 ||
+        initialZoom > 18) {
       initialZoom = 5.0;
     }
 
@@ -1648,7 +1689,9 @@ class _RoutePreviewMapState extends State<_RoutePreviewMap> {
             onMapReady: () {
               // Schedule the camera update after the map is ready
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted && widget.dayRoute.points.isNotEmpty && widget.dayRoute.points.length >= 2) {
+                if (mounted &&
+                    widget.dayRoute.points.isNotEmpty &&
+                    widget.dayRoute.points.length >= 2) {
                   _fitMapToRoute();
                 }
               });
@@ -1675,7 +1718,8 @@ class _RoutePreviewMapState extends State<_RoutePreviewMap> {
               },
             ),
             // Only add polyline layer if we have valid points
-            if (widget.dayRoute.points.isNotEmpty && widget.dayRoute.points.length >= 2)
+            if (widget.dayRoute.points.isNotEmpty &&
+                widget.dayRoute.points.length >= 2)
               PolylineLayer(
                 polylines: [
                   Polyline(
@@ -1688,7 +1732,8 @@ class _RoutePreviewMapState extends State<_RoutePreviewMap> {
                 ],
               ),
             // Only add markers if we have valid points
-            if (widget.dayRoute.points.isNotEmpty && widget.dayRoute.points.length >= 2)
+            if (widget.dayRoute.points.isNotEmpty &&
+                widget.dayRoute.points.length >= 2)
               MarkerLayer(
                 markers: generateArrowMarkersForDays([widget.dayRoute]),
               ),

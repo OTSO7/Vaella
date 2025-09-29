@@ -174,6 +174,8 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
     super.initState();
     _lastSavedPlan = widget.initialPlan;
     _initializeDays();
+    // Start with clean state since we just loaded
+    _isDirty = false;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _attachPlanListener();
     });
@@ -280,7 +282,8 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
       _ensureFixedSections(day);
       _dayPlans.add(day);
     }
-    _isDirty = true;
+    // Don't mark as dirty when just initializing empty structure
+    _isDirty = false;
   }
 
   void _ensureFixedSections(DayPlan day) {
@@ -308,26 +311,130 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
       return false;
     }
 
+    final cs = Theme.of(context).colorScheme;
     final action = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Unsaved Changes'),
-        content: const Text(
-            'You have unsaved changes. Do you want to save them before exiting?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop('discard'),
-            child: const Text('Discard'),
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: cs.surface,
+            borderRadius: BorderRadius.circular(20),
           ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop('cancel'),
-            child: const Text('Cancel'),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Icon
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(
+                  Icons.warning_amber_rounded,
+                  color: Colors.orange.shade700,
+                  size: 32,
+                ),
+              ),
+              const SizedBox(height: 20),
+              
+              // Title
+              Text(
+                'Save your changes?',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 20,
+                  color: cs.onSurface,
+                ),
+              ),
+              const SizedBox(height: 12),
+              
+              // Message
+              Text(
+                'You have unsaved changes to your food plan.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.lato(
+                  fontSize: 14,
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 24),
+              
+              // Buttons
+              Column(
+                children: [
+                  // Primary action - Save
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: () => Navigator.of(context).pop('save'),
+                      icon: const Icon(Icons.save_rounded, size: 20),
+                      label: const Text('Save changes'),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        backgroundColor: cs.primary,
+                        foregroundColor: cs.onPrimary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  
+                  // Secondary action - Leave without saving
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.of(context).pop('discard'),
+                      icon: Icon(Icons.exit_to_app_rounded, 
+                        size: 20,
+                        color: Colors.red.shade700,
+                      ),
+                      label: Text(
+                        'Leave without saving',
+                        style: TextStyle(color: Colors.red.shade700),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        side: BorderSide(color: Colors.red.shade200),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  
+                  // Tertiary action - Stay
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop('cancel'),
+                      child: Text(
+                        'Continue editing',
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop('save'),
-            child: const Text('Save & Exit'),
-          ),
-        ],
+        ),
       ),
     );
 

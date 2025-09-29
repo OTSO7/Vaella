@@ -32,34 +32,33 @@ class UltraSmooth3DRoute extends StatefulWidget {
 
 class _UltraSmooth3DRouteState extends State<UltraSmooth3DRoute>
     with SingleTickerProviderStateMixin {
-  
   // Animation
   late Ticker _ticker;
   Duration _lastElapsed = Duration.zero;
   double _progress = 0.0;
-  
+
   // Map control
   MapController? _mapController;
-  
+
   // Route data
   final List<double> _distances = [];
   double _totalDistance = 0;
   LatLng _currentPosition = const LatLng(0, 0);
-  double _currentBearing = 0;
+  final double _currentBearing = 0;
   double _targetBearing = 0;
-  
+
   // Smooth values
   double _smoothLat = 0;
   double _smoothLng = 0;
   double _smoothBearing = 0;
   double _smoothZoom = 17; // Start with higher zoom for lower view
-  
+
   @override
   void initState() {
     super.initState();
     _initializeRoute();
     _ticker = createTicker(_onTick);
-    
+
     // Delay map controller initialization
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -72,15 +71,15 @@ class _UltraSmooth3DRouteState extends State<UltraSmooth3DRoute>
 
   void _initializeRoute() {
     if (widget.routePoints.isEmpty) return;
-    
+
     _currentPosition = widget.routePoints.first;
     _smoothLat = _currentPosition.latitude;
     _smoothLng = _currentPosition.longitude;
-    
+
     // Calculate distances between consecutive points
     _distances.clear();
     _totalDistance = 0;
-    
+
     if (widget.routePoints.length > 1) {
       const distance = Distance();
       for (int i = 1; i < widget.routePoints.length; i++) {
@@ -97,26 +96,26 @@ class _UltraSmooth3DRouteState extends State<UltraSmooth3DRoute>
 
   void _onTick(Duration elapsed) {
     if (!widget.isPlaying || widget.routePoints.length < 2) return;
-    
+
     // Calculate delta time in seconds
     final deltaTime = (elapsed - _lastElapsed).inMicroseconds / 1000000.0;
     _lastElapsed = elapsed;
-    
+
     // Much slower progress - complete route in 180 seconds (3 minutes) at speed 1.0
     _progress += (deltaTime * widget.animationSpeed) / 180.0;
-    
+
     if (_progress >= 1.0) {
       _progress = 1.0;
       _ticker.stop();
       widget.onPlaybackComplete?.call();
     }
-    
+
     // Calculate position along route
     _updatePosition();
-    
+
     // Update map smoothly
     _updateMap();
-    
+
     // Trigger rebuild for UI updates
     if (mounted) {
       setState(() {});
@@ -125,41 +124,42 @@ class _UltraSmooth3DRouteState extends State<UltraSmooth3DRoute>
 
   void _updatePosition() {
     if (widget.routePoints.length < 2 || _distances.isEmpty) return;
-    
+
     // Find position based on total distance traveled
     final targetDistance = _progress * _totalDistance;
     double accumulatedDistance = 0;
-    
+
     // Find which segment we're in
     for (int i = 0; i < _distances.length; i++) {
       final segmentDistance = _distances[i];
-      
+
       if (accumulatedDistance + segmentDistance >= targetDistance) {
         // We're in segment i (between point i and point i+1)
         final distanceIntoSegment = targetDistance - accumulatedDistance;
-        final segmentProgress = segmentDistance > 0 
-            ? distanceIntoSegment / segmentDistance 
-            : 0.0;
-        
+        final segmentProgress =
+            segmentDistance > 0 ? distanceIntoSegment / segmentDistance : 0.0;
+
         // Get the two points of this segment
         final start = widget.routePoints[i];
         final end = widget.routePoints[i + 1];
-        
+
         // Linear interpolation between the two points
-        final lat = start.latitude + (end.latitude - start.latitude) * segmentProgress;
-        final lng = start.longitude + (end.longitude - start.longitude) * segmentProgress;
-        
+        final lat =
+            start.latitude + (end.latitude - start.latitude) * segmentProgress;
+        final lng = start.longitude +
+            (end.longitude - start.longitude) * segmentProgress;
+
         _currentPosition = LatLng(lat, lng);
-        
+
         // Calculate bearing for this segment
         _targetBearing = _calculateBearing(start, end);
-        
+
         return; // Exit once we've found our position
       }
-      
+
       accumulatedDistance += segmentDistance;
     }
-    
+
     // If we've somehow gone past the end, set to last point
     if (accumulatedDistance < targetDistance && widget.routePoints.isNotEmpty) {
       _currentPosition = widget.routePoints.last;
@@ -168,31 +168,35 @@ class _UltraSmooth3DRouteState extends State<UltraSmooth3DRoute>
 
   void _updateMap() {
     if (_mapController == null) return;
-    
+
     // Much slower smoothing for smoother movement
     const positionSmoothing = 0.08; // Lower = smoother but slower response
-    const bearingSmoothing = 0.05;  // Very smooth rotation
+    const bearingSmoothing = 0.05; // Very smooth rotation
     const zoomSmoothing = 0.05;
-    
+
     // Smooth position
     _smoothLat += (_currentPosition.latitude - _smoothLat) * positionSmoothing;
     _smoothLng += (_currentPosition.longitude - _smoothLng) * positionSmoothing;
-    
+
     // Smooth bearing (handle wrap-around)
     double bearingDiff = _targetBearing - _smoothBearing;
     if (bearingDiff > 180) bearingDiff -= 360;
     if (bearingDiff < -180) bearingDiff += 360;
     _smoothBearing += bearingDiff * bearingSmoothing;
-    
+
     // Normalize bearing to [0, 360]
-    while (_smoothBearing < 0) _smoothBearing += 360;
-    while (_smoothBearing >= 360) _smoothBearing -= 360;
-    
+    while (_smoothBearing < 0) {
+      _smoothBearing += 360;
+    }
+    while (_smoothBearing >= 360) {
+      _smoothBearing -= 360;
+    }
+
     // Calculate zoom for low camera view (higher zoom = closer to ground)
     // Lower camera height = higher zoom level for closer view
     final targetZoom = 18.5 - math.log(widget.cameraHeight / 500) / math.ln2;
     _smoothZoom += (targetZoom - _smoothZoom) * zoomSmoothing;
-    
+
     // Apply to map
     try {
       _mapController!.move(LatLng(_smoothLat, _smoothLng), _smoothZoom);
@@ -206,11 +210,11 @@ class _UltraSmooth3DRouteState extends State<UltraSmooth3DRoute>
     final dLon = (end.longitude - start.longitude) * math.pi / 180;
     final lat1 = start.latitude * math.pi / 180;
     final lat2 = end.latitude * math.pi / 180;
-    
+
     final y = math.sin(dLon) * math.cos(lat2);
     final x = math.cos(lat1) * math.sin(lat2) -
         math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
-    
+
     final bearing = math.atan2(y, x) * 180 / math.pi;
     return (bearing + 360) % 360;
   }
@@ -218,11 +222,11 @@ class _UltraSmooth3DRouteState extends State<UltraSmooth3DRoute>
   @override
   void didUpdateWidget(UltraSmooth3DRoute oldWidget) {
     super.didUpdateWidget(oldWidget);
-    
+
     if (widget.routePoints != oldWidget.routePoints) {
       _initializeRoute();
     }
-    
+
     if (widget.isPlaying && !oldWidget.isPlaying) {
       _lastElapsed = Duration.zero;
       if (_progress >= 1.0) {
@@ -279,10 +283,10 @@ class _UltraSmooth3DRouteState extends State<UltraSmooth3DRoute>
             ..rotateX(-widget.cameraAngle * math.pi / 180), // Tilt for 3D view
           child: _buildMap(),
         ),
-        
+
         // 3D effect overlay
         if (widget.showTerrain) _build3DOverlay(),
-        
+
         // Progress indicator
         _buildProgressIndicator(),
       ],
@@ -311,28 +315,30 @@ class _UltraSmooth3DRouteState extends State<UltraSmooth3DRoute>
           userAgentPackageName: 'com.treknote.app', // Proper app identification
           tileProvider: NetworkTileProvider(), // Use network tile provider
         ),
-        
+
         // Hillshade for 3D terrain effect
         if (widget.showTerrain)
           Opacity(
             opacity: 0.6, // Stronger hillshade for better terrain visibility
             child: TileLayer(
-              urlTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}',
+              urlTemplate:
+                  'https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}',
               maxZoom: 19,
               userAgentPackageName: 'com.treknote.app',
               tileProvider: NetworkTileProvider(),
             ),
           ),
-        
+
         // Route polylines
         PolylineLayer(
           polylines: [
             // Shadow for depth (offset more for low angle view)
             if (widget.showTerrain)
               Polyline(
-                points: widget.routePoints.map((p) => 
-                  LatLng(p.latitude - 0.00015, p.longitude + 0.00015)
-                ).toList(),
+                points: widget.routePoints
+                    .map((p) =>
+                        LatLng(p.latitude - 0.00015, p.longitude + 0.00015))
+                    .toList(),
                 strokeWidth: 8,
                 color: Colors.black.withOpacity(0.4),
               ),
@@ -355,7 +361,7 @@ class _UltraSmooth3DRouteState extends State<UltraSmooth3DRoute>
               ),
           ],
         ),
-        
+
         // Markers
         MarkerLayer(
           markers: [
@@ -377,7 +383,8 @@ class _UltraSmooth3DRouteState extends State<UltraSmooth3DRoute>
                     ),
                   ],
                 ),
-                child: const Icon(Icons.play_arrow, color: Colors.white, size: 18),
+                child:
+                    const Icon(Icons.play_arrow, color: Colors.white, size: 18),
               ),
             ),
             // End marker
@@ -508,14 +515,14 @@ class _UltraSmooth3DRouteState extends State<UltraSmooth3DRoute>
   List<LatLng> _getCompletedPoints() {
     if (_progress <= 0) return [];
     if (_progress >= 1) return widget.routePoints;
-    
+
     final targetDistance = _progress * _totalDistance;
     double accumulatedDistance = 0;
     List<LatLng> points = [];
-    
+
     for (int i = 0; i < widget.routePoints.length - 1; i++) {
       points.add(widget.routePoints[i]);
-      
+
       if (i < _distances.length) {
         if (accumulatedDistance + _distances[i] >= targetDistance) {
           // Add the interpolated current position
@@ -525,7 +532,7 @@ class _UltraSmooth3DRouteState extends State<UltraSmooth3DRoute>
         accumulatedDistance += _distances[i];
       }
     }
-    
+
     return points;
   }
 }

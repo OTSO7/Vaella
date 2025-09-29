@@ -28,9 +28,9 @@ class _Route3DFlyoverPageState extends State<Route3DFlyoverPage> {
   double _cameraAngle = 45.0;
   bool _isPlaying = false;
   bool _showTerrain = true;
-  bool _showLabels = true;
+  final bool _showLabels = true;
   int _selectedDayIndex = -1; // -1 means all days
-  
+
   late List<DailyRoute> _routes;
   late String _hikeName;
 
@@ -69,7 +69,7 @@ class _Route3DFlyoverPageState extends State<Route3DFlyoverPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final routePoints = _getSelectedRoutePoints();
-    
+
     return Scaffold(
       backgroundColor: Colors.grey[900],
       appBar: AppBar(
@@ -134,7 +134,7 @@ class _Route3DFlyoverPageState extends State<Route3DFlyoverPage> {
               });
             },
           ),
-          
+
           // Simplified Control Panel
           Positioned(
             bottom: 0,
@@ -162,7 +162,7 @@ class _Route3DFlyoverPageState extends State<Route3DFlyoverPage> {
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  
+
                   // Day Selector (if multiple days)
                   if (_routes.length > 1) ...[
                     SizedBox(
@@ -173,10 +173,10 @@ class _Route3DFlyoverPageState extends State<Route3DFlyoverPage> {
                         itemBuilder: (context, index) {
                           final isSelected = _selectedDayIndex == (index - 1);
                           final label = index == 0 ? 'All' : 'Day $index';
-                          final color = index == 0 
-                              ? Colors.blue 
+                          final color = index == 0
+                              ? Colors.blue
                               : _routes[index - 1].routeColor;
-                          
+
                           return Padding(
                             padding: const EdgeInsets.only(right: 8.0),
                             child: ChoiceChip(
@@ -191,8 +191,11 @@ class _Route3DFlyoverPageState extends State<Route3DFlyoverPage> {
                               selectedColor: color,
                               backgroundColor: Colors.grey[800],
                               labelStyle: TextStyle(
-                                color: isSelected ? Colors.white : Colors.white70,
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                color:
+                                    isSelected ? Colors.white : Colors.white70,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
                               ),
                             ),
                           );
@@ -201,7 +204,7 @@ class _Route3DFlyoverPageState extends State<Route3DFlyoverPage> {
                     ),
                     const SizedBox(height: 12),
                   ],
-                  
+
                   // Main Playback Control
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -213,13 +216,14 @@ class _Route3DFlyoverPageState extends State<Route3DFlyoverPage> {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: LinearGradient(
-                            colors: _isPlaying 
+                            colors: _isPlaying
                                 ? [Colors.orange, Colors.deepOrange]
                                 : [Colors.blue, Colors.blueAccent],
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: (_isPlaying ? Colors.orange : Colors.blue).withOpacity(0.4),
+                              color: (_isPlaying ? Colors.orange : Colors.blue)
+                                  .withOpacity(0.4),
                               blurRadius: 12,
                               spreadRadius: 2,
                             ),
@@ -241,7 +245,7 @@ class _Route3DFlyoverPageState extends State<Route3DFlyoverPage> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Simplified Controls Row
                   Row(
                     children: [
@@ -253,7 +257,9 @@ class _Route3DFlyoverPageState extends State<Route3DFlyoverPage> {
                           '${_animationSpeed.toStringAsFixed(1)}x',
                           () {
                             setState(() {
-                              _animationSpeed = _animationSpeed >= 4 ? 0.5 : _animationSpeed + 0.5;
+                              _animationSpeed = _animationSpeed >= 4
+                                  ? 0.5
+                                  : _animationSpeed + 0.5;
                             });
                           },
                         ),
@@ -267,7 +273,8 @@ class _Route3DFlyoverPageState extends State<Route3DFlyoverPage> {
                           '${_cameraAngle.toStringAsFixed(0)}°',
                           () {
                             setState(() {
-                              _cameraAngle = _cameraAngle >= 75 ? 15 : _cameraAngle + 15;
+                              _cameraAngle =
+                                  _cameraAngle >= 75 ? 15 : _cameraAngle + 15;
                             });
                           },
                         ),
@@ -281,7 +288,9 @@ class _Route3DFlyoverPageState extends State<Route3DFlyoverPage> {
                           '${(_cameraHeight / 100).toStringAsFixed(0)}00m',
                           () {
                             setState(() {
-                              _cameraHeight = _cameraHeight >= 2000 ? 200 : _cameraHeight + 300;
+                              _cameraHeight = _cameraHeight >= 2000
+                                  ? 200
+                                  : _cameraHeight + 300;
                             });
                           },
                         ),
@@ -292,20 +301,20 @@ class _Route3DFlyoverPageState extends State<Route3DFlyoverPage> {
               ),
             ),
           ),
-          
+
           // Route Statistics Overlay
           Positioned(
             top: 16,
             left: 16,
             child: _buildStatsOverlay(),
           ),
-          
+
           // Elevation Profile (responsive)
           if (!_isPlaying && MediaQuery.of(context).size.width > 600)
             Positioned(
               top: 16,
               right: 16,
-              child: Container(
+              child: SizedBox(
                 width: MediaQuery.of(context).size.width > 800 ? 300 : 250,
                 height: 150,
                 child: ElevationProfileChart(
@@ -321,7 +330,7 @@ class _Route3DFlyoverPageState extends State<Route3DFlyoverPage> {
   }
 
   Widget _buildDaySelector() {
-    return Container(
+    return SizedBox(
       height: 40,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
@@ -329,10 +338,9 @@ class _Route3DFlyoverPageState extends State<Route3DFlyoverPage> {
         itemBuilder: (context, index) {
           final isSelected = _selectedDayIndex == (index - 1);
           final label = index == 0 ? 'All Days' : 'Day $index';
-          final color = index == 0 
-              ? Colors.blue 
-              : _routes[index - 1].routeColor;
-          
+          final color =
+              index == 0 ? Colors.blue : _routes[index - 1].routeColor;
+
           return Padding(
             padding: const EdgeInsets.only(right: 8.0),
             child: FilterChip(
@@ -451,17 +459,17 @@ class _Route3DFlyoverPageState extends State<Route3DFlyoverPage> {
   Widget _buildStatsOverlay() {
     final selectedRoutes = _selectedDayIndex == -1
         ? _routes
-        : (_selectedDayIndex < _routes.length 
+        : (_selectedDayIndex < _routes.length
             ? [_routes[_selectedDayIndex]]
             : []);
-    
+
     if (selectedRoutes.isEmpty) return const SizedBox.shrink();
-    
+
     final totalSummary = selectedRoutes.fold(
       RouteSummary(),
       (sum, route) => sum + route.summary,
     );
-    
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -473,7 +481,7 @@ class _Route3DFlyoverPageState extends State<Route3DFlyoverPage> {
         children: [
           _buildStatRow(
             Icons.route,
-            '${_formatDistance(totalSummary.distance)}',
+            _formatDistance(totalSummary.distance),
           ),
           const SizedBox(height: 4),
           _buildStatRow(

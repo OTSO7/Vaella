@@ -1,5 +1,4 @@
 // lib/pages/modern_individual_hike_hub_page.dart
-import 'dart:ui' as ui;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -34,6 +33,7 @@ class _ModernIndividualHikeHubPageState
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
   bool _isInitialized = false;
+  double? _calculatedTotalDistance;
 
   @override
   void initState() {
@@ -115,6 +115,17 @@ class _ModernIndividualHikeHubPageState
         extra: _plan);
     if (mounted && result is HikePlan) {
       setState(() => _plan = result);
+      _refreshPlanData();
+    }
+  }
+
+  Future<void> _openFoodPlanner() async {
+    HapticFeedback.lightImpact();
+    final result = await context.pushNamed('foodPlannerPage',
+        pathParameters: {'planId': _plan.id}, extra: _plan);
+    if (mounted && result is HikePlan) {
+      setState(() => _plan = result);
+    } else {
       _refreshPlanData();
     }
   }
@@ -753,7 +764,7 @@ class _ModernIndividualHikeHubPageState
           icon: Icons.cloud_outlined,
           title: 'Weather',
           subtitle: hasLocation ? 'Check forecast' : 'Add location first',
-          color: Colors.blue,
+          color: Colors.lightBlue.shade600,
           onTap: hasLocation ? _openWeather : null,
         ),
         const SizedBox(height: 12),
@@ -762,7 +773,7 @@ class _ModernIndividualHikeHubPageState
           icon: Icons.map_outlined,
           title: 'Route',
           subtitle: hasRoute ? 'View & edit' : 'Plan your route',
-          color: Colors.purple,
+          color: Colors.deepPurple.shade400,
           onTap: _openPlanner,
         ),
         const SizedBox(height: 12),
@@ -771,8 +782,17 @@ class _ModernIndividualHikeHubPageState
           icon: Icons.backpack_outlined,
           title: 'My Gear',
           subtitle: 'Manage packing list',
-          color: AppColors.accentColor(context),
+          color: Colors.teal.shade600,
           onTap: _openPackingList,
+        ),
+        const SizedBox(height: 12),
+        _buildModernActionCard(
+          context,
+          icon: Icons.restaurant_menu,
+          title: 'Food Planner',
+          subtitle: 'Plan meals and snacks',
+          color: Colors.orange.shade600,
+          onTap: _openFoodPlanner,
         ),
       ],
     );

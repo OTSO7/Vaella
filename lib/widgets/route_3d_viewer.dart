@@ -44,10 +44,12 @@ class _Route3DViewerState extends State<Route3DViewer> {
   }
 
   void _setupViewer() {
-    final routeData = widget.routePoints.map((point) => {
-      'lat': point.latitude,
-      'lng': point.longitude,
-    }).toList();
+    final routeData = widget.routePoints
+        .map((point) => {
+              'lat': point.latitude,
+              'lng': point.longitude,
+            })
+        .toList();
 
     final htmlContent = '''
 <!DOCTYPE html>
@@ -142,12 +144,12 @@ class _Route3DViewerState extends State<Route3DViewer> {
                     viewer.entities.add({
                         position: terrainPositions[0],
                         billboard: {
-                            image: 'data:image/svg+xml;base64,' + btoa(\`
+                            image: 'data:image/svg+xml;base64,' + btoa(`
                                 <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24">
                                     <circle cx="12" cy="12" r="10" fill="#4CAF50"/>
                                     <text x="12" y="16" text-anchor="middle" fill="white" font-size="12" font-weight="bold">S</text>
                                 </svg>
-                            \`),
+                            `),
                             verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
                             scale: 1.0
                         },
@@ -165,12 +167,12 @@ class _Route3DViewerState extends State<Route3DViewer> {
                     viewer.entities.add({
                         position: terrainPositions[terrainPositions.length - 1],
                         billboard: {
-                            image: 'data:image/svg+xml;base64,' + btoa(\`
+                            image: 'data:image/svg+xml;base64,' + btoa(`
                                 <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24">
                                     <circle cx="12" cy="12" r="10" fill="#F44336"/>
                                     <text x="12" y="16" text-anchor="middle" fill="white" font-size="12" font-weight="bold">F</text>
                                 </svg>
-                            \`),
+                            `),
                             verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
                             scale: 1.0
                         },
@@ -327,7 +329,7 @@ class _Route3DViewerState extends State<Route3DViewer> {
   @override
   void didUpdateWidget(Route3DViewer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    
+
     // Send updates to the iframe
     if (_iFrame != null) {
       final message = {
@@ -338,10 +340,10 @@ class _Route3DViewerState extends State<Route3DViewer> {
           'cameraAngle': widget.cameraAngle,
         }
       };
-      
+
       _iFrame!.contentWindow?.postMessage(message, '*');
     }
-    
+
     // If route points changed significantly, recreate the viewer
     if (oldWidget.routePoints.length != widget.routePoints.length ||
         oldWidget.showTerrain != widget.showTerrain) {

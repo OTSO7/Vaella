@@ -1,6 +1,5 @@
 // lib/pages/enhanced_group_hike_hub_page.dart
 import 'dart:ui' as ui;
-import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';

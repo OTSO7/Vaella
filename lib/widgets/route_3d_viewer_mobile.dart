@@ -43,10 +43,11 @@ class _Route3DViewerState extends State<Route3DViewer>
   void initState() {
     super.initState();
     _mapController = MapController();
-    
+
     // Calculate smoother animation duration based on route length
-    final animationDuration = widget.routePoints.length * 100; // milliseconds per point
-    
+    final animationDuration =
+        widget.routePoints.length * 100; // milliseconds per point
+
     _animationController = AnimationController(
       vsync: this,
       duration: Duration(
@@ -65,7 +66,7 @@ class _Route3DViewerState extends State<Route3DViewer>
   @override
   void didUpdateWidget(Route3DViewer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    
+
     if (widget.isPlaying != oldWidget.isPlaying) {
       if (widget.isPlaying) {
         _startAnimation();
@@ -116,9 +117,11 @@ class _Route3DViewerState extends State<Route3DViewer>
     // Interpolate between points for smooth movement
     final currentPoint = widget.routePoints[currentIndex];
     final nextPoint = widget.routePoints[nextIndex];
-    
-    final lat = currentPoint.latitude + (nextPoint.latitude - currentPoint.latitude) * t;
-    final lng = currentPoint.longitude + (nextPoint.longitude - currentPoint.longitude) * t;
+
+    final lat = currentPoint.latitude +
+        (nextPoint.latitude - currentPoint.latitude) * t;
+    final lng = currentPoint.longitude +
+        (nextPoint.longitude - currentPoint.longitude) * t;
 
     // Calculate bearing for rotation
     if (currentIndex < totalPoints) {
@@ -126,10 +129,8 @@ class _Route3DViewerState extends State<Route3DViewer>
     }
 
     // Move map to interpolated position smoothly
-    if (_mapController.mapEventStream != null) {
-      _mapController.move(LatLng(lat, lng), _currentZoom);
-      _mapController.rotate(_currentRotation);
-    }
+    _mapController.move(LatLng(lat, lng), _currentZoom);
+    _mapController.rotate(_currentRotation);
   }
 
   double _calculateBearing(LatLng start, LatLng end) {
@@ -206,7 +207,8 @@ class _Route3DViewerState extends State<Route3DViewer>
           child: Transform(
             alignment: Alignment.center,
             transform: Matrix4.identity()
-              ..setEntry(3, 2, 0.002) // increased perspective for better 3D effect
+              ..setEntry(
+                  3, 2, 0.002) // increased perspective for better 3D effect
               ..rotateX(-widget.cameraAngle * math.pi / 180) // tilt angle
               ..scale(1.0, 1.3), // stretch vertically for depth illusion
             child: FlutterMap(
@@ -215,7 +217,8 @@ class _Route3DViewerState extends State<Route3DViewer>
                 initialCenter: widget.routePoints.first,
                 initialZoom: _currentZoom,
                 interactionOptions: const InteractionOptions(
-                  flags: InteractiveFlag.none, // Disable user interaction during animation
+                  flags: InteractiveFlag
+                      .none, // Disable user interaction during animation
                 ),
               ),
               children: [
@@ -230,32 +233,34 @@ class _Route3DViewerState extends State<Route3DViewer>
                     // Handle tile loading errors silently
                   },
                 ),
-                
+
                 // Hillshade overlay for terrain effect using ESRI (working URL)
                 if (widget.showTerrain)
                   Opacity(
                     opacity: 0.5,
                     child: TileLayer(
-                      urlTemplate: 'https://services.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}',
+                      urlTemplate:
+                          'https://services.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}',
                       userAgentPackageName: 'com.example.treknoteflutter',
                     ),
                   ),
-                
+
                 // Add shadow effect for elevation illusion
                 if (widget.showTerrain)
                   PolylineLayer(
                     polylines: [
                       // Shadow polyline
                       Polyline(
-                        points: widget.routePoints.map((point) => 
-                          LatLng(point.latitude - 0.0002, point.longitude + 0.0002)
-                        ).toList(),
+                        points: widget.routePoints
+                            .map((point) => LatLng(point.latitude - 0.0002,
+                                point.longitude + 0.0002))
+                            .toList(),
                         strokeWidth: 10.0,
                         color: Colors.black.withOpacity(0.3),
                       ),
                     ],
                   ),
-                
+
                 // Route polyline with elevation effect
                 PolylineLayer(
                   polylines: [
@@ -270,7 +275,8 @@ class _Route3DViewerState extends State<Route3DViewer>
                     // Highlight current segment with glow effect
                     if (_currentPointIndex > 0)
                       Polyline(
-                        points: widget.routePoints.sublist(0, _currentPointIndex + 1),
+                        points: widget.routePoints
+                            .sublist(0, _currentPointIndex + 1),
                         strokeWidth: 8.0,
                         color: widget.routeColor.withOpacity(0.9),
                         borderStrokeWidth: 3.0,
@@ -278,7 +284,7 @@ class _Route3DViewerState extends State<Route3DViewer>
                       ),
                   ],
                 ),
-                
+
                 // Markers
                 MarkerLayer(
                   markers: [
@@ -360,7 +366,7 @@ class _Route3DViewerState extends State<Route3DViewer>
                       ),
                   ],
                 ),
-                
+
                 // Labels
                 if (widget.showLabels)
                   MarkerLayer(
@@ -372,7 +378,8 @@ class _Route3DViewerState extends State<Route3DViewer>
                         child: Column(
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(
                                 color: Colors.black.withOpacity(0.7),
                                 borderRadius: BorderRadius.circular(10),
@@ -397,7 +404,8 @@ class _Route3DViewerState extends State<Route3DViewer>
                         child: Column(
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(
                                 color: Colors.black.withOpacity(0.7),
                                 borderRadius: BorderRadius.circular(10),
@@ -421,7 +429,7 @@ class _Route3DViewerState extends State<Route3DViewer>
             ),
           ),
         ),
-        
+
         // Add gradient overlay for depth effect
         if (widget.showTerrain)
           Positioned.fill(
@@ -442,7 +450,7 @@ class _Route3DViewerState extends State<Route3DViewer>
               ),
             ),
           ),
-        
+
         // Progress indicator
         Positioned(
           bottom: 100,
