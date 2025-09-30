@@ -671,7 +671,6 @@ class _PackingListPageState extends State<PackingListPage>
 
   @override
   Widget build(BuildContext context) {
-    final appTextTheme = _getAppTextTheme(context);
     final theme = Theme.of(context);
 
     return ScaffoldMessenger(
@@ -682,6 +681,72 @@ class _PackingListPageState extends State<PackingListPage>
           controller: _scrollController,
           slivers: [
             _buildSliverAppBar(context),
+            // Viewing indicator banner
+            if (!_isOwnList)
+              SliverToBoxAdapter(
+                child: Container(
+                  margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        theme.colorScheme.primary.withOpacity(0.1),
+                        theme.colorScheme.primary.withOpacity(0.05),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: theme.colorScheme.primary.withOpacity(0.3),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.visibility_rounded,
+                          color: theme.colorScheme.primary,
+                          size: 16,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Viewing teammate\'s packing list',
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                            if (_viewingUserName != null)
+                              Text(
+                                'See what $_viewingUserName has packed for the hike',
+                                style: GoogleFonts.lato(
+                                  fontSize: 12,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.lock_outline_rounded,
+                        color: theme.colorScheme.primary.withOpacity(0.7),
+                        size: 18,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             SliverPersistentHeader(
               delegate: _SliverAppBarDelegate(
                 TabBar(
@@ -825,11 +890,26 @@ class _PackingListPageState extends State<PackingListPage>
           return AnimatedOpacity(
             duration: const Duration(milliseconds: 200),
             opacity: showTitle ? 1.0 : 0.0,
-            child: Text(
-              'Packing List',
-              style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.onSurface),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _isOwnList ? 'My Packing List' : 'Teammate\'s Gear',
+                  style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                      color: theme.colorScheme.onSurface),
+                ),
+                if (!_isOwnList && _viewingUserName != null)
+                  Text(
+                    'Viewing $_viewingUserName\'s gear',
+                    style: GoogleFonts.lato(
+                      fontSize: 12,
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+              ],
             ),
           );
         },

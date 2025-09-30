@@ -20,12 +20,7 @@ class HikePlanCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    // Käytetään Google Fonts -fontteja yhtenäisen ulkoasun takaamiseksi
-    final textTheme = theme.textTheme.apply(
-      fontFamily: GoogleFonts.lato().fontFamily,
-    );
+  Widget build(BuildContext context) {    final theme = Theme.of(context);
     final titleTextStyle = GoogleFonts.poppins(
       fontWeight: FontWeight.w700,
       fontSize: 19,

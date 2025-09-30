@@ -1,6 +1,7 @@
 // lib/services/hike_plan_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import '../models/hike_plan_model.dart';
 
 class HikePlanService {
@@ -34,9 +35,8 @@ class HikePlanService {
           try {
             return snapshot.docs
                 .map((doc) => HikePlan.fromFirestore(doc))
-                .toList();
-          } catch (e) {
-            print(
+                .toList();          } catch (e) {
+            debugPrint(
                 "HikePlanService: Error mapping active plans from Firestore: $e");
             return [];
           }
@@ -59,9 +59,8 @@ class HikePlanService {
         .snapshots()
         .map((snapshot) {
       try {
-        return snapshot.docs.map((doc) => HikePlan.fromFirestore(doc)).toList();
-      } catch (e) {
-        print(
+        return snapshot.docs.map((doc) => HikePlan.fromFirestore(doc)).toList();      } catch (e) {
+        debugPrint(
             "HikePlanService: Error mapping completed plans from Firestore: $e");
         return [];
       }
@@ -70,12 +69,11 @@ class HikePlanService {
 
   // NEW METHOD: Stream for a single HikePlan
   Stream<HikePlan?> getHikePlanStream(String planId) {
-    String? userId = getUserId();
-    if (userId == null) {
-      print('HikePlanService: Cannot get plan stream, user not logged in.');
+    String? userId = getUserId();    if (userId == null) {
+      debugPrint('HikePlanService: Cannot get plan stream, user not logged in.');
       return Stream.value(null); // Return empty stream if no user
     }
-    print(
+    debugPrint(
         'HikePlanService: Subscribing to plan stream for $planId under user $userId');
     return _firestore
         .collection('users')
@@ -83,12 +81,11 @@ class HikePlanService {
         .collection('plans')
         .doc(planId)
         .snapshots()
-        .map((docSnapshot) {
-      if (docSnapshot.exists && docSnapshot.data() != null) {
-        print('HikePlanService: Plan $planId data received from stream.');
+        .map((docSnapshot) {      if (docSnapshot.exists && docSnapshot.data() != null) {
+        debugPrint('HikePlanService: Plan $planId data received from stream.');
         return HikePlan.fromFirestore(docSnapshot);
       } else {
-        print('HikePlanService: Plan $planId not found or no data.');
+        debugPrint('HikePlanService: Plan $planId not found or no data.');
         return null;
       }
     });
@@ -99,8 +96,7 @@ class HikePlanService {
     if (userId == null) {
       throw Exception(
           "HikePlanService: Ei kirjautunutta käyttäjää. Vaellussuunnitelmaa ei voida lisätä.");
-    }
-    print('HikePlanService: Adding plan ${plan.id} for user $userId');
+    }    debugPrint('HikePlanService: Adding plan ${plan.id} for user $userId');
     try {
       await _firestore
           .collection('users')
@@ -108,44 +104,41 @@ class HikePlanService {
           .collection('plans')
           .doc(plan.id)
           .set(plan.toFirestore());
-      print('HikePlanService: Plan ${plan.id} added successfully.');
+      debugPrint('HikePlanService: Plan ${plan.id} added successfully.');
     } catch (e) {
-      print('HikePlanService: Error adding plan ${plan.id}: $e');
+      debugPrint('HikePlanService: Error adding plan ${plan.id}: $e');
       rethrow;
     }
   }
-
   Future<HikePlan> updateHikePlan(HikePlan plan) async {
-    print('HikePlanService: Attempting to update plan ${plan.id}');
+    debugPrint('HikePlanService: Attempting to update plan ${plan.id}');
     String? userId = getUserId();
     if (userId == null) {
-      print('HikePlanService: Update failed - No logged in user.');
+      debugPrint('HikePlanService: Update failed - No logged in user.');
       throw Exception(
           "HikePlanService: Ei kirjautunutta käyttäjää. Vaellussuunnitelmaa ei voida päivittää.");
     }
 
-    print('HikePlanService: Updating plan ${plan.id} for user $userId');
+    debugPrint('HikePlanService: Updating plan ${plan.id} for user $userId');
     final planData = plan.toFirestore();
-    print(
+    debugPrint(
         'HikePlanService: Plan packingList data being sent: ${plan.packingList.map((item) => item.name).toList()}');
-    print('HikePlanService: Plan toFirestore() map: $planData');
+    debugPrint('HikePlanService: Plan toFirestore() map: $planData');
 
     try {
       final planRef = _firestore
           .collection('users')
           .doc(userId)
           .collection('plans')
-          .doc(plan.id);
-
-      await planRef.update(planData);
-      print('HikePlanService: Plan ${plan.id} updated successfully.');
+          .doc(plan.id);      await planRef.update(planData);
+      debugPrint('HikePlanService: Plan ${plan.id} updated successfully.');
 
       // Fetch the updated document from Firestore to ensure we have the latest data
       final updatedDoc = await planRef.get();
       // Return the updated HikePlan object
       return HikePlan.fromFirestore(updatedDoc);
     } catch (e) {
-      print('HikePlanService: Error updating plan ${plan.id}: $e');
+      debugPrint('HikePlanService: Error updating plan ${plan.id}: $e');
       rethrow;
     }
   }
@@ -155,8 +148,7 @@ class HikePlanService {
     if (userId == null) {
       throw Exception(
           "HikePlanService: Ei kirjautunutta käyttäjää. Vaellussuunnitelmaa ei voida poistaa.");
-    }
-    print('HikePlanService: Deleting plan $planId for user $userId');
+    }    debugPrint('HikePlanService: Deleting plan $planId for user $userId');
     try {
       await _firestore
           .collection('users')
@@ -164,9 +156,9 @@ class HikePlanService {
           .collection('plans')
           .doc(planId)
           .delete();
-      print('HikePlanService: Plan $planId deleted successfully.');
+      debugPrint('HikePlanService: Plan $planId deleted successfully.');
     } catch (e) {
-      print('HikePlanService: Error deleting plan $planId: $e');
+      debugPrint('HikePlanService: Error deleting plan $planId: $e');
       rethrow;
     }
   }

@@ -307,10 +307,12 @@ class _ElevationProfileChartState extends State<ElevationProfileChart> {
               reservedSize: 22,
               interval: spots.length / 5,
               getTitlesWidget: (value, meta) {
-                if (value == 0)
+                if (value == 0) {
                   return const Text('Start', style: TextStyle(fontSize: 10));
-                if (value >= spots.length - 1)
+                }
+                if (value >= spots.length - 1) {
                   return const Text('End', style: TextStyle(fontSize: 10));
+                }
 
                 // Calculate distance
                 final distance = _calculateDistanceAtIndex(value.toInt());

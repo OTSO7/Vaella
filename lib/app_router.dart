@@ -305,7 +305,7 @@ class AppRouter extends StatelessWidget {
                   body: Center(child: Text('Hike Plan data missing.')));
             }
             return PackingListPage(
-              planId: planId, 
+              planId: planId,
               initialPlan: hikePlan,
               userId: userId,
             );

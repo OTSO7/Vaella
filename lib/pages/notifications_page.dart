@@ -49,7 +49,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
       final type = data['type'] as String?;
       final status = data['status'] as String?;
       final read = data['read'] == true;
-      final actionableInvite = type == 'hike_invite' && (status == null || status == 'pending');
+      final actionableInvite =
+          type == 'hike_invite' && (status == null || status == 'pending');
       if (!read && !actionableInvite) {
         batch.update(d.reference, {'read': true});
         toUpdate++;
@@ -102,7 +103,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
                         }
                       },
                 icon: Icon(Icons.mark_email_read_outlined,
-                    size: 18, color: hasUnread ? cs.primary : cs.onSurfaceVariant),
+                    size: 18,
+                    color: hasUnread ? cs.primary : cs.onSurfaceVariant),
                 label: Text('Mark all',
                     style: GoogleFonts.lato(
                         color: hasUnread ? cs.primary : cs.onSurfaceVariant)),
@@ -160,8 +162,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
           return ListView.separated(
             padding: const EdgeInsets.symmetric(vertical: 8),
             itemCount: docs.length,
-            separatorBuilder: (_, __) => Divider(
-                height: 1, color: cs.outlineVariant.withOpacity(0.15)),
+            separatorBuilder: (_, __) =>
+                Divider(height: 1, color: cs.outlineVariant.withOpacity(0.15)),
             itemBuilder: (context, index) {
               final doc = docs[index];
               final data = doc.data();
@@ -250,8 +252,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
                     isUnread: isUnread,
                     leading: const Icon(Icons.notifications_rounded),
                     title: Text('Notification',
-                        style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w600)),
+                        style:
+                            GoogleFonts.poppins(fontWeight: FontWeight.w600)),
                     subtitle: Text(
                       timeString,
                       style: GoogleFonts.lato(),
@@ -389,6 +391,17 @@ class _HikeInviteTileState extends State<_HikeInviteTile> {
           .doc(planId)
           .set(planData, SetOptions(merge: true));
 
+      // CRITICAL: Also update the host's original plan with the new collaborator
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(fromUserId)
+          .collection('plans')
+          .doc(planId)
+          .update({
+        'collaboratorIds': collabs.map((e) => e.toString()).toList(),
+        'isCollaborative': true,
+      });
+
       // mark invite as accepted and read
       await widget.notifDoc.reference
           .update({'status': 'accepted', 'read': true});
@@ -476,7 +489,8 @@ class _HikeInviteTileState extends State<_HikeInviteTile> {
     final status = (data['status'] as String?) ?? 'pending';
 
     return Container(
-      color: widget.isUnread ? cs.surfaceContainerLowest.withOpacity(0.6) : null,
+      color:
+          widget.isUnread ? cs.surfaceContainerLowest.withOpacity(0.6) : null,
       child: ListTile(
         isThreeLine: true,
         leading: Stack(
@@ -524,17 +538,20 @@ class _HikeInviteTileState extends State<_HikeInviteTile> {
                     TextButton(
                       style: TextButton.styleFrom(
                         minimumSize: const Size(0, 36),
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 8),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
-                      onPressed: _working ? null : () => _declineInvite(context),
+                      onPressed:
+                          _working ? null : () => _declineInvite(context),
                       child: const Text('Decline'),
                     ),
                     const SizedBox(width: 8),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         minimumSize: const Size(0, 36),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                       onPressed: _working ? null : () => _acceptInvite(context),

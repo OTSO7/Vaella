@@ -1,4 +1,5 @@
 // lib/pages/enhanced_group_hike_hub_page.dart
+import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -39,8 +40,8 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
   late Animation<double> _pulseAnimation;
 
   List<String> _participantIds = [];
-  int _currentPageIndex = 0;
   bool _isInitialized = false;
+  StreamSubscription? _planStreamSubscription;
 
   @override
   void initState() {
@@ -74,9 +75,13 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
     _updateParticipantIds();
     _fadeController.forward();
 
+    // Listen to plan changes in real-time
+    _setupPlanListener();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         setState(() => _isInitialized = true);
+        _refreshPlanData(); // Refresh plan data when page loads
       }
     });
   }
@@ -86,6 +91,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
     _pageController.dispose();
     _fadeController.dispose();
     _pulseController.dispose();
+    _planStreamSubscription?.cancel();
     super.dispose();
   }
 
@@ -97,6 +103,19 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
       ..._plan.collaboratorIds,
       if (me != null && me.uid.isNotEmpty) me.uid,
     }.toList();
+  }
+
+  void _setupPlanListener() {
+    final service = HikePlanService();
+    _planStreamSubscription =
+        service.getHikePlanStream(_plan.id).listen((updatedPlan) {
+      if (updatedPlan != null && mounted) {
+        setState(() {
+          _plan = updatedPlan;
+          _updateParticipantIds();
+        });
+      }
+    });
   }
 
   Future<void> _refreshPlanData() async {
@@ -198,6 +217,16 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
             }
 
             try {
+              // Make plan collaborative when first invite is sent
+              if (!_plan.isCollaborative) {
+                final updatedPlan = _plan.copyWith(
+                  isCollaborative: true,
+                  collabOwnerId: me.uid,
+                );
+                await HikePlanService().updateHikePlan(updatedPlan);
+                setState(() => _plan = updatedPlan);
+              }
+
               await FirebaseFirestore.instance
                   .collection('users')
                   .doc(target.uid)
@@ -363,7 +392,6 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
 
   void _onPageChanged(int index) {
     HapticFeedback.selectionClick();
-    setState(() => _currentPageIndex = index);
   }
 
   @override
@@ -547,7 +575,6 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
   }
 
   Widget _buildMainOverviewPage(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final hasRoute = _plan.dailyRoutes.any((r) => r.points.isNotEmpty);
     final hasLocation = _plan.latitude != null && _plan.longitude != null;
     final dayCount = _plan.endDate != null
@@ -934,48 +961,73 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
             ),
             const Spacer(),
             if (canInviteMore) ...[
-              Material(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
-                child: InkWell(
+              Builder(builder: (context) {
+                final currentUserId =
+                    context.read<AuthProvider>().userProfile?.uid;
+                final isHost = currentUserId == _plan.collabOwnerId;
+
+                return Material(
+                  color: Colors.transparent,
                   borderRadius: BorderRadius.circular(12),
-                  onTap: () {
-                    HapticFeedback.lightImpact();
-                    _openInviteSheet();
-                  },
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryColor(context).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: AppColors.primaryColor(context).withOpacity(0.3),
-                        width: 0.5,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: isHost
+                        ? () {
+                            HapticFeedback.lightImpact();
+                            _openInviteSheet();
+                          }
+                        : () {
+                            HapticFeedback.lightImpact();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: const Text(
+                                    'Only the host can invite new members'),
+                                backgroundColor: Colors.orange.shade700,
+                              ),
+                            );
+                          },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isHost
+                            ? AppColors.primaryColor(context).withOpacity(0.1)
+                            : Colors.grey.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isHost
+                              ? AppColors.primaryColor(context).withOpacity(0.3)
+                              : Colors.grey.withOpacity(0.3),
+                          width: 0.5,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.person_add_alt_1_rounded,
+                            size: 14,
+                            color: isHost
+                                ? AppColors.primaryColor(context)
+                                : Colors.grey,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            isHost ? 'Add' : 'Host only',
+                            style: GoogleFonts.lato(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isHost
+                                  ? AppColors.primaryColor(context)
+                                  : Colors.grey,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.person_add_alt_1_rounded,
-                          size: 14,
-                          color: AppColors.primaryColor(context),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Add',
-                          style: GoogleFonts.lato(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.primaryColor(context),
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
-                ),
-              ),
+                );
+              }),
               const SizedBox(width: 8),
             ],
             Container(
@@ -1073,37 +1125,64 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                       curve: Curves.easeInOutCubic,
                     );
                   },
-                  child: Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: const Color(0xFF2C2C2C),
-                        width: 3,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
+                  child: Stack(
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: user['uid'] == _plan.collabOwnerId
+                                ? Colors.amber.shade600
+                                : const Color(0xFF2C2C2C),
+                            width: 3,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    child: CircleAvatar(
-                      radius: 26,
-                      backgroundImage: user['photo'] != null
-                          ? NetworkImage(user['photo'])
-                          : null,
-                      backgroundColor: AppColors.cardColor(context),
-                      child: user['photo'] == null
-                          ? Icon(
-                              Icons.person_rounded,
-                              color: AppColors.primaryColor(context),
-                              size: 24,
-                            )
-                          : null,
-                    ),
+                        child: CircleAvatar(
+                          radius: 26,
+                          backgroundImage: user['photo'] != null
+                              ? NetworkImage(user['photo'])
+                              : null,
+                          backgroundColor: AppColors.cardColor(context),
+                          child: user['photo'] == null
+                              ? Icon(
+                                  Icons.person_rounded,
+                                  color: AppColors.primaryColor(context),
+                                  size: 24,
+                                )
+                              : null,
+                        ),
+                      ),
+                      // Host crown icon
+                      if (user['uid'] == _plan.collabOwnerId)
+                        Positioned(
+                          right: 0,
+                          top: 0,
+                          child: Container(
+                            width: 20,
+                            height: 20,
+                            decoration: BoxDecoration(
+                              color: Colors.amber.shade600,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                  color: const Color(0xFF1A1A1A), width: 2),
+                            ),
+                            child: const Icon(
+                              Icons.star_rounded,
+                              color: Colors.white,
+                              size: 10,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               );
@@ -1322,10 +1401,47 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                     child: CustomScrollView(
                       physics: const ClampingScrollPhysics(),
                       slivers: [
+                        // Viewing indicator for friend's profile
+                        if (!isCurrentUser)
+                          SliverToBoxAdapter(
+                            child: Container(
+                              margin: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: Colors.blue.withOpacity(0.3),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.visibility_rounded,
+                                    color: Colors.blue,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Viewing ${userProfile?.displayName ?? "teammate"}\'s hiking preparations',
+                                      style: GoogleFonts.lato(
+                                        color: Colors.blue,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+
                         // Floating header with glassmorphism
                         SliverToBoxAdapter(
-                          child:
-                              _buildFloatingHeader(userProfile, isCurrentUser),
+                          child: _buildFloatingHeader(
+                              userProfile, isCurrentUser, participantId),
                         ),
 
                         // Main content with cards
@@ -1339,19 +1455,20 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                               _buildOverviewStatsCard(planData, foodPlans),
                               const SizedBox(height: 16),
 
-                              // Packing progress card
-                              _buildPackingProgressCard(
-                                  planData, participantId, isCurrentUser),
+                              // Enhanced packing progress card with detailed view
+                              _buildEnhancedPackingCard(planData, participantId,
+                                  isCurrentUser, userProfile),
                               const SizedBox(height: 16),
 
-                              // Food planning card
-                              _buildFoodPlanningCard(
-                                  foodPlans, participantId, isCurrentUser),
+                              // Enhanced food planning card with meal details
+                              _buildEnhancedFoodCard(foodPlans, participantId,
+                                  isCurrentUser, userProfile),
                               const SizedBox(height: 16),
 
-                              // Quick actions
-                              _buildQuickActionsCard(
-                                  participantId, isCurrentUser, planData),
+                              // Quick actions (only for current user)
+                              if (isCurrentUser)
+                                _buildQuickActionsCard(
+                                    participantId, isCurrentUser, planData),
                             ]),
                           ),
                         ),
@@ -1385,8 +1502,8 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
     );
   }
 
-  Widget _buildFloatingHeader(
-      user_model.UserProfile? userProfile, bool isCurrentUser) {
+  Widget _buildFloatingHeader(user_model.UserProfile? userProfile,
+      bool isCurrentUser, String participantId) {
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 20, 20, 0),
       child: ClipRRect(
@@ -1469,7 +1586,29 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                         );
                       },
                     ),
-                    if (isCurrentUser)
+                    // Host crown (takes priority over "you" indicator)
+                    if (participantId == _plan.collabOwnerId)
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade600,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                                color: const Color(0xFF1A1A1A), width: 2),
+                          ),
+                          child: const Icon(
+                            Icons.star_rounded,
+                            color: Colors.white,
+                            size: 12,
+                          ),
+                        ),
+                      )
+                    // "You" indicator for current user (but not if they're host)
+                    else if (isCurrentUser)
                       Positioned(
                         bottom: 0,
                         right: 0,
@@ -1483,7 +1622,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                                 color: const Color(0xFF1A1A1A), width: 2),
                           ),
                           child: const Icon(
-                            Icons.star_rounded,
+                            Icons.person_rounded,
                             color: Colors.white,
                             size: 12,
                           ),
@@ -1493,15 +1632,52 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                 ),
                 const SizedBox(height: 16),
 
-                // Name and username
-                Text(
-                  userProfile?.displayName ?? 'Adventurer',
-                  style: GoogleFonts.poppins(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 20,
-                    color: Colors.white,
-                    letterSpacing: -0.3,
-                  ),
+                // Name and username with host badge
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      userProfile?.displayName ?? 'Adventurer',
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 20,
+                        color: Colors.white,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    // Host badge
+                    if (participantId == _plan.collabOwnerId) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade600,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.star,
+                              size: 12,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'HOST',
+                              style: GoogleFonts.poppins(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 if (userProfile?.username != null) ...[
                   const SizedBox(height: 4),
@@ -1674,18 +1850,29 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
     );
   }
 
-  Widget _buildPackingProgressCard(Map<String, dynamic>? planData,
-      String participantId, bool isCurrentUser) {
+  Widget _buildEnhancedPackingCard(
+      Map<String, dynamic>? planData,
+      String participantId,
+      bool isCurrentUser,
+      user_model.UserProfile? userProfile) {
     final packingList = (planData?['packingList'] as List<dynamic>? ?? []);
     final packedItems =
         packingList.where((item) => item['isPacked'] == true).toList();
     final unpackedItems =
         packingList.where((item) => item['isPacked'] != true).toList();
 
+    // Group items by category for better organization
+    final categorizedItems = <String, List<dynamic>>{};
+    for (var item in packingList) {
+      final category = item['category'] ?? 'General';
+      categorizedItems.putIfAbsent(category, () => []).add(item);
+    }
+
     return _buildGlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header with user context
           Row(
             children: [
               Container(
@@ -1694,8 +1881,10 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                   color: Colors.blue.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(
-                  Icons.backpack_outlined,
+                child: Icon(
+                  isCurrentUser
+                      ? Icons.backpack_outlined
+                      : Icons.visibility_outlined,
                   color: Colors.blue,
                   size: 20,
                 ),
@@ -1706,7 +1895,9 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isCurrentUser ? 'My Gear' : 'Gear Status',
+                      isCurrentUser
+                          ? 'My Gear'
+                          : '${userProfile?.displayName ?? "Teammate"}\'s Gear',
                       style: GoogleFonts.poppins(
                         fontWeight: FontWeight.w700,
                         fontSize: 18,
@@ -1714,7 +1905,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                       ),
                     ),
                     Text(
-                      '${packedItems.length} of ${packingList.length} items packed',
+                      '${packedItems.length} of ${packingList.length} items ${isCurrentUser ? "packed" : "ready"}',
                       style: GoogleFonts.lato(
                         fontSize: 13,
                         color: Colors.white.withOpacity(0.6),
@@ -1723,6 +1914,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                   ],
                 ),
               ),
+              // Action button
               Material(
                 color: Colors.transparent,
                 borderRadius: BorderRadius.circular(12),
@@ -1730,26 +1922,54 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                   borderRadius: BorderRadius.circular(12),
                   onTap: () => _openUserPackingList(participantId),
                   child: Container(
-                    padding: const EdgeInsets.all(8),
-                    child: Icon(
-                      Icons.arrow_forward_ios_rounded,
-                      color: Colors.white.withOpacity(0.6),
-                      size: 16,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isCurrentUser
+                          ? Colors.blue.withOpacity(0.2)
+                          : Colors.white.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.blue.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          isCurrentUser
+                              ? Icons.edit_outlined
+                              : Icons.list_alt_rounded,
+                          color: Colors.blue,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          isCurrentUser ? 'Edit' : 'View',
+                          style: GoogleFonts.lato(
+                            color: Colors.blue,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
             ],
           ),
+
           if (packingList.isNotEmpty) ...[
             const SizedBox(height: 20),
 
             // Progress bar
             Container(
-              height: 8,
+              height: 6,
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(3),
               ),
               child: FractionallySizedBox(
                 alignment: Alignment.centerLeft,
@@ -1760,17 +1980,82 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                     gradient: LinearGradient(
                       colors: [Colors.blue, Colors.blue.shade300],
                     ),
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: BorderRadius.circular(3),
                   ),
                 ),
               ),
             ),
             const SizedBox(height: 16),
 
-            // Recent packed items
+            // Categorized gear overview
+            if (categorizedItems.isNotEmpty) ...[
+              Text(
+                'Gear Categories',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  color: Colors.white.withOpacity(0.8),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: categorizedItems.entries.map((entry) {
+                  final category = entry.key;
+                  final items = entry.value;
+                  final packedInCategory =
+                      items.where((item) => item['isPacked'] == true).length;
+                  final isComplete = packedInCategory == items.length;
+
+                  return Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isComplete
+                          ? Colors.green.withOpacity(0.2)
+                          : Colors.white.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isComplete
+                            ? Colors.green.withOpacity(0.4)
+                            : Colors.white.withOpacity(0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          isComplete
+                              ? Icons.check_circle_rounded
+                              : Icons.radio_button_unchecked,
+                          size: 14,
+                          color: isComplete
+                              ? Colors.green
+                              : Colors.white.withOpacity(0.5),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '$category ($packedInCategory/${items.length})',
+                          style: GoogleFonts.lato(
+                            fontSize: 11,
+                            color: Colors.white.withOpacity(0.8),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // Recent items with better visibility
             if (packedItems.isNotEmpty) ...[
               Text(
-                'Recently Packed',
+                isCurrentUser ? 'Recently Packed' : 'Ready Items',
                 style: GoogleFonts.poppins(
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
@@ -1779,15 +2064,14 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
               ),
               const SizedBox(height: 8),
               ...packedItems
-                  .take(3)
-                  .map((item) => _buildPackingItem(item, true)),
+                  .take(4)
+                  .map((item) => _buildDetailedPackingItem(item, true)),
             ],
 
-            // Pending items
             if (unpackedItems.isNotEmpty) ...[
               const SizedBox(height: 12),
               Text(
-                'Still Needed',
+                isCurrentUser ? 'Still to Pack' : 'Pending Items',
                 style: GoogleFonts.poppins(
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
@@ -1797,17 +2081,19 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
               const SizedBox(height: 8),
               ...unpackedItems
                   .take(3)
-                  .map((item) => _buildPackingItem(item, false)),
+                  .map((item) => _buildDetailedPackingItem(item, false)),
             ],
 
-            if (packingList.length > 6) ...[
+            if (packingList.length > 7) ...[
               const SizedBox(height: 12),
-              Text(
-                '+${packingList.length - 6} more items',
-                style: GoogleFonts.lato(
-                  fontSize: 12,
-                  color: Colors.white.withOpacity(0.5),
-                  fontStyle: FontStyle.italic,
+              Center(
+                child: Text(
+                  '+${packingList.length - 7} more items - tap to view all',
+                  style: GoogleFonts.lato(
+                    fontSize: 12,
+                    color: Colors.blue.withOpacity(0.8),
+                    fontStyle: FontStyle.italic,
+                  ),
                 ),
               ),
             ],
@@ -1823,7 +2109,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'No packing list yet',
+                    isCurrentUser ? 'No packing list yet' : 'No gear added yet',
                     style: GoogleFonts.lato(
                       fontSize: 14,
                       color: Colors.white.withOpacity(0.5),
@@ -1838,20 +2124,20 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
     );
   }
 
-  Widget _buildPackingItem(Map<String, dynamic> item, bool isPacked) {
+  Widget _buildDetailedPackingItem(Map<String, dynamic> item, bool isPacked) {
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: isPacked
-            ? Colors.green.withOpacity(0.1)
-            : Colors.white.withOpacity(0.05),
+            ? Colors.green.withOpacity(0.15)
+            : Colors.white.withOpacity(0.08),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color: isPacked
               ? Colors.green.withOpacity(0.3)
               : Colors.white.withOpacity(0.1),
-          width: 0.5,
+          width: 1,
         ),
       ),
       child: Row(
@@ -1863,15 +2149,29 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
             size: 16,
             color: isPacked ? Colors.green : Colors.white.withOpacity(0.4),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              item['name'] ?? 'Item',
-              style: GoogleFonts.lato(
-                fontSize: 13,
-                color: Colors.white.withOpacity(isPacked ? 0.9 : 0.7),
-                decoration: isPacked ? TextDecoration.lineThrough : null,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item['name'] ?? 'Item',
+                  style: GoogleFonts.lato(
+                    fontSize: 13,
+                    color: Colors.white.withOpacity(isPacked ? 0.9 : 0.7),
+                    fontWeight: FontWeight.w500,
+                    decoration: isPacked ? TextDecoration.lineThrough : null,
+                  ),
+                ),
+                if ((item['quantity'] ?? 1) > 1)
+                  Text(
+                    'Quantity: ${item['quantity']}',
+                    style: GoogleFonts.lato(
+                      fontSize: 11,
+                      color: Colors.white.withOpacity(0.5),
+                    ),
+                  ),
+              ],
             ),
           ),
           if (item['category'] != null)
@@ -1884,7 +2184,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
               child: Text(
                 item['category'],
                 style: GoogleFonts.lato(
-                  fontSize: 10,
+                  fontSize: 9,
                   color: Colors.white.withOpacity(0.6),
                   fontWeight: FontWeight.w500,
                 ),
@@ -1895,16 +2195,27 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
     );
   }
 
-  Widget _buildFoodPlanningCard(List<Map<String, dynamic>> foodPlans,
-      String participantId, bool isCurrentUser) {
+  Widget _buildEnhancedFoodCard(
+      List<Map<String, dynamic>> foodPlans,
+      String participantId,
+      bool isCurrentUser,
+      user_model.UserProfile? userProfile) {
     final plannedMeals = foodPlans
         .where((plan) => (plan['items'] as List<dynamic>? ?? []).isNotEmpty)
         .length;
+
+    // Group meals by day for better organization
+    final mealsByDay = <int, List<Map<String, dynamic>>>{};
+    for (var plan in foodPlans) {
+      final dayIndex = plan['dayIndex'] ?? 0;
+      mealsByDay.putIfAbsent(dayIndex, () => []).add(plan);
+    }
 
     return _buildGlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header with user context
           Row(
             children: [
               Container(
@@ -1913,8 +2224,10 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                   color: Colors.orange.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(
-                  Icons.restaurant_outlined,
+                child: Icon(
+                  isCurrentUser
+                      ? Icons.restaurant_outlined
+                      : Icons.visibility_outlined,
                   color: Colors.orange,
                   size: 20,
                 ),
@@ -1925,7 +2238,9 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isCurrentUser ? 'My Food Plan' : 'Food Planning',
+                      isCurrentUser
+                          ? 'My Food Plan'
+                          : '${userProfile?.displayName ?? "Teammate"}\'s Meals',
                       style: GoogleFonts.poppins(
                         fontWeight: FontWeight.w700,
                         fontSize: 18,
@@ -1942,37 +2257,72 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                   ],
                 ),
               ),
+              // Action button
               Material(
                 color: Colors.transparent,
                 borderRadius: BorderRadius.circular(12),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(12),
-                  onTap: () {
-                    // Navigate to food planner
-                    GoRouter.of(context).pushNamed('foodPlannerPage',
-                        pathParameters: {'planId': _plan.id}, extra: _plan);
-                  },
+                  onTap: isCurrentUser
+                      ? () {
+                          // Open food planner for editing
+                          GoRouter.of(context).pushNamed('foodPlannerPage',
+                              pathParameters: {'planId': _plan.id},
+                              extra: _plan);
+                        }
+                      : () {
+                          // Show read-only food plan preview
+                          _showFoodPlanPreview(context, userProfile, foodPlans);
+                        },
                   child: Container(
-                    padding: const EdgeInsets.all(8),
-                    child: Icon(
-                      Icons.arrow_forward_ios_rounded,
-                      color: Colors.white.withOpacity(0.6),
-                      size: 16,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isCurrentUser
+                          ? Colors.orange.withOpacity(0.2)
+                          : Colors.white.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.orange.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          isCurrentUser
+                              ? Icons.edit_outlined
+                              : Icons.restaurant_menu_rounded,
+                          color: Colors.orange,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          isCurrentUser ? 'Edit' : 'Preview',
+                          style: GoogleFonts.lato(
+                            color: Colors.orange,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
             ],
           ),
+
           if (foodPlans.isNotEmpty) ...[
             const SizedBox(height: 20),
 
             // Progress bar
             Container(
-              height: 8,
+              height: 6,
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(3),
               ),
               child: FractionallySizedBox(
                 alignment: Alignment.centerLeft,
@@ -1982,26 +2332,84 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                     gradient: LinearGradient(
                       colors: [Colors.orange, Colors.orange.shade300],
                     ),
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: BorderRadius.circular(3),
                   ),
                 ),
               ),
             ),
             const SizedBox(height: 16),
 
-            // Meal breakdown
-            ...foodPlans.take(4).map((plan) => _buildMealItem(plan)),
-
-            if (foodPlans.length > 4) ...[
-              const SizedBox(height: 8),
+            // Daily meal breakdown
+            if (mealsByDay.isNotEmpty) ...[
               Text(
-                '+${foodPlans.length - 4} more meals',
-                style: GoogleFonts.lato(
-                  fontSize: 12,
-                  color: Colors.white.withOpacity(0.5),
-                  fontStyle: FontStyle.italic,
+                'Meal Schedule',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  color: Colors.white.withOpacity(0.8),
                 ),
               ),
+              const SizedBox(height: 12),
+              ...mealsByDay.entries.map((entry) {
+                final dayIndex = entry.key;
+                final dayMeals = entry.value;
+                final plannedDayMeals = dayMeals
+                    .where((meal) =>
+                        (meal['items'] as List<dynamic>? ?? []).isNotEmpty)
+                    .length;
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.1),
+                      width: 1,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.calendar_today_rounded,
+                            size: 14,
+                            color: Colors.white.withOpacity(0.7),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Day ${dayIndex + 1}',
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                              color: Colors.white.withOpacity(0.9),
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            '$plannedDayMeals/${dayMeals.length} meals',
+                            style: GoogleFonts.lato(
+                              fontSize: 11,
+                              color: Colors.white.withOpacity(0.6),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: dayMeals
+                            .map((meal) => _buildMealChip(meal))
+                            .toList(),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
             ],
           ] else ...[
             const SizedBox(height: 20),
@@ -2015,7 +2423,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'No meals planned yet',
+                    isCurrentUser ? 'No meals planned yet' : 'No meal plan set',
                     style: GoogleFonts.lato(
                       fontSize: 14,
                       color: Colors.white.withOpacity(0.5),
@@ -2030,10 +2438,9 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
     );
   }
 
-  Widget _buildMealItem(Map<String, dynamic> plan) {
-    final items = plan['items'] as List<dynamic>? ?? [];
-    final mealType = plan['mealType'] ?? 'Meal';
-    final dayIndex = plan['dayIndex'] ?? 0;
+  Widget _buildMealChip(Map<String, dynamic> meal) {
+    final mealType = meal['mealType'] ?? 'Meal';
+    final items = meal['items'] as List<dynamic>? ?? [];
     final isPlanned = items.isNotEmpty;
 
     IconData mealIcon;
@@ -2052,7 +2459,11 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
         mealIcon = Icons.dinner_dining_outlined;
         mealColor = Colors.deepOrange;
         break;
-      case 'snack':
+      case 'evening meal':
+        mealIcon = Icons.nightlight_round;
+        mealColor = Colors.indigo;
+        break;
+      case 'snacks':
         mealIcon = Icons.cookie_outlined;
         mealColor = Colors.purple;
         break;
@@ -2062,238 +2473,243 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
     }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: isPlanned
-            ? mealColor.withOpacity(0.1)
-            : Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(12),
+            ? mealColor.withOpacity(0.2)
+            : Colors.white.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: isPlanned
-              ? mealColor.withOpacity(0.3)
-              : Colors.white.withOpacity(0.1),
-          width: 0.5,
+              ? mealColor.withOpacity(0.4)
+              : Colors.white.withOpacity(0.2),
+          width: 1,
         ),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: mealColor.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(8),
+          Icon(
+            mealIcon,
+            size: 12,
+            color: isPlanned ? mealColor : Colors.white.withOpacity(0.4),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            mealType,
+            style: GoogleFonts.lato(
+              fontSize: 10,
+              color: isPlanned ? mealColor : Colors.white.withOpacity(0.6),
+              fontWeight: FontWeight.w500,
             ),
-            child: Icon(
-              mealIcon,
-              size: 16,
+          ),
+          if (isPlanned) ...[
+            const SizedBox(width: 2),
+            Icon(
+              Icons.check_circle_rounded,
+              size: 10,
               color: mealColor,
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Day ${dayIndex + 1} - $mealType',
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white.withOpacity(0.9),
-                  ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _showFoodPlanPreview(
+      BuildContext context,
+      user_model.UserProfile? userProfile,
+      List<Map<String, dynamic>> foodPlans) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.8,
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.orange.withOpacity(0.2), Colors.transparent],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
                 ),
-                if (isPlanned) ...[
-                  Text(
-                    '${items.length} items planned',
-                    style: GoogleFonts.lato(
-                      fontSize: 11,
-                      color: Colors.white.withOpacity(0.6),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.restaurant_menu_rounded,
+                        color: Colors.orange),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${userProfile?.displayName ?? "Teammate"}\'s Food Plan',
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 18,
+                          ),
+                        ),
+                        Text(
+                          'Read-only preview of planned meals',
+                          style: GoogleFonts.lato(
+                            color: Colors.orange,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ] else ...[
-                  Text(
-                    'Not planned yet',
-                    style: GoogleFonts.lato(
-                      fontSize: 11,
-                      color: Colors.white.withOpacity(0.4),
-                      fontStyle: FontStyle.italic,
-                    ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded),
                   ),
                 ],
-              ],
-            ),
-          ),
-          Icon(
-            isPlanned
-                ? Icons.check_circle_rounded
-                : Icons.radio_button_unchecked_rounded,
-            size: 16,
-            color: isPlanned ? mealColor : Colors.white.withOpacity(0.3),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPreparationCard(Map<String, dynamic>? planData,
-      String participantId, bool isCurrentUser) {
-    final preparationItems =
-        planData?['preparationItems'] as Map<String, dynamic>? ?? {};
-    final completedItems =
-        preparationItems.entries.where((e) => e.value == true).toList();
-    final pendingItems =
-        preparationItems.entries.where((e) => e.value != true).toList();
-
-    final prepTasks = [
-      {
-        'key': 'weatherChecked',
-        'title': 'Weather Forecast',
-        'icon': Icons.cloud_outlined
-      },
-      {
-        'key': 'routePlanned',
-        'title': 'Route Planning',
-        'icon': Icons.map_outlined
-      },
-      {
-        'key': 'gearChecked',
-        'title': 'Gear Check',
-        'icon': Icons.backpack_outlined
-      },
-      {
-        'key': 'emergencyPlan',
-        'title': 'Emergency Plan',
-        'icon': Icons.emergency_outlined
-      },
-    ];
-
-    return _buildGlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.checklist_outlined,
-                  color: Colors.green,
-                  size: 20,
-                ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Preparation',
-                      style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 18,
-                        color: Colors.white,
+            ),
+            // Food plan content
+            Expanded(
+              child: foodPlans.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.restaurant_outlined,
+                            size: 64,
+                            color: Colors.grey.withOpacity(0.5),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No meals planned yet',
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
                       ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(20),
+                      itemCount: foodPlans.length,
+                      itemBuilder: (context, index) {
+                        final meal = foodPlans[index];
+                        final items = meal['items'] as List<dynamic>? ?? [];
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surface,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Theme.of(context)
+                                  .dividerColor
+                                  .withOpacity(0.2),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  _buildMealChip(meal),
+                                  const Spacer(),
+                                  Text(
+                                    'Day ${(meal['dayIndex'] ?? 0) + 1}',
+                                    style: GoogleFonts.lato(
+                                      fontSize: 12,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (items.isNotEmpty) ...[
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Planned Items:',
+                                  style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                ...items.take(5).map((item) => Padding(
+                                      padding: const EdgeInsets.only(
+                                          left: 16, bottom: 4),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.circle,
+                                              size: 6, color: Colors.orange),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              item['name'] ?? 'Food item',
+                                              style: GoogleFonts.lato(
+                                                  fontSize: 13),
+                                            ),
+                                          ),
+                                          if (item['calories'] != null)
+                                            Text(
+                                              '${item['calories'].round()} kcal',
+                                              style: GoogleFonts.lato(
+                                                fontSize: 11,
+                                                color: Colors.grey,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    )),
+                                if (items.length > 5)
+                                  Padding(
+                                    padding:
+                                        const EdgeInsets.only(left: 16, top: 4),
+                                    child: Text(
+                                      '+${items.length - 5} more items',
+                                      style: GoogleFonts.lato(
+                                        fontSize: 11,
+                                        color: Colors.grey,
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                                  ),
+                              ] else
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Text(
+                                    'No items planned for this meal',
+                                    style: GoogleFonts.lato(
+                                      fontSize: 13,
+                                      color: Colors.grey,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
-                    Text(
-                      '${completedItems.length} of ${prepTasks.length} tasks completed',
-                      style: GoogleFonts.lato(
-                        fontSize: 13,
-                        color: Colors.white.withOpacity(0.6),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-
-          // Progress bar
-          Container(
-            height: 8,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(4),
             ),
-            child: FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor:
-                  (completedItems.length / prepTasks.length).clamp(0.0, 1.0),
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.green, Colors.green.shade300],
-                  ),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Preparation tasks
-          ...prepTasks.map((task) {
-            final isCompleted = preparationItems[task['key']] == true;
-            return _buildPreparationItem(
-              task['title'] as String,
-              task['icon'] as IconData,
-              isCompleted,
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPreparationItem(String title, IconData icon, bool isCompleted) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: isCompleted
-            ? Colors.green.withOpacity(0.1)
-            : Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: isCompleted
-              ? Colors.green.withOpacity(0.3)
-              : Colors.white.withOpacity(0.1),
-          width: 0.5,
+          ],
         ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            isCompleted
-                ? Icons.check_circle_rounded
-                : Icons.radio_button_unchecked_rounded,
-            size: 20,
-            color: isCompleted ? Colors.green : Colors.white.withOpacity(0.4),
-          ),
-          const SizedBox(width: 12),
-          Icon(
-            icon,
-            size: 16,
-            color: Colors.white.withOpacity(isCompleted ? 0.8 : 0.5),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              title,
-              style: GoogleFonts.lato(
-                fontSize: 14,
-                color: Colors.white.withOpacity(isCompleted ? 0.9 : 0.7),
-                decoration: isCompleted ? TextDecoration.lineThrough : null,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -2414,25 +2830,4 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
       ),
     );
   }
-}
-
-// Custom painter for subtle pattern
-class _SubtlePatternPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white.withOpacity(0.02)
-      ..strokeWidth = 0.5
-      ..style = PaintingStyle.stroke;
-
-    const spacing = 30.0;
-    for (double i = 0; i < size.width; i += spacing) {
-      for (double j = 0; j < size.height; j += spacing) {
-        canvas.drawCircle(Offset(i, j), 2, paint);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

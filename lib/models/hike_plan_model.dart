@@ -20,7 +20,6 @@ extension HikeDifficultyExtension on HikeDifficulty {
       case HikeDifficulty.expert:
         return 'Expert';
       case HikeDifficulty.unknown:
-      default:
         return 'Not set';
     }
   }
@@ -36,8 +35,7 @@ extension HikeDifficultyExtension on HikeDifficulty {
       case HikeDifficulty.expert:
         return Colors.red.shade400;
       case HikeDifficulty.unknown:
-      default:
-        return Colors.white.withOpacity(0.6);
+        return Colors.white.withValues(alpha: 0.6);
     }
   }
 }

@@ -150,8 +150,16 @@ class DayPlan {
 class FoodPlannerPage extends StatefulWidget {
   final String planId;
   final HikePlan? initialPlan;
+  final String? viewingUserId; // For viewing teammate's food plan
+  final bool isPreviewMode; // Read-only preview mode
 
-  const FoodPlannerPage({super.key, required this.planId, this.initialPlan});
+  const FoodPlannerPage({
+    super.key,
+    required this.planId,
+    this.initialPlan,
+    this.viewingUserId,
+    this.isPreviewMode = false,
+  });
 
   @override
   State<FoodPlannerPage> createState() => _FoodPlannerPageState();
@@ -342,7 +350,7 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
                 ),
               ),
               const SizedBox(height: 20),
-              
+
               // Title
               Text(
                 'Save your changes?',
@@ -353,7 +361,7 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
                 ),
               ),
               const SizedBox(height: 12),
-              
+
               // Message
               Text(
                 'You have unsaved changes to your food plan.',
@@ -364,7 +372,7 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
                 ),
               ),
               const SizedBox(height: 24),
-              
+
               // Buttons
               Column(
                 children: [
@@ -386,13 +394,14 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  
+
                   // Secondary action - Leave without saving
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       onPressed: () => Navigator.of(context).pop('discard'),
-                      icon: Icon(Icons.exit_to_app_rounded, 
+                      icon: Icon(
+                        Icons.exit_to_app_rounded,
                         size: 20,
                         color: Colors.red.shade700,
                       ),
@@ -410,22 +419,22 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  
+
                   // Tertiary action - Stay
                   SizedBox(
                     width: double.infinity,
                     child: TextButton(
                       onPressed: () => Navigator.of(context).pop('cancel'),
-                      child: Text(
-                        'Continue editing',
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                        ),
-                      ),
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        'Continue editing',
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
                         ),
                       ),
                     ),
@@ -462,25 +471,80 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
       canPop: false,
       onPopInvoked: (didPop) async {
         if (didPop) return;
+        if (widget.isPreviewMode) {
+          Navigator.of(context).pop();
+          return;
+        }
         await _handleBackPressed();
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(
-            'Food Planner',
-            style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+          title: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                widget.isPreviewMode ? 'Food Plan Preview' : 'Food Planner',
+                style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w700, fontSize: 16),
+              ),
+              if (widget.isPreviewMode)
+                Text(
+                  'Viewing teammate\'s meal plan',
+                  style: GoogleFonts.lato(
+                    fontSize: 12,
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+            ],
           ),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
-            onPressed: _handleBackPressed,
+            onPressed: widget.isPreviewMode
+                ? () => Navigator.of(context).pop()
+                : _handleBackPressed,
           ),
-          actions: [
-            IconButton(
-              tooltip: 'Save changes',
-              onPressed: () => _savePlan(),
-              icon: const Icon(Icons.check_circle_outline_rounded),
-            )
-          ],
+          actions: widget.isPreviewMode
+              ? [
+                  Container(
+                    margin: const EdgeInsets.all(8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: theme.colorScheme.primary.withOpacity(0.3),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.visibility_rounded,
+                          size: 16,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Read Only',
+                          style: GoogleFonts.lato(
+                            fontSize: 12,
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ]
+              : [
+                  IconButton(
+                    tooltip: 'Save changes',
+                    onPressed: () => _savePlan(),
+                    icon: const Icon(Icons.check_circle_outline_rounded),
+                  )
+                ],
         ),
         body: Column(
           children: [
@@ -613,7 +677,9 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
             const SizedBox(height: 6),
             if (section.items.isEmpty)
               InkWell(
-                onTap: () => _showAddFoodAction(section),
+                onTap: widget.isPreviewMode
+                    ? null
+                    : () => _showAddFoodAction(section),
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
                   width: double.infinity,
@@ -644,12 +710,19 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
                     .map((item) => _FoodItemExpansionTile(
                           key: ValueKey(item.id),
                           item: item,
-                          onEditPortion: () => _editPortion(section, item),
-                          onEditMacros: () => _editFoodItem(section, item),
-                          onDelete: () {
-                            setState(() => section.items.remove(item));
-                            _markAsDirty();
-                          },
+                          isPreviewMode: widget.isPreviewMode,
+                          onEditPortion: widget.isPreviewMode
+                              ? null
+                              : () => _editPortion(section, item),
+                          onEditMacros: widget.isPreviewMode
+                              ? null
+                              : () => _editFoodItem(section, item),
+                          onDelete: widget.isPreviewMode
+                              ? null
+                              : () {
+                                  setState(() => section.items.remove(item));
+                                  _markAsDirty();
+                                },
                         ))
                     .toList(),
               ),
@@ -666,16 +739,17 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                FilledButton.icon(
-                  onPressed: () => _showAddFoodAction(section),
-                  icon: const Icon(Icons.add_rounded, size: 20),
-                  label: const Text('Add'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    backgroundColor: theme.colorScheme.primary,
-                    foregroundColor: theme.colorScheme.onPrimary,
-                  ),
-                )
+                if (!widget.isPreviewMode)
+                  FilledButton.icon(
+                    onPressed: () => _showAddFoodAction(section),
+                    icon: const Icon(Icons.add_rounded, size: 20),
+                    label: const Text('Add'),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      backgroundColor: theme.colorScheme.primary,
+                      foregroundColor: theme.colorScheme.onPrimary,
+                    ),
+                  )
               ],
             )
           ],
@@ -1185,16 +1259,18 @@ class _FoodPlannerPageState extends State<FoodPlannerPage> {
 
 class _FoodItemExpansionTile extends StatefulWidget {
   final FoodItem item;
-  final VoidCallback onEditPortion;
-  final VoidCallback onEditMacros;
-  final VoidCallback onDelete;
+  final VoidCallback? onEditPortion;
+  final VoidCallback? onEditMacros;
+  final VoidCallback? onDelete;
+  final bool isPreviewMode;
 
   const _FoodItemExpansionTile({
     super.key,
     required this.item,
-    required this.onEditPortion,
-    required this.onEditMacros,
-    required this.onDelete,
+    this.onEditPortion,
+    this.onEditMacros,
+    this.onDelete,
+    this.isPreviewMode = false,
   });
 
   @override
@@ -1322,28 +1398,56 @@ class _FoodItemExpansionTileState extends State<_FoodItemExpansionTile>
           ),
           const SizedBox(height: 12),
           // Use Wrap to avoid overflow on narrow screens
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              OutlinedButton.icon(
-                onPressed: widget.onEditPortion,
-                icon: const Icon(Icons.scale_rounded),
-                label: const Text('Edit portion'),
+          if (!widget.isPreviewMode)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: widget.onEditPortion,
+                  icon: const Icon(Icons.scale_rounded),
+                  label: const Text('Edit portion'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: widget.onEditMacros,
+                  icon: const Icon(Icons.edit_note_rounded),
+                  label: const Text('Edit macros'),
+                ),
+                IconButton(
+                  tooltip: 'Delete',
+                  onPressed: widget.onDelete,
+                  icon: const Icon(Icons.delete_outline_rounded),
+                ),
+              ],
+            )
+          else
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
               ),
-              OutlinedButton.icon(
-                onPressed: widget.onEditMacros,
-                icon: const Icon(Icons.edit_note_rounded),
-                label: const Text('Edit macros'),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.visibility_rounded,
+                    size: 16,
+                    color: Colors.blue,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Preview Mode - Read Only',
+                    style: GoogleFonts.lato(
+                      fontSize: 12,
+                      color: Colors.blue,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
-              IconButton(
-                tooltip: 'Delete',
-                onPressed: widget.onDelete,
-                icon: const Icon(Icons.delete_outline_rounded),
-              ),
-            ],
-          )
+            )
         ],
       ),
     );

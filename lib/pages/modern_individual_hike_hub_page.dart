@@ -33,7 +33,6 @@ class _ModernIndividualHikeHubPageState
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
   bool _isInitialized = false;
-  double? _calculatedTotalDistance;
 
   @override
   void initState() {
@@ -154,6 +153,25 @@ class _ModernIndividualHikeHubPageState
 
           Future<void> sendInvite(user_model.UserProfile target) async {
             try {
+              // Make plan collaborative when first invite is sent
+              if (!_plan.isCollaborative) {
+                final updatedPlan = _plan.copyWith(
+                  isCollaborative: true,
+                  collabOwnerId: me.uid,
+                );
+                await HikePlanService().updateHikePlan(updatedPlan);
+                setState(() => _plan = updatedPlan);
+
+                // Navigate to group view after making plan collaborative
+                if (mounted) {
+                  Navigator.of(ctx).pop(); // Close invite sheet first
+                  // Use pushReplacement instead of go to maintain navigation stack
+                  context.pushReplacement('/group-hike-hub',
+                      extra: updatedPlan);
+                  return; // Exit early since we're navigating away
+                }
+              }
+
               await FirebaseFirestore.instance
                   .collection('users')
                   .doc(target.uid)
