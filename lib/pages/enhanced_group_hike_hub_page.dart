@@ -1401,43 +1401,6 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                     child: CustomScrollView(
                       physics: const ClampingScrollPhysics(),
                       slivers: [
-                        // Viewing indicator for friend's profile
-                        if (!isCurrentUser)
-                          SliverToBoxAdapter(
-                            child: Container(
-                              margin: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: Colors.blue.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: Colors.blue.withOpacity(0.3),
-                                  width: 1,
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.visibility_rounded,
-                                    color: Colors.blue,
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      'Viewing ${userProfile?.displayName ?? "teammate"}\'s hiking preparations',
-                                      style: GoogleFonts.lato(
-                                        color: Colors.blue,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-
                         // Floating header with glassmorphism
                         SliverToBoxAdapter(
                           child: _buildFloatingHeader(
@@ -1691,6 +1654,7 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
                   ),
                 ],
 
+                // Only show "You" badge for current user
                 if (isCurrentUser) ...[
                   const SizedBox(height: 12),
                   Container(
