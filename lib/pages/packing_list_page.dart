@@ -65,11 +65,9 @@ class _PackingListPageState extends State<PackingListPage>
   final TextEditingController _categoryFilterController =
       TextEditingController();
   String _selectedCategory = 'General';
-
   // MUUTETTU: Vain yksi pääkategorialista.
   final List<String> _packingCategories = const [
     'Shelter',
-    'Food',
     'Clothing',
     'Tools',
     'Hygiene',
@@ -856,8 +854,6 @@ class _PackingListPageState extends State<PackingListPage>
         return Icons.construction_rounded;
       case 'electronics':
         return Icons.camera_alt_rounded;
-      case 'food':
-        return Icons.fastfood_rounded;
       case 'bonus':
         return Icons.star_border_rounded;
       default:

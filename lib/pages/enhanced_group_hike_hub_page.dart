@@ -1194,22 +1194,28 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
   }
 
   Widget _buildLoadingAvatars() {
-    return Row(
-      children: List.generate(3, (index) {
-        return Container(
-          margin: EdgeInsets.only(left: index > 0 ? -12 : 0),
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white.withOpacity(0.1),
-            border: Border.all(
-              color: const Color(0xFF0A0A0A),
-              width: 3,
+    return SizedBox(
+      height: 56,
+      width: 56 + (2 * 40.0), // Width for 3 overlapping avatars
+      child: Stack(
+        children: List.generate(3, (index) {
+          return Positioned(
+            left: index * 40.0,
+            child: Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.1),
+                border: Border.all(
+                  color: const Color(0xFF0A0A0A),
+                  width: 3,
+                ),
+              ),
             ),
-          ),
-        );
-      }),
+          );
+        }),
+      ),
     );
   }
 
