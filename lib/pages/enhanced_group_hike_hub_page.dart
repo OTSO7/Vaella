@@ -170,6 +170,17 @@ class _EnhancedGroupHikeHubPageState extends State<EnhancedGroupHikeHubPage>
     }
   }
 
+  Future<void> _openFoodPlanner() async {
+    HapticFeedback.lightImpact();
+    final result = await context.pushNamed('foodPlannerPage',
+        pathParameters: {'planId': _plan.id}, extra: _plan);
+    if (mounted && result is HikePlan) {
+      setState(() => _plan = result);
+    } else {
+      _refreshPlanData();
+    }
+  }
+
   Future<void> _openInviteSheet() async {
     // Check if already at max capacity (4 members)
     if (_participantIds.length >= 4) {
