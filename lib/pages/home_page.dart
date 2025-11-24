@@ -85,9 +85,27 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   bool _isNotificationVisible = false;
   Timer? _notificationTimer;
 
+  // Animation controllers
+  late AnimationController _routeDrawController;
+  late Animation<double> _routeProgressAnimation;
+  
+  // Animation state
+  List<LatLng> _animatingRoutePoints = [];
+
   @override
   void initState() {
     super.initState();
+    
+    _routeDrawController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
+    
+    _routeProgressAnimation = CurvedAnimation(
+      parent: _routeDrawController,
+      curve: Curves.easeInOutQuart,
+    );
+
     _fetchPosts();
     _subscribeToPostsRealtime();
     _searchController.addListener(_onSearchChanged);
@@ -95,6 +113,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _routeDrawController.dispose();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     _mapController.dispose();
@@ -319,47 +338,109 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   void _updateSelectedRoute() {
     _selectedRoutePolylines.clear();
     _arrowMarkers.clear();
+    _animatingRoutePoints.clear();
+
     if (_selectedPost != null &&
         _selectedPost!.dailyRoutes != null &&
         _selectedPost!.dailyRoutes!.isNotEmpty) {
+      
+      // 1. Populate static background lines (Ghost Route)
       for (final route in _selectedPost!.dailyRoutes!) {
+        if (route.points.isEmpty) continue;
+
         final polyline = Polyline(
           points: route.points,
-          color: Colors.deepOrange.withOpacity(0.8),
+          color: Colors.black.withOpacity(0.1), // Faint ghost path
           strokeWidth: 5.0,
-          borderColor: Colors.black.withOpacity(0.2),
-          borderStrokeWidth: 1.0,
         );
         _selectedRoutePolylines.add(polyline);
       }
+
+      // 2. Populate animation points (Flattened for continuous drawing effect)
+      _animatingRoutePoints = _selectedPost!.dailyRoutes!
+          .expand((r) => r.points)
+          .toList();
+
+      // 3. Add markers
       _arrowMarkers
           .addAll(generateArrowMarkersForDays(_selectedPost!.dailyRoutes!));
     }
   }
 
+  void _animateTo(LatLng destLocation, double destZoom) {
+    // ... (existing implementation stays roughly the same, logic handles map move)
+    final latTween = Tween<double>(
+        begin: _mapController.camera.center.latitude, end: destLocation.latitude);
+    final lngTween = Tween<double>(
+        begin: _mapController.camera.center.longitude, end: destLocation.longitude);
+    final zoomTween = Tween<double>(
+        begin: _mapController.camera.zoom, end: destZoom);
+
+    final controller = AnimationController(
+        duration: const Duration(milliseconds: 1000), vsync: this);
+    
+    final Animation<double> animation = CurvedAnimation(
+        parent: controller, curve: Curves.fastOutSlowIn);
+
+    controller.addListener(() {
+      _mapController.move(
+        LatLng(latTween.evaluate(animation), lngTween.evaluate(animation)),
+        zoomTween.evaluate(animation),
+      );
+    });
+
+    animation.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        controller.dispose();
+      }
+    });
+
+    controller.forward();
+  }
+
   void _handlePostSelection(Post post) {
     HapticFeedback.lightImpact();
+    
     setState(() {
       _selectedPost = post;
       _updateSelectedRoute();
     });
+    
+    // Reset animation
+    _routeDrawController.reset();
+
     final bool hasRoute =
         post.dailyRoutes != null && post.dailyRoutes!.isNotEmpty;
+        
+    LatLng targetCenter;
+    double targetZoom;
+
     if (hasRoute) {
-      final allPoints =
-          post.dailyRoutes!.expand((route) => route.points).toList();
-      if (allPoints.length > 1) {
-        final bounds = LatLngBounds.fromPoints(allPoints);
-        _mapController.fitCamera(
-          CameraFit.bounds(
-            bounds: bounds,
-            padding: const EdgeInsets.all(70.0),
-          ),
-        );
+      // Use flattened points for bounds calculation too
+      if (_animatingRoutePoints.length > 1) {
+        final bounds = LatLngBounds.fromPoints(_animatingRoutePoints);
+        targetCenter = bounds.center;
+        targetZoom = _calculateZoomForBounds(bounds); 
+      } else {
+         targetCenter = LatLng(post.latitude!, post.longitude!);
+         targetZoom = 13.0;
       }
     } else {
-      _mapController.move(LatLng(post.latitude!, post.longitude!), 13);
+      targetCenter = LatLng(post.latitude!, post.longitude!);
+      targetZoom = 13.0;
     }
+    
+    _animateTo(targetCenter, targetZoom);
+
+    // Start drawing animation after a short delay
+    if (hasRoute && _animatingRoutePoints.isNotEmpty) {
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted && _selectedPost?.id == post.id) {
+          _routeDrawController.forward();
+        }
+      });
+    }
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -371,7 +452,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           _selectedPost = null;
           _selectedRoutePolylines.clear();
           _arrowMarkers.clear();
+          _animatingRoutePoints.clear(); // Clear animation points
         });
+        _routeDrawController.reset();
       }
     });
   }
@@ -653,7 +736,41 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
           userAgentPackageName: 'com.example.treknoteflutter',
         ),
+        
+        // 1. Ghost Route (Static faint background)
         PolylineLayer(polylines: _selectedRoutePolylines),
+
+        // 2. Animated Progressive Route
+        AnimatedBuilder(
+          animation: _routeProgressAnimation,
+          builder: (context, child) {
+             if (_animatingRoutePoints.isEmpty || _selectedPost == null) {
+               return const SizedBox.shrink();
+             }
+             
+             // Calculate points to show
+             final count = (_animatingRoutePoints.length * _routeProgressAnimation.value).ceil();
+             final visiblePoints = _animatingRoutePoints.take(count).toList();
+             
+             // Safety check: flutter_map crashes on empty polyline points
+             if (visiblePoints.isEmpty) return const SizedBox.shrink();
+
+             return PolylineLayer(
+               polylines: [
+                 Polyline(
+                   points: visiblePoints,
+                   strokeWidth: 5.0,
+                   color: Colors.deepOrange.withOpacity(0.9),
+                   borderColor: Colors.white,
+                   borderStrokeWidth: 2.0,
+                   strokeCap: StrokeCap.round,
+                   strokeJoin: StrokeJoin.round,
+                 ),
+               ],
+             );
+          }
+        ),
+
         MarkerLayer(markers: _arrowMarkers),
         MarkerClusterLayerWidget(
           options: MarkerClusterLayerOptions(
@@ -669,19 +786,45 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               return _buildClusterMarker(context, markers.length);
             },
             onClusterTap: (cluster) {
+              // --- SMART CLUSTER LOGIC ---
+              // Tämä ratkaisee "satoja postauksia" -ongelman ja "näkymän reunat" -ongelman.
+
+              final currentZoom = _mapController.camera.zoom;
+              final clusterSize = cluster.markers.length;
+
+              // 1. Tarkistetaan, ovatko kaikki täsmälleen samassa pisteessä
               final firstPoint = cluster.markers.first.point;
               final allSameLocation =
                   cluster.markers.every((m) => m.point == firstPoint);
-              if (allSameLocation && cluster.markers.length > 1) {
+
+              // 2. "Viral Density Check": Jos on paljon postauksia ja ollaan jo zoomattu,
+              // tai jos klusteri on maantieteellisesti hyvin pieni -> näytä lista.
+              // Tämä estää loputtoman zoomauksen ja "hämähäkki"-efektin.
+              bool isDenseArea = (currentZoom > 14 && clusterSize > 5) || 
+                                 (currentZoom > 10 && clusterSize > 20); 
+
+              if ((allSameLocation && clusterSize > 1) || isDenseArea) {
                 final postsInCluster = cluster.markers
                     .map((node) => ((node).marker as PostMarker).post)
                     .toList();
                 _showPostSelectionSheet(context, postsInCluster);
               } else {
+                // 3. Turvallinen Zoom & Padding - KORJATTU V2
+                // Käyttäjä haluaa, että postaukset pysyvät selkeästi keskellä eivätkä
+                // mene reunoille.
+                // Ratkaisu:
+                // 1. maxZoom: 13.0 -> Estää liian syvän zoomauksen, jolloin markerit
+                //    pysyvät lähellä toisiaan "ryppäänä" sen sijaan että ne
+                //    levitettäisiin eri puolille näyttöä.
+                // 2. Padding: horizontal 100 -> Pakottaa sisällön kapealle alueelle
+                //    keskelle ruutua.
                 _mapController.fitCamera(
                   CameraFit.bounds(
-                      bounds: cluster.bounds,
-                      padding: const EdgeInsets.all(50.0)),
+                    bounds: cluster.bounds,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 100, vertical: 160),
+                    maxZoom: 13.0, 
+                  ),
                 );
               }
             },

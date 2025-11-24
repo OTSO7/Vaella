@@ -346,6 +346,8 @@ class AppRouter extends StatelessWidget {
     );
 
     // --- TEEMA-ASETUKSET ---
+    final baseTextTheme = GoogleFonts.poppinsTextTheme(Theme.of(context).textTheme);
+    
     final themeData = ThemeData(
       brightness: Brightness.dark,
       scaffoldBackgroundColor: const Color(0xFF1A1A1A),
@@ -363,22 +365,22 @@ class AppRouter extends StatelessWidget {
         onError: Colors.black,
         outline: Colors.grey.shade700,
       ),
-      textTheme: TextTheme(
-        headlineLarge: GoogleFonts.poppins(
+      textTheme: baseTextTheme.copyWith(
+        headlineLarge: baseTextTheme.headlineLarge?.copyWith(
             fontWeight: FontWeight.w800, color: Colors.white, fontSize: 30),
-        titleLarge: GoogleFonts.poppins(
+        titleLarge: baseTextTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.w600,
             color: Colors.white.withOpacity(0.9),
             fontSize: 20),
-        bodyLarge: GoogleFonts.lato(
+        bodyLarge: baseTextTheme.bodyLarge?.copyWith(
             color: Colors.white.withOpacity(0.85), fontSize: 16, height: 1.5),
-        labelLarge: GoogleFonts.poppins(
+        labelLarge: baseTextTheme.labelLarge?.copyWith(
             color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white.withOpacity(0.05),
-        hintStyle: GoogleFonts.lato(color: Colors.white.withOpacity(0.4)),
+        hintStyle: GoogleFonts.poppins(color: Colors.white.withOpacity(0.4)),
         prefixIconColor: Colors.teal.shade200.withOpacity(0.7),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
@@ -409,6 +411,8 @@ class AppRouter extends StatelessWidget {
         selectedItemColor: Colors.orange.shade300,
         unselectedItemColor: Colors.white.withOpacity(0.5),
         type: BottomNavigationBarType.fixed,
+        selectedLabelStyle: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600),
+        unselectedLabelStyle: GoogleFonts.poppins(fontSize: 12),
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: const Color(0xFF1A1A1A),
