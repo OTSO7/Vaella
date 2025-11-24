@@ -159,11 +159,13 @@ class AuthProvider with ChangeNotifier {
   Future<void> synchronizePostsCount() async {
     if (!isLoggedIn || _userProfile == null) return;
     try {
-      final postsQuery = await _firestore
+      final postsCountQuery = await _firestore
           .collection('posts')
           .where('userId', isEqualTo: _user!.uid)
+          .count()
           .get();
-      final actualPostsCount = postsQuery.docs.length;
+      
+      final actualPostsCount = postsCountQuery.count ?? 0;
 
       if (actualPostsCount != _userProfile!.postsCount) {
         await _firestore.collection('users').doc(_user!.uid).update({
@@ -246,7 +248,8 @@ class AuthProvider with ChangeNotifier {
           await _firestore.collection('users').doc(_user!.uid).get();
       if (userDoc.exists && userDoc.data() != null) {
         _userProfile = UserProfile.fromFirestore(userDoc);
-        await synchronizePostsCount();
+        // Run synchronization in background to speed up login
+        synchronizePostsCount();
       } else {
         _userProfile = UserProfile(
           uid: _user!.uid,

@@ -17,11 +17,12 @@ import 'app_router.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-
-  await initializeDateFormatting('fi_FI', null);
+  await Future.wait([
+    Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    ),
+    initializeDateFormatting('fi_FI', null),
+  ]);
 
   runApp(
     MultiProvider(
@@ -51,11 +52,13 @@ class _MyAppState extends State<MyApp> {
     final followProvider = Provider.of<FollowProvider>(context, listen: false);
 
     // Synkronoi heti kun userProfile on saatavilla
-    if (authProvider.userProfile != null) {
-      followProvider.setFollowingList(authProvider.userProfile!.followingIds);
-    } else {
-      followProvider.setFollowingList([]);
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (authProvider.userProfile != null) {
+        followProvider.setFollowingList(authProvider.userProfile!.followingIds);
+      } else {
+        followProvider.setFollowingList([]);
+      }
+    });
   }
 
   @override
